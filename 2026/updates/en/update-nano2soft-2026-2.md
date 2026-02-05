@@ -15,7 +15,7 @@
 
 The geographic region management software module has been updated. A new table dedicated to nationalities has been added, and nationality management interfaces have been created in the system control panel, including a mechanism to generate data for all nationalities from the interface with a single click. Professional classes for managing nationalities and religions have been developed.
 
-## 2026-2-2
+## 2026-2-3
 
 **Support Nationalities in Nano.LocationAPI**
 
