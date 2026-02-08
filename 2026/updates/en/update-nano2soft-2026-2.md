@@ -99,3 +99,8 @@ GET /api/v1/location/languages/activelystats
 
 We have updated and upgraded the API browsing and testing section to be compatible with the system's third version. Additionally, it is now possible to export a `collection-api.json` file with or without documentation for the purpose of importing the APIs into external tools like Postman and others.
 
+## 2026-2-8
+
+**Updated Map FormWidgets in the Backend**
+
+The input fields for the mapping system in the backend section have been improved and updated.
