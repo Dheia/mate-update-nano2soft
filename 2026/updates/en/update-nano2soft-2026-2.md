@@ -67,3 +67,35 @@ Example 1.2.4
 Example 1.2.5
 Example 1.2.6
 
+## 2026-2-3 - 2026-2-6
+
+**Updated Nano.Location, Nano.LocationApi, Nano.UserPlus, and Nano.AuthApi**
+
+-   Added support for the LocaleHelper class.
+-   Added support for the LanguagesHelper class.
+-   Updated the Address Behaviors class.
+-   Added support for Languages API endpoints and their documentation.
+-   Added support for Religions API endpoints and their documentation.
+-   Added support for a `belongsTo` relationship with Nationalities in the Frontend User Model.
+-   Added dropdown fields for nationality and language in the Backend Interface.
+
+The frontend user management component was updated, the backend user management interfaces were improved, and filters were added to filter users by religion, nationality, or language. The input fields for this data were enhanced, and new relationships were added to the user file specifically for nationality data. The following APIs were created with complete documentation for everything.
+
+The added APIs are as follows:
+
+```
+GET /api/v1/location/religions
+GET /api/v1/location/religions/{id}
+GET /api/v1/location/religions/activelystats
+
+GET /api/v1/location/languages
+GET /api/v1/location/languages/{id}
+GET /api/v1/location/languages/activelystats
+```
+
+## 2026-2-7
+
+**Updated RoutesBrowser API to v3**
+
+We have updated and upgraded the API browsing and testing section to be compatible with the system's third version. Additionally, it is now possible to export a `collection-api.json` file with or without documentation for the purpose of importing the APIs into external tools like Postman and others.
+

@@ -67,3 +67,36 @@ Example 1.2.4
 Example 1.2.5
 Example 1.2.6
 
+
+## 2026-2-3 -2026-2-6 
+
+**Update Nano.Location And Nano.LocationApi And Nano.UserPlus And Nano.AuthApi**
+
+    - Support LocaleHelper Class
+    - Support LanguagesHelper Class
+    - Update Address Behaviors Class
+    - Support Languages Endpoins Api And Docs Api
+    - Support Religions Endpoins Api And Docs Api
+    - Support Relation belongsTo Nationalitys in Frontend User Model.
+    - Support dropdown field nationality and language In Backend Interface
+تم تحديث جزء إداة مستخدمين الفرونت اند وتم تحسين واجهات إدارة المستخدمين فى الباك اند وتم اضافة فلاتر لفلترة المستخدمين حسب الديانه او الجنسية او اللغة وتم تحسين حقول ادخال هذه البيانات وتم اضافة علاقات جديدة الي ملف المستخدم خاصة ببيانات الجنسية وتم انشاء ال api التالي مع التوثيق الكامل لكل شي 
+
+ال api المضاف كالتالي 
+
+```
+GET /api/v1/location/religions
+GET /api/v1/location/religions/{id}
+GET /api/v1/location/religions/activelystats
+
+GET /api/v1/location/languages
+GET /api/v1/location/languages/{id}
+GET /api/v1/location/languages/activelystats
+```
+
+
+## 2026-2-7 
+
+**Update RoutesBrowser Api To v3**
+
+قمنا بتحديث وترقية الجزء الخاص بتصفح واختبار ال api ليتوافق مع الاصدار الثالث من النظام بالاضافة الى امكانية تصدير ملف collection-api.json مع التوثيق او بدون التوثيق من اجل استراد ال api فى جهات خارجية كا postmain وغيرها .
+
