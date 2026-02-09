@@ -125,3 +125,9 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_SHOW= true
 # Allow recording visits when fetching records in the order types list
 NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 ```
+
+## 2025-10-25 - 2026-2-10
+
+**Support Nano3.Packer Tools Version V2**
+
+A comprehensive and professionally developed software module has been created for processing, encrypting, and preparing code for the production stage. Through this module, an entire software package can be encrypted in several ways—either via a compressed file or by specifying the specific module within the system to be encrypted.

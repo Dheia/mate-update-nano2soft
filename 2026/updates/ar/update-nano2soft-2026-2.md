@@ -127,3 +127,9 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_SHOW= true
 NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 ```
 
+## 2025-10-25 - 2026-2-10
+
+**Support Nano3.Packer Tools Version V2**
+
+تم تطوير وحدة برمجية متكاملة بشكل احترافي لمعالجة وتشفير الكود وتجهيز الكود لمرحلة الانتاج حيث من خلال هذه الوحدة يمكن تشفير حزمة برمجية كامل بعدة طرق  من خلال ملف مضغوط او من خلال تحديد الوحدة المراد تشفيرها فى النظام . 
+
