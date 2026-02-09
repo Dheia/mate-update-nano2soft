@@ -104,3 +104,24 @@ We have updated and upgraded the API browsing and testing section to be compatib
 **Updated Map FormWidgets in the Backend**
 
 The input fields for the mapping system in the backend section have been improved and updated.
+
+## 2026-2-9
+
+**Support VisitModel In OrdersType**
+
+Support VisitModel In OrdersType
+    - Update Nano2.Visitors Support extendOrdersTypeModel And Config
+    - Update Nano.OrdersApi
+    - Development of the Order Types System Adding Behaviors VisitModel In OrdersType Models And OrdersTypeTransformer
+    - Support Visitors In Order Types
+    - Support Visit Event Api In Order Types
+
+The Order Types section has been updated to support the feature of recording views and visits at the order type level, allowing the tracking of visit counts for each order type. The API for this section has been updated, along with the related documentation.
+To enable or disable this feature, the following settings have been added:
+
+```
+# Allow recording visits when accessing the record in the order type
+NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_SHOW= true
+# Allow recording visits when fetching records in the order types list
+NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
+```

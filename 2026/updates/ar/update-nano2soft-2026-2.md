@@ -106,3 +106,24 @@ GET /api/v1/location/languages/activelystats
 
 تم تحسين وتحديث حقول الادخال الخاصة بنظام الخرائط فى جزء الباك اند .
 
+##2026-2-9
+
+**Support VisitModel In OrdersType**
+
+Support VisitModel In OrdersType
+    - Update Nano2.Visitors Support extendOrdersTypeModel And Config
+    - Update Nano.OrdersApi
+    - Development of the Order Types System Adding Behaviors VisitModel In OrdersType Models And OrdersTypeTransformer
+    - Support Visitors In Order Types
+    - Support Visit Event Api In Order Types
+
+تم تحديث جزء انوع الطلبات بحيث تم دعم خاصية تسجيل المشاهدات والزيارة على مستوي انواع الطلبات بحيث يمكن معرفة عدد زيارة كل نوع طلب وتم تحديث ال api الخاص بهذا الجزء وتم تحديث التوثيق الخاص به . 
+ ولتفعيل او ايقاف هذه الميزة تم اضافة الاعدادات التالية 
+
+```
+#السماح بتسجيل الزيارات عند الدخول الى السجل فى نوع الطلب
+NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_SHOW= true
+#السماح بتسجيل الزيارات عند جلب السجل فى القائمة انوع الطلبات 
+NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
+```
+
