@@ -164,4 +164,49 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 }
 ```
 
+## 2026-2-8 - 2026-2-12
+
+**Support Google Merchant Validator Version 2**
+
+    - Support ValidationLibrary Class
+    - Support GoogleMerchantFields Class
+    - Support GoogleMerchantValidator Class
+    - Support Interface Google Merchant Validator
+تم انشاء وحدة برمجية جديدة خاصة بالتحقق من صحة محتوي عناصر ملف جوجل ميرشانت بطريقة احترافية حيث يتم التحقق من كافة القواعد لكل صنف فى الملف .
+الرابط العام للاطلاع على واجهة هذه الوحده 
+
+https://account.now-ye.com/nano2/googlemerchant/validator
+
+
+
+
+
+## 2026-2-12
+**Update GDPR**
+تم تحديث الوحدة البرمجية الخاصة بالكوكيز وطلب الموافقة علية من قبل المتصفح او الزائر للموقع وتم اضافة api تجريبي لهذا الجزء .
+نقاط النهاية التي تم اضافتها فى ال api هى كالتالي 
+
+```json
+
+POST /api/v1/gdpr/cookie/accept-defaults
+قبول الكوكيز الافتراضية (مثل cookieBanner->onAccept)
+)
+GET api/v1/gdpr/cookie/check/{code}/{level?}
+التحقق من صلاحية كوكي معين
+GET api/v1/gdpr/cookie/consent
+الحصول على حالة موافقات المستخدم الحالية
+POST api/v1/gdpr/cookie/decline-all
+رفض جميع الكوكيز (مثل cookieBanner->onDecline)
+POST api/v1/gdpr/cookie/reset
+إعادة تعيين جميع الموافقات
+GET api/v1/gdpr/cookie/settings
+الحصول على جميع مجموعات الكوكيز والإعدادات
+GET api/v1/gdpr/cookie/status
+الحصول على حالة الموافقة العامة
+POST api/v1/gdpr/cookie/update
+تحديث تفضيلات الكوكيز (مثل CookieManager)
+GET api/v1/gdpr/data-retention/policies
+الحصول على جميع سياسات الاحتفاظ بالبيانات
+```
+
 

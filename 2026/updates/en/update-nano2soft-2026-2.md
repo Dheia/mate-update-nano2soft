@@ -165,3 +165,51 @@ GET http://localhost:8006/api/v1/tags/categories?tagsId=1,2&include=tags
 }
 ```
 
+## 2026-02-08 – 2026-02-12
+
+**Support Google Merchant Validator Version 2**
+
+    - Support ValidationLibrary Class
+    - Support GoogleMerchantFields Class
+    - Support GoogleMerchantValidator Class
+    - Support Interface Google Merchant Validator
+
+A new software module has been created for professionally validating the content of Google Merchant feed items, verifying all rules for each item in the file.
+
+Public link to view the interface of this module:
+
+https://account.now-ye.com/nano2/googlemerchant/validator
+
+---
+
+## 2026-02-12
+
+**Update GDPR**
+
+The software module for cookies and obtaining consent from the browser or site visitor has been updated. An experimental API has been added for this part.
+
+The endpoints added in the API are as follows:
+
+```json
+
+POST /api/v1/gdpr/cookie/accept-defaults
+Accept default cookies (e.g., cookieBanner->onAccept)
+
+GET api/v1/gdpr/cookie/check/{code}/{level?}
+Check the validity of a specific cookie
+GET api/v1/gdpr/cookie/consent
+Get the current user consent status
+POST api/v1/gdpr/cookie/decline-all
+Decline all cookies (e.g., cookieBanner->onDecline)
+POST api/v1/gdpr/cookie/reset
+Reset all consents
+GET api/v1/gdpr/cookie/settings
+Get all cookie groups and settings
+GET api/v1/gdpr/cookie/status
+Get the general consent status
+POST api/v1/gdpr/cookie/update
+Update cookie preferences (e.g., CookieManager)
+GET api/v1/gdpr/data-retention/policies
+Get all data retention policies
+```
+
