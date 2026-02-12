@@ -131,3 +131,37 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 **Support Nano3.Packer Tools Version V2**
 
 A comprehensive and professionally developed software module has been created for processing, encrypting, and preparing code for the production stage. Through this module, an entire software package can be encrypted in several ways—either via a compressed file or by specifying the specific module within the system to be encrypted.
+
+## 2026-02-11
+
+**Update Nano.Tags And Nano.TagsApi**
+
+    - Support TagManager Class
+    - Support TagIntegrationHandler EventHandlers Class
+    - Support DynamicAddIncludeTags Transformer Class
+    - Support tags Relation In Types
+    - Support tags Relation In Categories
+    - Support Tags Relation And tagsId Filter in api/v1/tags/types API Version 2.
+    - Support Tags Relation And tagsId Filter in api/v1/tags/categories API Version 2.
+    - Update Docs Api Version 2.
+
+The software module for managing public hashtags has been updated. The hashtag management mechanism, as well as the injection of objects, interfaces, queries, and the API, have been professionally improved through a class named `TagManager`. This class flexibly associates any object or interface with hashtags while providing control over each object's properties (such as interfaces, etc.). Complete documentation has been created for interacting with the new mechanism, and the API along with its documentation has been updated. Additionally, it is now possible to filter public types and public categories by hashtags.
+
+### Example 1.1.5 get List of Types with include=tags and where tagsId=43,54
+### Example 1.1.12 get List of Categories with include=tags and where tagsId=1,2
+
+**In the following example, we will fetch categories by hashtags, including the hashtag relation as follows:**
+
+```
+GET http://localhost:8006/api/v1/tags/categories?tagsId=1,2&include=tags
+```
+
+**The parameters passed are as follows:**
+
+```json
+{
+  "tagsId": "1,2",
+  "include": tags,
+}
+```
+

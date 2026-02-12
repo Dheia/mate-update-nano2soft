@@ -133,3 +133,35 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 
 تم تطوير وحدة برمجية متكاملة بشكل احترافي لمعالجة وتشفير الكود وتجهيز الكود لمرحلة الانتاج حيث من خلال هذه الوحدة يمكن تشفير حزمة برمجية كامل بعدة طرق  من خلال ملف مضغوط او من خلال تحديد الوحدة المراد تشفيرها فى النظام . 
 
+## 2026-2-11
+
+**Update Nano.Tags And Nano.TagsApi**
+
+    - Support TagManager Class
+    - Support TagIntegrationHandler EventHandlers Class
+    - Support DynamicAddIncludeTags Transformer Class
+    - Support tags Relation In Types
+    - Support tags Relation In Categories
+    - Support Tags Relation And tagsId Filter in api/v1/tags/types API Version 2.
+    - Support Tags Relation And tagsId Filter in api/v1/tags/categories API Version 2.
+    - Update Docs Api Version 2.
+تم تحديث الوحدة البرمجية الخاصة بإدارة الهاشتجات العامة حيث تم تحسين آلية إدارة الهاشتجات وطريقة حقن الكائنات والواجهات والاستعلامات وال api بشكل احترافي من خلال كلاس باسم TagManager يتولي ربط اي كائن او واجهة بالهشتاجات بشكل مرن مع امكانية التحكم بخصائص كل كائن من حيث الواجهات وغيرها وتم انشاء توثيق كامل لطريقة التعامل مع الآلية الجديدة . وتم تحديث ال api والتوثيق الخاص به . كما اصبح بالامكان فلترة الفئات العامة والتصنيفات العامة بحسب الهاشتاجات .
+
+### Example 1.1.5 get List Types include=tags And where tagsId=43,54
+### Example 1.1.12 get List Categories include=tags And where tagsId=1,2
+
+**فى المثال التالي سنقوم بجلب التصنيفات حسب الهاشتجات مع تضمين العلاقة الخاصة بالهاشتجات كالتالي     **
+
+ 
+ GET http://localhost:8006/api/v1/tags/categories?tagsId=1,2&include=tags
+
+**البراميترات الممررة كالتالي **
+
+```json
+{
+  "tagsId": "1,2",
+  "include": tags,
+}
+```
+
+
