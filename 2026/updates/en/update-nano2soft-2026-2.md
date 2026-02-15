@@ -213,3 +213,33 @@ GET api/v1/gdpr/data-retention/policies
 Get all data retention policies
 ```
 
+## 2026-2-6 - 2026-2-15
+
+**Support Nano3.Legal**
+
+A new integrated software module dedicated to managing legal documents and records has been launched. The module includes all legal documents such as the privacy policy, terms of use, refund and payment policy, and others. Its API part has been created completely and professionally, with its documentation completed. Document types have been classified as follows:
+```json
+{
+        "ecommerce": "E-commerce",
+        "rental": "Rental and Applications",
+        "contract": "Contracts and Orders",
+        "user": "Users and Registration",
+        "employment": "Employment and Work",
+        "security": "Security and Protection",
+        "general": "General",
+        "industry": "Industry Specific"
+}
+```
+
+The API endpoints are as follows:
+```
+GET api/v1/legal/support/ref-types/{id?}
+GET api/v1/legal/support/types/{id?}
+GET api/v1/legal/documents
+GET api/v1/legal/documents/activelystats
+GET api/v1/legal/documents/{id}
+GET api/v1/legal/consents
+GET api/v1/legal/consents/activelystats
+GET api/v1/legal/consents/{id}
+```
+

@@ -209,4 +209,33 @@ GET api/v1/gdpr/data-retention/policies
 الحصول على جميع سياسات الاحتفاظ بالبيانات
 ```
 
+## 2026-2-6 - 2026-2-15 
+
+**Support Nano3.Legal**
+
+تم اطلاق وحدة برمجية جديدة متكاملة خاصة بإدارة الوثائق والمستندات القانونية حيث تضم الوحدة كافة المستندات القانونية كسياسة الخصوصية والاستخدام وسياسة الاستدار والدفع وغيره . وتم انشاء جزء ال api الخاص بها بشكل كامل واحترافي وتم عمل التوثيق الخاص بها وتم تصنيف انواع الوثائق كالتالي 
+```json
+{
+        "ecommerce": "التجارة الإلكترونية",
+        "rental": "التأجير والتطبيقات",
+        "contract": "العقود والطلبات",
+        "user": "المستخدمين والتسجيل",
+        "employment": "التوظيف والعمل",
+        "security": "الأمن والحماية",
+        "general": "عامة",
+        "industry": "خاصة بالصناعة"
+}
+```
+
+نقاط النهاية الخاصة بال api هى كالتالي 
+```
+GET api/v1/legal/support/ref-types/{id?}
+GET api/v1/legal/support/types/{id?}
+GET api/v1/legal/documents
+GET api/v1/legal/documents/activelystats
+GET api/v1/legal/documents/{id}
+GET api/v1/legal/consents
+GET api/v1/legal/consents/activelystats
+GET api/v1/legal/consents/{id}
+```
 
