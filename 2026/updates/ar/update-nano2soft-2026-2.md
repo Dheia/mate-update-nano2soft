@@ -178,9 +178,6 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
 https://account.now-ye.com/nano2/googlemerchant/validator
 
 
-
-
-
 ## 2026-2-12
 **Update GDPR**
 تم تحديث الوحدة البرمجية الخاصة بالكوكيز وطلب الموافقة علية من قبل المتصفح او الزائر للموقع وتم اضافة api تجريبي لهذا الجزء .
@@ -209,11 +206,26 @@ GET api/v1/gdpr/data-retention/policies
 الحصول على جميع سياسات الاحتفاظ بالبيانات
 ```
 
+
 ## 2026-2-6 - 2026-2-15 
 
 **Support Nano3.Legal**
 
-تم اطلاق وحدة برمجية جديدة متكاملة خاصة بإدارة الوثائق والمستندات القانونية حيث تضم الوحدة كافة المستندات القانونية كسياسة الخصوصية والاستخدام وسياسة الاستدار والدفع وغيره . وتم انشاء جزء ال api الخاص بها بشكل كامل واحترافي وتم عمل التوثيق الخاص بها وتم تصنيف انواع الوثائق كالتالي 
+تم اطلاق وحدة برمجية جديدة متكاملة خاصة بإدارة الوثائق والمستندات القانونية حيث تضم الوحدة كافة المستندات القانونية كسياسة الخصوصية والاستخدام وسياسة الاسترداد والدفع وغيرها .وتم انشاء كلاسات تحترافية لتدير انواع الوثائق وتصنيفات الوثائق وانشاء نماذج الوثائق بشكل آلي حسب المواصفات العالمية . وتم انشاء جزء ال api الخاص بها بشكل كامل واحترافي وتم عمل التوثيق الخاص بها وتم انشاء دوال اختبار لاختبار الوحدة البرمجية .
+
+نقاط النهاية الخاصة بال api هى كالتالي 
+```
+GET api/v1/legal/support/ref-types/{id?}
+GET api/v1/legal/support/types/{id?}
+GET api/v1/legal/documents
+GET api/v1/legal/documents/activelystats
+GET api/v1/legal/documents/{id}
+GET api/v1/legal/consents
+GET api/v1/legal/consents/activelystats
+GET api/v1/legal/consents/{id}
+
+```
+ تصنيف انواع الوثائق كالتالي 
 ```json
 {
         "ecommerce": "التجارة الإلكترونية",
@@ -227,17 +239,18 @@ GET api/v1/gdpr/data-retention/policies
 }
 ```
 
-نقاط النهاية الخاصة بال api هى كالتالي 
+اما معرفات الوثائق الاساسية فهيا كالتالي 
+```json
+{
+        "privacy_policy": "سياسة الخصوصية",
+        "terms_of_service": "شروط الخدمة",
+        "return_policy": "سياسة الإرجاع والاستبدال",
+        "shipping_policy": "سياسة الشحن والتوصيل",
+        "cookie_policy": "سياسة الكوكيز",
+        "user_agreement": "اتفاقية المستخدم"
+}
 ```
-GET api/v1/legal/support/ref-types/{id?}
-GET api/v1/legal/support/types/{id?}
-GET api/v1/legal/documents
-GET api/v1/legal/documents/activelystats
-GET api/v1/legal/documents/{id}
-GET api/v1/legal/consents
-GET api/v1/legal/consents/activelystats
-GET api/v1/legal/consents/{id}
-```
+
 
 ## 2026-2-15
 

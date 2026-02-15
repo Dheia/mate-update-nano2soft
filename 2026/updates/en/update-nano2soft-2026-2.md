@@ -217,7 +217,21 @@ Get all data retention policies
 
 **Support Nano3.Legal**
 
-A new integrated software module dedicated to managing legal documents and records has been launched. The module includes all legal documents such as the privacy policy, terms of use, refund and payment policy, and others. Its API part has been created completely and professionally, with its documentation completed. Document types have been classified as follows:
+A new integrated software module for managing legal documents and records has been launched. The module includes all legal documents such as the privacy policy, terms of use, refund and payment policy, and others. Professional classes have been created to manage document types and classifications, and document templates have been automatically generated according to international specifications. Its API part has been created completely and professionally, with its documentation completed, and test functions have been created to test the software module.
+
+The API endpoints are as follows:
+```
+GET api/v1/legal/support/ref-types/{id?}
+GET api/v1/legal/support/types/{id?}
+GET api/v1/legal/documents
+GET api/v1/legal/documents/activelystats
+GET api/v1/legal/documents/{id}
+GET api/v1/legal/consents
+GET api/v1/legal/consents/activelystats
+GET api/v1/legal/consents/{id}
+```
+
+The document types are classified as follows:
 ```json
 {
         "ecommerce": "E-commerce",
@@ -231,16 +245,16 @@ A new integrated software module dedicated to managing legal documents and recor
 }
 ```
 
-The API endpoints are as follows:
-```
-GET api/v1/legal/support/ref-types/{id?}
-GET api/v1/legal/support/types/{id?}
-GET api/v1/legal/documents
-GET api/v1/legal/documents/activelystats
-GET api/v1/legal/documents/{id}
-GET api/v1/legal/consents
-GET api/v1/legal/consents/activelystats
-GET api/v1/legal/consents/{id}
+The main document identifiers are as follows:
+```json
+{
+        "privacy_policy": "Privacy Policy",
+        "terms_of_service": "Terms of Service",
+        "return_policy": "Return and Exchange Policy",
+        "shipping_policy": "Shipping and Delivery Policy",
+        "cookie_policy": "Cookie Policy",
+        "user_agreement": "User Agreement"
+}
 ```
 
 ## 2026-2-15
