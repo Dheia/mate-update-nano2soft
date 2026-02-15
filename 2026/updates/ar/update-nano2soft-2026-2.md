@@ -239,3 +239,13 @@ GET api/v1/legal/consents/activelystats
 GET api/v1/legal/consents/{id}
 ```
 
+## 2026-2-15
+
+**Update OrdersRequests And OrdersLists Api Version 2**
+
+    - Update OrdersRequests And OrdersLists Api Version 2
+    - Support Filter is_user_or_delivery_user_id  In OrdersLists And OrdersRequests Api Version 2
+    - Support Permission Backend User In get OrdersRequests Api Version 2
+    - Support Filter companys_id And departments_id In get OrdersRequests Api Version 2
+تم تحديث جزء إدارة العروض الخاصة بطلبات التوصيل فى لوحة التحكم وفى ال api الخاص بها .
+
