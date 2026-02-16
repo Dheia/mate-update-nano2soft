@@ -267,3 +267,87 @@ The main document identifiers are as follows:
     - Support Filter companys_id And departments_id In get OrdersRequests Api Version 2
 The section for managing delivery request offers in the control panel and its related API has been updated.
 
+## 2026-2-16 - 2026-2-17
+
+**Support Filter: is_has_product_options, is_has_product_options_value, and product_options_values**
+
+  -- Update Nano.Shop Product Models  
+  -- Update Nano.ShopApi Products ApiController  
+  -- Update Nano.ShopApi Products Api Docs  
+
+The product management module has been updated with new filters to allow filtering products based on whether they have additional options or option values. It is now possible to filter by product options and their attributes. The API part has been updated along with the documentation, including illustrative examples.
+
+#### Example 3.3.2: Get Products Filtered by is_has_product_options or is_has_product_options_value
+
+**You can filter products by whether they have additional options or not, and also by whether they have additional option values or not, using the following filters:**
+
+```json
+{
+  "is_has_product_options": "To fetch products based on whether they have options. Default value is all.",
+  "is_has_product_options_value": "To fetch products based on whether they have option values. Default value is all."
+}
+```
+
+**To fetch products that have additional options, pass the following parameter:**
+```json
+{
+  "is_has_product_options": 1
+}
+```
+
+**To fetch products that do not have additional options, pass the following parameter:**
+```json
+{
+  "is_has_product_options": 0
+}
+```
+
+**To fetch products that have additional options and option values, pass the following parameter:**
+```json
+{
+  "is_has_product_options_value": 1
+}
+```
+
+**To fetch products that do not have additional options and option values, pass the following parameter:**
+```json
+{
+  "is_has_product_options_value": 0
+}
+```
+
+**In the following example, we will fetch only products that have additional option values, using this filter:**
+
+```
+GET http://localhost:8006/api/v1/shop/products?is_has_product_options_value=1
+```
+
+#### Example 3.3.3: Get Products Filtered by product_options_values=Black
+
+**You can filter products by whether they have a specific additional option value as follows:**
+
+```json
+{
+  "product_options_values": "The option value you want to filter products by.",
+  "products_options_id": "The ID of the specific option (optional, leave empty to search across all options)."
+}
+```
+
+**To fetch products where one of their additional option values equals "Black", pass the following parameter:**
+
+```json
+{
+  "product_options_values": "Black"
+}
+```
+
+**In the following example, we will fetch products that have additional options and whose option value is "Black":**
+
+```
+GET http://localhost:8006/api/v1/shop/products?product_options_values=Black
+```
+or
+```
+GET http://localhost:8006/api/v1/shop/products?product_options_values=Black&products_options_id=4,8
+```
+

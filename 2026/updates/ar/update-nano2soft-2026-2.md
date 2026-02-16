@@ -262,3 +262,88 @@ GET api/v1/legal/consents/{id}
     - Support Filter companys_id And departments_id In get OrdersRequests Api Version 2
 تم تحديث جزء إدارة العروض الخاصة بطلبات التوصيل فى لوحة التحكم وفى ال api الخاص بها .
 
+
+## 2026-2-16 - 2026-2-17 
+
+**Support Filter is_has_product_options And is_has_product_options_value And product_options_values**
+
+  -- Update Nano.Shop Product Models
+  -- Update Nano.ShopApi Producs ApiController
+  -- Update Nano.ShopApi Products Api Docs
+تم تحديث جزء إدارة الاصناف وتم اضافة فلاتر لفلترة الاصناف حسب امتلكها لخيارات اضافية او قيم خيارات اضافية بحيث اصبح يمكن الفلترة حسب الخيارات والخصائص الاضافية للاصناف وتم تحديث جزء ال api وتم تحديث التوثيق مع اضافة امثلة توضيحية .
+
+#### Example 3.3.2 get data Products Filter is_has_product_options or is_has_product_options_value
+
+**يمكن فلترة الاصناف من خلال امتلكها لخيارات اضافية او لا وكذالك امتلكها لقيم خيارات اضافية ام لا من خلال الفلاتر التالية **
+
+```json
+{
+  "is_has_product_options": "لجلب الاصناف حسب امتلكها لخيارات ام لا القيمة الافتراضية هي all ",
+  "is_has_product_options_value": "لجلب الاصناف حسب امتلكها لخيارات وقيم للخيارات الاضافية القيمة الافتراضية هي all",
+}
+```
+
+**لجلب الاصناف التي تمتلك خيارات اضافية نمرر البراميتر التالي **
+```json
+{
+  "is_has_product_options": 1,
+}
+```
+
+**لجلب الاصناف التي لا تمتلك خيارات اضافية نمرر البراميتر التالي **
+```json
+{
+  "is_has_product_options": 0,
+}
+```
+
+**لجلب الاصناف التي تمتلك خيارات اضافية وقيم للخيارات  نمرر البراميتر التالي **
+```json
+{
+  "is_has_product_options_value": 1,
+}
+```
+
+**لجلب الاصناف التي لا تمتلك خيارات اضافية وقيم للخيارات  نمرر البراميتر التالي **
+```json
+{
+  "is_has_product_options_value": 0,
+}
+```
+
+**فى المثال التالي سنقوم بجلب الاصناف التي لديها خيارات اضافية فقط وذالك من خلال الفلتر التالي **
+
+```
+GET http://localhost:8006/api/v1/shop/products?is_has_product_options_value=1
+```
+
+#### Example 3.3.3 get data Products Filter product_options_values=Black
+
+**يمكن فلترة الاصناف من خلال امتلكها قيمة خيار اضافي كالتالي  **
+
+```json
+{
+  "product_options_values": "قيمة الخيار المراد فلترة الاصناف حسبة ",
+  "products_options_id": "معرف الخيار الاضافي ان وجد او يمكن تركة فارغ للبحث فى كافة الخيارات ",
+}
+```
+
+
+**لجلب الاصناف التي قيمة احد الخيارات الاضافية لها تساوي Blackنقوم بتمرير البراميتر التالي **
+
+```json
+{
+  "product_options_values": "Black",
+}
+```
+
+**فى المثال التالي سنقوم بجلب الاصناف التي لديها خيارات اضافية وبشرط ان تكون قيمة الخيار الاضافي تساوي Black **
+
+```
+GET http://localhost:8006/api/v1/shop/products?product_options_values=Black
+```
+or
+```
+GET http://localhost:8006/api/v1/shop/products?product_options_values=Black&products_options_id=4,8
+```
+
