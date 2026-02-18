@@ -347,3 +347,21 @@ or
 GET http://localhost:8006/api/v1/shop/products?product_options_values=Black&products_options_id=4,8
 ```
 
+
+## 2026-2-18 - 2026-2-19
+
+**Update Google Merchant Validator Version 2**
+
+    - Support DescriptiveTextValidator Class
+    - Support NoPromotionalTextValidator Class
+    - Support LinkProcessor Class
+
+تم تحديث الوحدة البرمجية الخاصة بالتحقق من صحة ملف جوجل ميرشنت حيث تم اضافة قواعد تحقق جديدة وتم تحسين الكود بشكل كبير وتم اضافة كلاسات مساعدة جديدة لتحسين التحقق من الكلمات الوصفية بشكل احترافي وبحيث يمكن التحكم باعدادات الكلاس الخاص بذالك وايضا بشكل يدعم التحقق من الكلمات الوصفية بعدة لغات 
+. وتم انشاء كلاس منفصل خاص بالتحقق من الكلمات الترويجية بشكل احترافي ومرن ويدعم تعدد اللغات ايضاً. والعديد من التحسينات الاخري في الكود .
+
+الرابط العام للاطلاع على واجهة هذه الوحده 
+
+https://account.now-ye.com/nano2/googlemerchant/validator
+
+
+

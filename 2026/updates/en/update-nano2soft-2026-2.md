@@ -351,3 +351,12 @@ or
 GET http://localhost:8006/api/v1/shop/products?product_options_values=Black&products_options_id=4,8
 ```
 
+## 2026-2-18 - 2026-2-19
+
+**Update Google Merchant Validator Version 2**
+
+The Google Merchant file validation module has been updated with new validation rules, significant code improvements, and the addition of new helper classes to enhance the validation of descriptive text professionally. It allows control over the settings of the relevant class and also supports validating descriptive text in multiple languages. A separate class has been created for professional and flexible validation of promotional text, which also supports multiple languages. Many other code improvements have been made.
+
+Public link to view the interface of this module:
+
+https://account.now-ye.com/nano2/googlemerchant/validator
