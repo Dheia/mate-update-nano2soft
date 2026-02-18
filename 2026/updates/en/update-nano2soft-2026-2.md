@@ -267,7 +267,7 @@ The main document identifiers are as follows:
     - Support Filter companys_id And departments_id In get OrdersRequests Api Version 2
 The section for managing delivery request offers in the control panel and its related API has been updated.
 
-## 2026-2-16 - 2026-2-17
+## 2026-2-16 - 2026-2-18
 
 **Support Filter: is_has_product_options, is_has_product_options_value, and product_options_values**
 

@@ -263,7 +263,7 @@ GET api/v1/legal/consents/{id}
 تم تحديث جزء إدارة العروض الخاصة بطلبات التوصيل فى لوحة التحكم وفى ال api الخاص بها .
 
 
-## 2026-2-16 - 2026-2-17 
+## 2026-2-16 - 2026-2-18 
 
 **Support Filter is_has_product_options And is_has_product_options_value And product_options_values**
 
