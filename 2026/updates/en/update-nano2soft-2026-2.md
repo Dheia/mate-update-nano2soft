@@ -360,3 +360,4 @@ The Google Merchant file validation module has been updated with new validation 
 Public link to view the interface of this module:
 
 https://account.now-ye.com/nano2/googlemerchant/validator
+
