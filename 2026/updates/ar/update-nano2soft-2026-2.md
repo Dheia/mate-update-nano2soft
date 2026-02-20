@@ -147,6 +147,9 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
     - Update Docs Api Version 2.
 تم تحديث الوحدة البرمجية الخاصة بإدارة الهاشتجات العامة حيث تم تحسين آلية إدارة الهاشتجات وطريقة حقن الكائنات والواجهات والاستعلامات وال api بشكل احترافي من خلال كلاس باسم TagManager يتولي ربط اي كائن او واجهة بالهشتاجات بشكل مرن مع امكانية التحكم بخصائص كل كائن من حيث الواجهات وغيرها وتم انشاء توثيق كامل لطريقة التعامل مع الآلية الجديدة . وتم تحديث ال api والتوثيق الخاص به . كما اصبح بالامكان فلترة الفئات العامة والتصنيفات العامة بحسب الهاشتاجات .
 
+See [docs/Docs-TagManager-en.md](2026/updates/ar/docs/Docs-TagManager-ar.md)
+
+
 ### Example 1.1.5 get List Types include=tags And where tagsId=43,54
 ### Example 1.1.12 get List Categories include=tags And where tagsId=1,2
 
@@ -250,6 +253,8 @@ GET api/v1/legal/consents/{id}
         "user_agreement": "اتفاقية المستخدم"
 }
 ```
+
+See [docs/docs-DocumentType-en.md](2026/updates/ar/docs/docs-DocumentType-ar.md)
 
 
 ## 2026-2-15
@@ -362,6 +367,7 @@ GET http://localhost:8006/api/v1/shop/products?product_options_values=Black&prod
 الرابط العام للاطلاع على واجهة هذه الوحده 
 
 https://account.now-ye.com/nano2/googlemerchant/validator
+
 
 
 

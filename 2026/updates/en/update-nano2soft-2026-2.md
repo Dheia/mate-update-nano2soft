@@ -147,6 +147,9 @@ A comprehensive and professionally developed software module has been created fo
 
 The software module for managing public hashtags has been updated. The hashtag management mechanism, as well as the injection of objects, interfaces, queries, and the API, have been professionally improved through a class named `TagManager`. This class flexibly associates any object or interface with hashtags while providing control over each object's properties (such as interfaces, etc.). Complete documentation has been created for interacting with the new mechanism, and the API along with its documentation has been updated. Additionally, it is now possible to filter public types and public categories by hashtags.
 
+See [docs/Docs-TagManager-en.md](2026/updates/en/docs/Docs-TagManager-en.md)
+
+
 ### Example 1.1.5 get List of Types with include=tags and where tagsId=43,54
 ### Example 1.1.12 get List of Categories with include=tags and where tagsId=1,2
 
@@ -257,6 +260,8 @@ The main document identifiers are as follows:
 }
 ```
 
+See [docs/docs-DocumentType-en.md](2026/updates/en/docs/docs-DocumentType-en.md)
+
 ## 2026-2-15
 
 **Update OrdersRequests And OrdersLists Api Version 2**
@@ -360,4 +365,5 @@ The Google Merchant file validation module has been updated with new validation 
 Public link to view the interface of this module:
 
 https://account.now-ye.com/nano2/googlemerchant/validator
+
 
