@@ -367,3 +367,45 @@ Public link to view the interface of this module:
 https://account.now-ye.com/nano2/googlemerchant/validator
 
 
+## 2026-2-20 - 2026-2-23
+
+**Nano3.Redactor – Sensitive Data Redaction Tool for Nanosoft Applications**
+
+### Overview
+
+**Nano3.Redactor** is an advanced plugin designed to automatically detect and redact (hide) sensitive data within applications built on the **Nanosoft Software** platform. The plugin analyzes various data types (strings, arrays, objects) and replaces private information such as passwords, API keys, email addresses, credit card numbers, and others with a safe placeholder (e.g., `[REDACTED]`) before logging, displaying, or exporting them.
+
+### How It Works?
+
+The plugin relies on a system of **specialized strategies** that are executed in a defined priority order. Each strategy is responsible for a specific type of sensitive data:
+
+- **Safe Keys Strategy** – Preserves non-sensitive keys (e.g., `id`, `created_at`).
+- **Blocked Keys Strategy** – Redacts well-known keys such as `password`, `token`.
+- **Regex Patterns Strategy** – Searches for patterns like email addresses, Social Security numbers, credit card numbers.
+- **Shannon Entropy Strategy** – Detects high-entropy random strings such as API keys and JWT tokens.
+- **Large Object Strategy** – Redacts arrays or objects that exceed a certain size limit.
+- **Large String Strategy** – Redacts strings that exceed a certain length limit.
+
+These strategies can be customized through multiple **profiles**, allowing different redaction behaviors depending on the context: a default profile (balanced), a strict profile (for highly sensitive data), and a performance profile (fast with minimal redaction). The plugin also supports **wildcard patterns** for flexibly specifying blocked keys.
+
+### Key Benefits
+
+1. **Data Privacy Protection** – Prevents sensitive information leakage through logs or API responses, reducing the risk of breaches and ensuring compliance with privacy standards such as GDPR and PCI DSS.
+2. **Developer Time Savings** – No need to write manual redaction code for every field; configuring the plugin once is enough.
+3. **High Flexibility** – Strategies can be customized, custom strategies can be added, and profiles can be created to suit each environment (development, production, auditing).
+4. **Improved Log Quality** – With `CustomLogTap`, log context is automatically redacted, keeping logs useful for analysis without exposing sensitive data.
+5. **File Scanning Tool** – The plugin provides an Artisan command to scan files and directories for sensitive data, helping with security reviews and vulnerability detection before deployment.
+6. **Easy Integration** – Can be used via a simple Facade, through the service container, or by direct instantiation, and works with any data type (arrays, Eloquent models, plain objects).
+7. **Comprehensive Language and Encoding Support** – Works with Arabic text and various encodings, and supports entropy calculation to detect random strings even in non-English text.
+
+### Typical Use Cases
+
+- **Logging** – Redact sensitive user data before writing it to the system log.
+- **Data Export** – Create backups or reports containing de-identified data.
+- **API Responses** – Hide private fields when returning debug information or user data.
+- **Security Audit** – Use the file scanning tool to search for forgotten API keys or passwords in the codebase.
+- **PCI Compliance** – Automatically redact credit card numbers before storing or logging them.
+
+### In a Nutshell
+
+**Nano3.Redactor** is the ideal plugin for any project running on the **Nanosoft Software** platform that requires a high level of security and privacy without complexity. It gives you peace of mind that your sensitive data will never appear in logs or unauthorized outputs, while maintaining ease of use and full flexibility.
