@@ -254,7 +254,7 @@ GET api/v1/legal/consents/{id}
 }
 ```
 
-See [docs/docs-DocumentType-en.md](2026/updates/ar/docs/docs-DocumentType-ar.md)
+See [docs/docs-DocumentType-ar.md](2026/updates/ar/docs/docs-DocumentType-ar.md)
 
 
 ## 2026-2-15
@@ -411,5 +411,20 @@ https://account.now-ye.com/nano2/googlemerchant/validator
 ### باختصار
 
 **Nano3.Redactor** هي الإضافة المثالية لأي مشروع يعمل على منصة **نانوسوفت للبرمجيات** ويحتاج إلى مستوى عالٍ من الأمان والخصوصية دون تعقيد. تمنحك راحة البال بأن بياناتك الحساسة لن تظهر أبداً في السجلات أو المخرجات غير المصرح بها، مع الحفاظ على سهولة الاستخدام والمرونة الكاملة.
+
+
+## 2026-2-23 -2026-2-24
+
+**Support AvailableFilterManager Class In Nano.Tags**
+
+**Update Nano.Tags**
+1.0.16:
+    - Support AvailableFilterManager Class In Nano.Tags
+    - Update Config available_filter shop and products
+    
+تم انشاء آلية جديدة خاصة بالتحكم بالفلاتر وانشائها بشكل احترافي بحيث يمكن التحكم بالفلاتر التي تعرض فى صفحة المنتجات فى المتاجر الالكترونية والتطبيقات مع انشاء توثيق كامل للكلاسات المسئولة عن ذالك .
+
+
+See [docs/Docs-AvailableFilterManager-ar.md](2026/updates/ar/docs/Docs-AvailableFilterManager-ar.md)
 
 

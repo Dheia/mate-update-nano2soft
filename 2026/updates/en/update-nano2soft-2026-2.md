@@ -409,3 +409,16 @@ These strategies can be customized through multiple **profiles**, allowing diffe
 ### In a Nutshell
 
 **Nano3.Redactor** is the ideal plugin for any project running on the **Nanosoft Software** platform that requires a high level of security and privacy without complexity. It gives you peace of mind that your sensitive data will never appear in logs or unauthorized outputs, while maintaining ease of use and full flexibility.
+
+## 2026-2-23 -2026-2-24
+
+**Support AvailableFilterManager Class In Nano.Tags**
+
+**Update Nano.Tags**
+1.0.16:
+    - Support AvailableFilterManager Class In Nano.Tags
+    - Update Config available_filter shop and products
+
+A new mechanism has been created for controlling and professionally creating filters, allowing control over the filters displayed on the product page in e-commerce stores and applications, along with complete documentation for the classes responsible for this.
+
+See [docs/Docs-AvailableFilterManager-en.md](2026/updates/ar/docs/Docs-AvailableFilterManager-en.md)
