@@ -147,7 +147,7 @@ A comprehensive and professionally developed software module has been created fo
 
 The software module for managing public hashtags has been updated. The hashtag management mechanism, as well as the injection of objects, interfaces, queries, and the API, have been professionally improved through a class named `TagManager`. This class flexibly associates any object or interface with hashtags while providing control over each object's properties (such as interfaces, etc.). Complete documentation has been created for interacting with the new mechanism, and the API along with its documentation has been updated. Additionally, it is now possible to filter public types and public categories by hashtags.
 
-See [docs/Docs-TagManager-en.md](2026/updates/en/docs/Docs-TagManager-en.md)
+See [docs/Docs-TagManager-en.md](./docs/Docs-TagManager-en.md)
 
 
 ### Example 1.1.5 get List of Types with include=tags and where tagsId=43,54
@@ -260,7 +260,7 @@ The main document identifiers are as follows:
 }
 ```
 
-See [docs/docs-DocumentType-en.md](2026/updates/en/docs/docs-DocumentType-en.md)
+See [docs/docs-DocumentType-en.md](./docs/docs-DocumentType-en.md)
 
 ## 2026-2-15
 
@@ -421,4 +421,4 @@ These strategies can be customized through multiple **profiles**, allowing diffe
 
 A new mechanism has been created for controlling and professionally creating filters, allowing control over the filters displayed on the product page in e-commerce stores and applications, along with complete documentation for the classes responsible for this.
 
-See [docs/Docs-AvailableFilterManager-en.md](2026/updates/ar/docs/Docs-AvailableFilterManager-en.md)
+See [docs/Docs-AvailableFilterManager-en.md](./docs/Docs-AvailableFilterManager-en.md)

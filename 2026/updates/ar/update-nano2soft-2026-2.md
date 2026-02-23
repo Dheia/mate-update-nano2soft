@@ -147,7 +147,7 @@ NANO2_VISITORS_IS_SUPPORT_ORDERS_TYPES_LIST= true
     - Update Docs Api Version 2.
 تم تحديث الوحدة البرمجية الخاصة بإدارة الهاشتجات العامة حيث تم تحسين آلية إدارة الهاشتجات وطريقة حقن الكائنات والواجهات والاستعلامات وال api بشكل احترافي من خلال كلاس باسم TagManager يتولي ربط اي كائن او واجهة بالهشتاجات بشكل مرن مع امكانية التحكم بخصائص كل كائن من حيث الواجهات وغيرها وتم انشاء توثيق كامل لطريقة التعامل مع الآلية الجديدة . وتم تحديث ال api والتوثيق الخاص به . كما اصبح بالامكان فلترة الفئات العامة والتصنيفات العامة بحسب الهاشتاجات .
 
-See [docs/Docs-TagManager-en.md](2026/updates/ar/docs/Docs-TagManager-ar.md)
+See [docs/Docs-TagManager-en.md](./docs/Docs-TagManager-ar.md)
 
 
 ### Example 1.1.5 get List Types include=tags And where tagsId=43,54
@@ -254,7 +254,7 @@ GET api/v1/legal/consents/{id}
 }
 ```
 
-See [docs/docs-DocumentType-ar.md](2026/updates/ar/docs/docs-DocumentType-ar.md)
+See [docs/docs-DocumentType-ar.md](./docs/docs-DocumentType-ar.md)
 
 
 ## 2026-2-15
@@ -425,6 +425,5 @@ https://account.now-ye.com/nano2/googlemerchant/validator
 تم انشاء آلية جديدة خاصة بالتحكم بالفلاتر وانشائها بشكل احترافي بحيث يمكن التحكم بالفلاتر التي تعرض فى صفحة المنتجات فى المتاجر الالكترونية والتطبيقات مع انشاء توثيق كامل للكلاسات المسئولة عن ذالك .
 
 
-See [docs/Docs-AvailableFilterManager-ar.md](2026/updates/ar/docs/Docs-AvailableFilterManager-ar.md)
-
+See [docs/Docs-AvailableFilterManager-ar.md](./docs/Docs-AvailableFilterManager-ar.md)
 
