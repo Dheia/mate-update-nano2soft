@@ -421,4 +421,26 @@ These strategies can be customized through multiple **profiles**, allowing diffe
 
 A new mechanism has been created for controlling and professionally creating filters, allowing control over the filters displayed on the product page in e-commerce stores and applications, along with complete documentation for the classes responsible for this.
 
+### Summary
+
+The `AvailableFilterManager` class is a generic class (not tied to a specific model) designed to uniformly manage and prepare available filters data. The class performs the following tasks:
+
+- Load filters from multiple sources: Array, JSON string, Config file.
+- Normalize filter data: Fill missing fields with default values, and convert text fields to multilingual formats.
+- Validate filters and ensure they conform to the required schema.
+- Merge multiple filter sets.
+- Sort filters by `sort_order`.
+- Filter only active filters (`is_active == true`).
+- Find a filter by `id`.
+- Reorder filters.
+- Detect duplicates in `id` or `name`.
+- Fetch filter options from dynamic data sources (API, database, static, functions).
+- Convert filters to JSON.
+- Obtain the JSON schema for filters.
+- Ensure data completeness and compliance with the required structure.
+- Easily process them (merge, sort, filter).
+- Dynamically retrieve their options.
+- Convert them to JSON for use in APIs or user interfaces.
+
+
 See [docs/Docs-AvailableFilterManager-en.md](./docs/Docs-AvailableFilterManager-en.md)
