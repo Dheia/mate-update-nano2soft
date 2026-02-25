@@ -444,3 +444,22 @@ The `AvailableFilterManager` class is a generic class (not tied to a specific mo
 
 
 See [docs/Docs-AvailableFilterManager-en.md](./docs/Docs-AvailableFilterManager-en.md)
+
+## 2026-2-24 - 2026-2-25
+
+**Support for availablefilters API in TagsAPI Version 2**
+
+**Update Nano.TagsApi**
+1.0.7:
+    - Support for api/v1/tags/availablefilters in API Version 2.
+    - Support for api/v1/tags/availablefilters?filter_id in API Version 2.
+    - Created tags/availablefilters documentation for API Version 2.
+    - Support for children_count and sub_children_count relations in CategorieTransformer for API Version 2.
+    - Updated tags/types documentation for API Version 2.
+    - Updated tags/categories documentation for API Version 2.
+
+A new API has been created to fetch filter settings, with the ability to retrieve filter field settings along with option values for filters of type "options" or "select list". Complete documentation for this section has also been created.
+
+https://account.now-ye.com/api/v1/thunder/docs?method=GET&uri=api/v1/tags/availablefilters
+
+

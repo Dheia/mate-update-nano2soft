@@ -448,3 +448,23 @@ https://account.now-ye.com/nano2/googlemerchant/validator
 
 See [docs/Docs-AvailableFilterManager-ar.md](./docs/Docs-AvailableFilterManager-ar.md)
 
+
+## 2026-2-24 - 2026-2-25
+
+**Support api availablefilters In TagsAPI Version 2**
+
+**Update Nano.TagsApi**
+1.0.7:
+    - Support api/v1/tags/availablefilters In API Version 2.
+    - Support api/v1/tags/availablefilters?filter_id In API Version 2.
+    - Create tags/availablefilters Docs Api Version 2.
+    - Support Relation children_count And sub_children_count In CategorieTransformer API Version 2.
+    - Update tags/types Docs Api Version 2.
+    - Update tags/categories Docs Api Version 2.
+
+تم انشاء apiخاص بجلب اعدادات الفلاتر مع امكانية جلب اعدادات حقول الفلاتر مع قيم الخيارات للفلات التي من نوع خيارات او قائمة خيارات  وتم انشاء التوثيق الخاص بهذا الجزء بشكل كامل .
+
+https://account.now-ye.com/api/v1/thunder/docs?method=GET&uri=api/v1/tags/availablefilters
+
+
+
