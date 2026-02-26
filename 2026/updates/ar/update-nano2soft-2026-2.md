@@ -462,9 +462,59 @@ See [docs/Docs-AvailableFilterManager-ar.md](./docs/Docs-AvailableFilterManager-
     - Update tags/types Docs Api Version 2.
     - Update tags/categories Docs Api Version 2.
 
-تم انشاء apiخاص بجلب اعدادات الفلاتر مع امكانية جلب اعدادات حقول الفلاتر مع قيم الخيارات للفلات التي من نوع خيارات او قائمة خيارات  وتم انشاء التوثيق الخاص بهذا الجزء بشكل كامل .
+تم انشاء apiخاص بجلب اعدادات الفلاتر مع امكانية جلب اعدادات حقول الفلاتر مع قيم الخيارات للفلاتر التي من نوع خيارات او قائمة خيارات  وتم انشاء التوثيق الخاص بهذا الجزء بشكل كامل .
 
 https://account.now-ye.com/api/v1/thunder/docs?method=GET&uri=api/v1/tags/availablefilters
+
+
+## 2026-2-25 - 2026-2-27
+
+**Update tags types api **
+
+**Update Nano.TagsApi**
+1.0.8:
+    - Support Config NANO_TAGSAPI_TYPES_IS_STOP_CONFIG_DATA_STEP_FIELDS In tags/types Api Version 2.
+    - Support Relation step_fields In TypeTransformer API Version 2.
+    - Update tags/types Docs Api Version 2.
+
+تم تحديث الجزء الخاص بالفئات الرئيسية للمواقع والمتاحر api/v1/tags/types
+حيث تم تحسين طريقة ارجاع اعدادات حقول اضاقة الاصناف حيث اصبح يتعامل معها كعلاقة وتم تحسين هذا الجزء بشكل كبير وكذالك تم تحديث التوثيق بشكل كامل .
+
+### Notes 
+
+**ملاحظة مهمة فى الاصدارات الحديث تم ايقافة ارجاع اعدادات حقول اضافة الاصناف ضمن الحقل config_data->step_fields وبدلا من ذالك يمكن تضمين العلاقة مباشرة اذا اردنا ارجاع حقول اعدادات اضافة الاصناف **
+
+**الاعدادات المسئولة عن ايقاف ارجاع اعدادات الحقول ضمن الحقل config_data->step_fields هى كالتالي **
+
+```env
+#القيمة الافتراضية لارجاع اعدادات حقول اضافة الاصناف او الاعلانات
+NANO_TAGSAPI_TYPES_IS_CONFIG_DATA_STEP_FIELDS= true
+
+
+#تم استخدمه فى الاصدارت الحديثة 
+# يستخدم في حال اردنا ايقاف ارجاع اعدادات حقول اضافة الاصناف ضمن الحقل 
+#لايقاف ارجاع إعدادات حقول اضافة الاصناف ضمن الحقل config_data
+NANO_TAGSAPI_TYPES_IS_STOP_CONFIG_DATA_STEP_FIELDS= true
+
+#config_data.step_fields
+```
+
+**الامثلة التالية فى الاصدار القديم **
+
+```
+Example 1.1.2.1 get List Types is_config_data_step_fields=1
+Example 1.1.3.1 get List Types is_config_data_step_fields=0
+Example 1.1.4.1 get List Types exclude=config_data
+```
+
+**الامثلة التالية فى الاصدار الحديث بالاعتماد على تضمين العلاقة include=step_fields **
+
+```
+Example 1.1.2.2 get List Types include=step_fields
+Example 1.1.3.2 get List Types exclude=step_fields
+Example 1.1.4.2 get List Types include=step_fields and exclude=config_data
+```
+
 
 
 

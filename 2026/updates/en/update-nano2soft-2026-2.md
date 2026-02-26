@@ -462,4 +462,51 @@ A new API has been created to fetch filter settings, with the ability to retriev
 
 https://account.now-ye.com/api/v1/thunder/docs?method=GET&uri=api/v1/tags/availablefilters
 
+## 2026-2-25 - 2026-2-27
+
+**Update tags types api**
+
+**Update Nano.TagsApi**
+1.0.8:
+    - Support Config NANO_TAGSAPI_TYPES_IS_STOP_CONFIG_DATA_STEP_FIELDS In tags/types Api Version 2.
+    - Support Relation step_fields In TypeTransformer API Version 2.
+    - Update tags/types Docs Api Version 2.
+
+The part related to the main categories of sites and stores, api/v1/tags/types, has been updated.  
+The method of returning the settings for category addition fields has been improved, as it is now treated as a relationship. This part has been significantly enhanced, and the documentation has also been completely updated.
+
+### Notes
+
+**Important Note: In recent versions, returning the settings for category addition fields within the config_data->step_fields field has been stopped. Instead, you can include the relationship directly if you wish to return the settings for category addition fields.**
+
+**The settings responsible for stopping the return of field settings within the config_data->step_fields field are as follows:**
+
+```env
+# Default value for returning the settings of category or ad addition fields
+NANO_TAGSAPI_TYPES_IS_CONFIG_DATA_STEP_FIELDS= true
+
+# Used in recent versions
+# Used if we want to stop returning the settings of category addition fields within the field
+# To stop returning the settings of category addition fields within the config_data field
+NANO_TAGSAPI_TYPES_IS_STOP_CONFIG_DATA_STEP_FIELDS= true
+
+# config_data.step_fields
+```
+
+**The following examples are for the old version:**
+
+```
+Example 1.1.2.1 get List Types is_config_data_step_fields=1
+Example 1.1.3.1 get List Types is_config_data_step_fields=0
+Example 1.1.4.1 get List Types exclude=config_data
+```
+
+**The following examples are for the new version, relying on including the relationship include=step_fields:**
+
+```
+Example 1.1.2.2 get List Types include=step_fields
+Example 1.1.3.2 get List Types exclude=step_fields
+Example 1.1.4.2 get List Types include=step_fields and exclude=config_data
+```
+
 
