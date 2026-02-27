@@ -585,3 +585,6 @@ api/v1/tags/availableformfields
 يمثل هذا التحديث خطوة استراتيجية نحو بناء نظام موحد وقوي لإدارة حقول النماذج في جميع برمجيات نانوسوفت، مما يسهم في رفع جودة المنتجات وتسريع وتيرة التطوير. 
 
 
+See [docs/Docs-FormFieldsManager-ar.md](./docs/Docs-FormFieldsManager-ar.md)
+
+

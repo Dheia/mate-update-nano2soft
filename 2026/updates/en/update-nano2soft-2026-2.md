@@ -577,3 +577,7 @@ Detailed documentation has been prepared for the second version of the available
 ---
 
 This update represents a strategic step towards building a unified and robust system for managing form fields across all Nanosoft software, contributing to higher product quality and faster development pace. 
+
+
+See [docs/Docs-FormFieldsManager-en.md](./docs/Docs-FormFieldsManager-en.md)
+
