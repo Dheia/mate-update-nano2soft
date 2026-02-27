@@ -509,4 +509,71 @@ Example 1.1.3.2 get List Types exclude=step_fields
 Example 1.1.4.2 get List Types include=step_fields and exclude=config_data
 ```
 
+## 2026-2-24 - 2026-2-28
 
+**Adding FormFieldsManager and Providing an Integrated API for Fetching Available Fields**
+
+---
+
+**Full Update Description:**
+Two major updates have been released for the `Nano.Tags` and `Nano.TagsApi` modules, aimed at improving form fields management and standardizing the way they are handled across all company software, in addition to providing an integrated API for dynamically fetching available fields.
+
+---
+
+### **First: Nano.Tags Module Update (Version 1.0.17)**
+
+#### **1. Adding FormFieldsManager Class**  
+A standalone generic class (`Nano\Tags\Classes\FormFieldsManager`) has been developed to serve as a unified center for managing form fields data. The class performs the following tasks:  
+
+- **Loading Fields from Multiple Sources**  
+  Support for loading fields from a PHP array, JSON string, or config file, with unified output.  
+- **Field Normalization**  
+  Completing missing values according to a default structure, and automatically converting text fields into multilingual formats based on supported languages (`ar`, `en`, `fr`).  
+- **Validation**  
+  Verifying required data completeness, correct field types, and allowed values.  
+- **Advanced Field Processing**  
+  Merging field sets, sorting them by `sort_order`, searching for a field by `id`, and detecting duplicates in `id` or `name`.  
+- **Dynamic Options Management**  
+  Fetching options from external sources such as APIs, database (Eloquent Models), static data, or custom PHP functions.  
+- **JSON Conversion**  
+  Converting fields to JSON (plain or formatted) and returning their JSON schema.  
+
+#### **2. Adding Helper Trait: SettingsFormFields**  
+A trait named `SettingsFormFields` has been created, which can be used in any class (whether related to settings or otherwise) to easily leverage the functionality of `FormFieldsManager`, enhancing code reuse and reducing duplication.
+
+#### **3. Updating Config Files**  
+The `config/nano/tags/form_fields.php` file has been updated to include ready-made sample fields for the store (`shop`) and products (`products`), with comprehensive coverage of different field types (text, lists, dates, sections, etc.), providing a practical example for developers.
+
+---
+
+### **Second: Nano.TagsApi Module Update (Version 1.0.9)**
+
+#### **1. Adding a New API Endpoint**  
+A new endpoint has been provided in the second version of the API for Nanosoft software:  
+```
+api/v1/tags/availableformfields
+```
+This endpoint returns an array of available fields after applying all normalization and validation rules, for direct use in frontend applications such as mobile apps or Vue/React interfaces.
+
+#### **2. Supporting Filtering by filter_id**  
+The API can be called with the `?filter_id` parameter to fetch only one specific field, allowing a specific part of the form to be updated without reloading all fields again.
+
+#### **3. Creating Comprehensive API Documentation**  
+Detailed documentation has been prepared for the second version of the available fields API, including usage instructions, request and response examples, and a list of all supported field types. This documentation is now available to the development team and will soon be published on the internal developer portal.
+
+---
+
+### **Expected Benefits and Impact on Workflow:**
+
+- **Unified Field Handling**  
+  Relying on `FormFieldsManager` across all modules ensures data consistency, ease of maintenance, and reduced errors.  
+- **Accelerated Development of Complex Forms**  
+  The ability to dynamically fetch options from external sources allows building automatically updated forms without modifying code.  
+- **Improved Developer Experience**  
+  The presence of a helper trait and clear documentation reduces the learning curve and speeds up the integration of new features.  
+- **Greater Frontend Flexibility**  
+  With the new API, frontend applications can request fields and display them according to context, enhancing interactivity and improving user experience.
+
+---
+
+This update represents a strategic step towards building a unified and robust system for managing form fields across all Nanosoft software, contributing to higher product quality and faster development pace. 
