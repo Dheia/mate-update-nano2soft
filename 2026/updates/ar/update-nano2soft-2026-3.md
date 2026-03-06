@@ -139,3 +139,15 @@ See [docs/Docs-TranslatableContentCaching-ar.md](./docs/Docs-TranslatableContent
 See [docs/Docs-HasAdvancedTree-ar.md](./docs/Docs-HasAdvancedTree-ar.md)
 
 See [docs/Docs-CategoriesModel-ar.md](./docs/Docs-CategoriesModel-ar.md)
+
+## 2026-3-7
+
+**Update Nano2.GoogleMerchant**
+
+1.0.10:
+    - Update autoFixItem In GoogleMerchantValidator Class
+    - Support fixGoogleProductUrl In LinkProcessor Class
+    - Support Download Corrected Xml File In Interface Google Merchant Validator
+
+تم تحديث الوحدة البرمجية الخاصة بالتحقق من صحة محتوي ملف جوجل ميرشينت حيث تم دعم خاصية تصحيح الروابط العربية وامكانية تحميل الملف المصحح من الواجهات مباشرة وتم تحسين الكود بشكل كبير .
+

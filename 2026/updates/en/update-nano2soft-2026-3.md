@@ -134,3 +134,15 @@ See [docs/Docs-HasAdvancedTree-en.md](./docs/Docs-HasAdvancedTree-en.md)
 
 See [docs/Docs-CategoriesModel-en.md](./docs/Docs-CategoriesModel-en.md)
 
+## 2026-3-7
+
+**Update Nano2.GoogleMerchant**
+
+1.0.10:
+    - Update autoFixItem In GoogleMerchantValidator Class
+    - Support fixGoogleProductUrl In LinkProcessor Class
+    - Support Download Corrected Xml File In Interface Google Merchant Validator
+
+The Google Merchant content validation module has been updated to support fixing Arabic links, with the ability to download the corrected file directly from the interfaces. The code has also been significantly improved.
+
+
