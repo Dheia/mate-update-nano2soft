@@ -68,7 +68,7 @@ These updates represent a qualitative leap in how multilingual content is manage
 See [docs/Docs-TranslatableContentCaching-en.md](./docs/Docs-TranslatableContentCaching-en.md)
 
 
-## 2026-3-3 - 2026-3-6
+## 2026-3-3 - 2026-3-7
 
 **Advanced Traits for Hierarchical Data and Improvements to the Categorization System**
 
