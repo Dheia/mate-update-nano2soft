@@ -280,3 +280,28 @@ Nano2\QueryBuilder\Classes\Reporting
 ### 8. الخاتمة
 
 يمثل نظام التقارير الديناميكي `Nano2.QueryBuilder.Reporting` إضافة نوعية لحزمة `Nano2.QueryBuilder`، حيث يوفر للشركة وعملائها قدرة متقدمة على تحليل البيانات واتخاذ القرارات بسرعة. من خلال هذا النظام، يمكن للمطورين بناء تطبيقات غنية بميزات التقارير المخصصة، بينما يحصل المستخدمون النهائيون على أداة مرنة وسهلة لاستخراج المعلومات التي يحتاجونها. مع خطط التطوير المستقبلية، سيواصل النظام تلبية احتياجات الأعمال المتطورة وتعزيز كفاءة التطبيقات المبنية على نانوسوفت.
+
+
+### 9. التوثيق
+
+See [docs/reporting/Docs-Reporting-ar.md](./docs/reporting/Docs-ReportsManager-ar.md)
+
+See [docs/reporting/Docs-Reporting-ar.md](./docs/reporting/Docs-ReportsManager-ar.md)
+
+See [docs/reporting/Docs-ReportSchemaRegistry-ar.md](./docs/reporting/Docs-ReportSchemaRegistry-ar.md)
+See [docs/reporting/Docs-ReportSchemaRegistry-Class-ar.md](./docs/reporting/Docs-ReportSchemaRegistry-Class-ar.md)
+
+See [docs/reporting/Docs-Reporting-Schema-Table-ar.md](./docs/reporting/Docs-Reporting-Schema-Table-ar.md)
+See [docs/reporting/Docs-Reporting-Schema-Column-ar.md](./docs/reporting/Docs-Reporting-Schema-Column-ar.md)
+See [docs/reporting/Docs-Reporting-Schema-Relationship-ar.md](./docs/reporting/Docs-Reporting-Schema-Relationship-ar.md)
+
+See [docs/reporting/Docs-ReportQueryConverter-ar.md](./docs/reporting/Docs-ReportQueryConverter-ar.md)
+
+See [docs/reporting/Docs-ComputedColumnValidator-ar.md](./docs/reporting/Docs-ComputedColumnValidator-ar.md)
+
+See [docs/reporting/Docs-ReportQueryValidator-ar.md](./docs/reporting/Docs-ReportQueryValidator-ar.md)
+
+See [docs/reporting/Docs-ReportQueryExporter-ar.md](./docs/reporting/Docs-ReportQueryExporter-ar.md)
+
+See [docs/reporting/Docs-ReportQueryErrorHandler-ar.md](./docs/reporting/Docs-ReportQueryErrorHandler-ar.md)
+

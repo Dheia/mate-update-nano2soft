@@ -274,3 +274,28 @@ The system was built from several specialized layers, each responsible for a spe
 ### 8. Conclusion
 
 The dynamic reporting system `Nano2.QueryBuilder.Reporting` represents a qualitative addition to the `Nano2.QueryBuilder` package, providing the company and its clients with an advanced ability to analyze data and make decisions quickly. Through this system, developers can build applications rich in custom reporting features, while end‑users obtain a flexible and easy tool to extract the information they need. With future development plans, the system will continue to meet evolving business needs and enhance the efficiency of NanoSoft‑based applications.
+
+
+### 9. Documentation 
+
+See [docs/reporting/Docs-Reporting-en.md](./docs/reporting/Docs-ReportsManager-en.md)
+
+See [docs/reporting/Docs-Reporting-en.md](./docs/reporting/Docs-ReportsManager-en.md)
+
+See [docs/reporting/Docs-ReportSchemaRegistry-en.md](./docs/reporting/Docs-ReportSchemaRegistry-en.md)
+See [docs/reporting/Docs-ReportSchemaRegistry-Class-en.md](./docs/reporting/Docs-ReportSchemaRegistry-Class-en.md)
+
+See [docs/reporting/Docs-Reporting-Schema-Table-en.md](./docs/reporting/Docs-Reporting-Schema-Table-en.md)
+See [docs/reporting/Docs-Reporting-Schema-Column-en.md](./docs/reporting/Docs-Reporting-Schema-Column-en.md)
+See [docs/reporting/Docs-Reporting-Schema-Relationship-en.md](./docs/reporting/Docs-Reporting-Schema-Relationship-en.md)
+
+See [docs/reporting/Docs-ReportQueryConverter-en.md](./docs/reporting/Docs-ReportQueryConverter-en.md)
+
+See [docs/reporting/Docs-ComputedColumnValidator-en.md](./docs/reporting/Docs-ComputedColumnValidator-en.md)
+
+See [docs/reporting/Docs-ReportQueryValidator-en.md](./docs/reporting/Docs-ReportQueryValidator-en.md)
+
+See [docs/reporting/Docs-ReportQueryExporter-en.md](./docs/reporting/Docs-ReportQueryExporter-en.md)
+
+See [docs/reporting/Docs-ReportQueryErrorHandler-en.md](./docs/reporting/Docs-ReportQueryErrorHandler-en.md)
+
