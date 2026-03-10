@@ -68,7 +68,6 @@
 
 See [docs/Docs-TranslatableContentCaching-ar.md](./docs/Docs-TranslatableContentCaching-ar.md)
 
-
 ## 2026-3-3 - 2026-3-7
 
 **Advanced Traits for Hierarchical Data and Improvements to the Categorization System**
