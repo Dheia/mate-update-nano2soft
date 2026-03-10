@@ -284,9 +284,9 @@ Nano2\QueryBuilder\Classes\Reporting
 
 ### 9. التوثيق
 
-See [docs/reporting/Docs-Reporting-ar.md](./docs/reporting/Docs-ReportsManager-ar.md)
+See [docs/reporting/Docs-Reporting-ar.md](./docs/reporting/Docs-Reporting-ar.md)
 
-See [docs/reporting/Docs-Reporting-ar.md](./docs/reporting/Docs-ReportsManager-ar.md)
+See [docs/reporting/Docs-ReportsManager-ar.md](./docs/reporting/Docs-ReportsManager-ar.md)
 
 See [docs/reporting/Docs-ReportSchemaRegistry-ar.md](./docs/reporting/Docs-ReportSchemaRegistry-ar.md)
 See [docs/reporting/Docs-ReportSchemaRegistry-Class-ar.md](./docs/reporting/Docs-ReportSchemaRegistry-Class-ar.md)
