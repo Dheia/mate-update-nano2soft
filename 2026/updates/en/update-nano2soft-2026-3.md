@@ -283,10 +283,13 @@ See [docs/reporting/Docs-Reporting-en.md](./docs/reporting/Docs-Reporting-en.md)
 See [docs/reporting/Docs-ReportsManager-en.md](./docs/reporting/Docs-ReportsManager-en.md)
 
 See [docs/reporting/Docs-ReportSchemaRegistry-en.md](./docs/reporting/Docs-ReportSchemaRegistry-en.md)
+
 See [docs/reporting/Docs-ReportSchemaRegistry-Class-en.md](./docs/reporting/Docs-ReportSchemaRegistry-Class-en.md)
 
 See [docs/reporting/Docs-Reporting-Schema-Table-en.md](./docs/reporting/Docs-Reporting-Schema-Table-en.md)
+
 See [docs/reporting/Docs-Reporting-Schema-Column-en.md](./docs/reporting/Docs-Reporting-Schema-Column-en.md)
+
 See [docs/reporting/Docs-Reporting-Schema-Relationship-en.md](./docs/reporting/Docs-Reporting-Schema-Relationship-en.md)
 
 See [docs/reporting/Docs-ReportQueryConverter-en.md](./docs/reporting/Docs-ReportQueryConverter-en.md)
