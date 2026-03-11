@@ -301,3 +301,80 @@ See [docs/reporting/Docs-ReportQueryExporter-en.md](./docs/reporting/Docs-Report
 
 See [docs/reporting/Docs-ReportQueryErrorHandler-en.md](./docs/reporting/Docs-ReportQueryErrorHandler-en.md)
 
+## 2026-3-11 - 2026-3-12
+
+**Adding interactive JSON display support (JSON Viewer) in Nano.Jsondb**
+
+A set of files has been added to improve the display of JSON data within the administration interface (Backend) of the NanoSoft system, so that JSON texts are converted into a collapsible and expandable tree with color-coded data types. This feature is very useful for displaying complex data in an organized and easy-to-read manner.
+
+---
+
+### 1. Added files and their functions
+
+#### a. `jjsonviewer.js`
+- **Description**: An independent jQuery library that converts JSON text (or object) into an HTML tree structure (tree view).
+- **Features**:
+  - Display values according to their type (string, number, boolean, object, array, null) with a distinctive color.
+  - Ability to collapse and expand sections (objects and arrays) by clicking on the `+` and `-` signs.
+  - Error handling and displaying a message in case the JSON is invalid.
+- **Direct usage**: It can be called on any page via:
+  ```javascript
+  $('#element').jJsonViewer(jsonString);
+  ```
+
+#### b. `oc.json-format.js`
+- **Description**: A control element specific to the NanoSoft software framework, acting as a wrapper for the previous library. It automatically applies `jjsonviewer.js` to any HTML element that has the `data-control="json"` attribute.
+- **Mechanism**:
+  - Reads the element's content (assumed to be JSON text) and creates a collapsible tree for it.
+  - It is automatically activated when the page loads via `$(document).render()`.
+- **Usage inside templates (Twig)**:
+  ```twig
+  <div data-control="json">
+      {{ variable | json_encode | raw }}
+  </div>
+  ```
+
+#### c. `jjsonviewer.css`
+- **Description**: The stylesheet file responsible for formatting the JSON tree.
+- **Tasks**:
+  - Hiding the original element and displaying the formatted version.
+  - Coloring keys and values according to type (keys in blue, strings in green, numbers in red, etc.).
+  - Adding `+` and `-` signs for collapsible elements via CSS (using `:before`).
+  - Controlling indentation and visual arrangement.
+
+---
+
+### 2. Using the feature in the admin panel (administration part)
+
+In any view inside the administration, add an element with the `data-control="json"` attribute and put the JSON text inside it.  
+Example:  
+```twig
+<div data-control="json">
+    {{ someModel.json_data | raw }}
+</div>
+```  
+The content will appear as a tree with the ability to collapse sections and color-coded data.
+
+**Notes**:  
+- If the content is large, you can customize the container height via CSS (adding `max-height` and `overflow-y` to `.jjson-container`).  
+- The library supports error display if the text is not valid JSON.  
+
+### 3. Using the feature in templates
+
+After activating the plugin and including the files, the JSON viewer can be used in any administration (backend) page very simply:
+
+```twig
+<div data-control="json">
+    {{ record.json_field | raw }} {# or any JSON source #}
+</div>
+```
+
+**Note**: Make sure that the content inside the element is valid JSON text, and you may need to use the `| json_encode` filter if the variable is an array.
+
+### 4. Settings and activation method
+
+**Activation method**:  
+- Make sure to set the configuration `extend_jsonviewer = true` in the file `nano/jsondb/config/config.php` (or via the environment variable `NANO_JSONDB_EXTEND_JSONVIEWER`).  
+- Once activated, the files will be automatically included in all administration pages.
+
+
