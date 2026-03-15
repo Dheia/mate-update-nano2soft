@@ -307,7 +307,6 @@ See [docs/reporting/Docs-ReportQueryErrorHandler-en.md](./docs/reporting/Docs-Re
 
 A set of files has been added to improve the display of JSON data within the administration interface (Backend) of the NanoSoft system, so that JSON texts are converted into a collapsible and expandable tree with color-coded data types. This feature is very useful for displaying complex data in an organized and easy-to-read manner.
 
----
 
 ### 1. Added files and their functions
 
@@ -342,7 +341,7 @@ A set of files has been added to improve the display of JSON data within the adm
   - Adding `+` and `-` signs for collapsible elements via CSS (using `:before`).
   - Controlling indentation and visual arrangement.
 
----
+
 
 ### 2. Using the feature in the admin panel (administration part)
 
@@ -377,4 +376,59 @@ After activating the plugin and including the files, the JSON viewer can be used
 - Make sure to set the configuration `extend_jsonviewer = true` in the file `nano/jsondb/config/config.php` (or via the environment variable `NANO_JSONDB_EXTEND_JSONVIEWER`).  
 - Once activated, the files will be automatically included in all administration pages.
 
+## 2026-3-12 - 2026-3-14
+
+**Improvements and Extensions to the FormFieldsManager Class**
+
+**Update Nano.Tags**
+1.0.19:
+    - Update FormFieldsManager Class In Nano.Tags
+    - Support FormFieldsHelperTrait Trait In Nano.Tags
+    - Update form_fields Config Support nestedform and repeater
+    - Create Docs FormFieldsHelperTrait Arabic And English
+
+### Introduction
+
+In line with the company's vision to provide flexible and scalable technological solutions, a set of improvements and extensions have been made to the `FormFieldsManager` class responsible for managing and preparing form field data in Nano2Soft applications. These updates aim to increase the class's efficiency, simplify the process of building complex forms, and provide advanced helper tools for developers, ensuring unified efforts and accelerating the development pace.
+
+### Key Updates
+
+#### 1. Addition of a Helper Trait (`FormFieldsHelperTrait`)
+A separate Trait has been created that includes a large set of helper functions that extend the class's capabilities without affecting its core structure. Developers can easily use this Trait via `use` inside the main class or any other class requiring the same functionalities.
+
+**Areas covered by the Trait:**
+- **Validation Simulation:** Functions like `validateFieldValue()` to simulate input value validation, and `getValidationRulesFlattened()` to convert validation rules into Laravel's string format.
+- **Output Generation:** Functions like `toHtml()` to generate preliminary HTML code for the field, and `toJsonSchema()` to create a JSON Schema structure for the fields.
+- **Advanced Filtering:** Functions like `getFieldsByType()`, `getFieldsByContext()`, `getFieldsByDataSourceType()`, `getFieldsWithValidation()`, `getFieldsByTabGroup()`, `groupFieldsByType()` and more to filter fields based on multiple properties.
+- **Search and Query:** Functions like `findByName()`, `findBy()`, `hasFieldWithId()`, `filterByCallback()` to facilitate access to fields.
+- **Data Transformation and Processing:** Functions like `extractFieldValues()`, `mapFieldsToAssoc()`, `sortFieldsBy()`, `sliceFields()`, `paginateFields()`, `localizeFields()`, `toArraySimple()` to flexibly transform and format field data.
+
+#### 2. Support for Nested Fields
+A new field type `nestedform` has been added, and the `repeater` type has been enhanced to include internal fields via a `fields` property. This allows developers to build complex, multi-level data structures (such as a sub-address or a set of prices associated with a specific unit).
+
+- The JSON schema file (`form-fields-settings-schema-no-default.json`) has been updated to include the `nestedform` type in the `enum` list for `type`, and a `fields` property of type `array` has been added, referencing the same field definition (using `$ref`) to ensure infinite nesting capability.
+- Class functions were modified: `applyTypeSpecific()` to process and normalize `fields`, `validateRecord()` to validate internal fields, and `cleanValues()` to correctly handle `fields` without removing empty arrays.
+
+#### 3. Improvements to the `form_fields.php` Configuration File
+The pricing section in the example configuration file has been restructured to align with the new logic:
+- Added an `is_units` checkbox field that controls the display of two alternative groups of fields.
+- When `is_units` is unchecked, single price fields (`price`, `old_price`, `currencys_id`, `is_show_price`, `is_show_old_price`, `is_parleying`) appear using a `trigger` with an `unchecked` condition.
+- When `is_units` is checked, a `units_prices` field of type `repeater` appears, containing sub-fields representing unit prices (`units_id`, `price`, `old_price`, `currencys_id`, ...).
+- This design makes the configuration file more dynamic and reflects a real-world use case of the `trigger` feature and nested fields.
+
+#### 4. Update to the `normalizeFields` Function to Support Recursive Normalization
+`normalizeFields` has been modified to call `createRecord` on each field, which in turn calls `applyTypeSpecific` that normalizes any internal fields if present. This ensures that fields within a `repeater` or `nestedform` are also populated with all default properties (like `sort_order`, language processing, etc.) and become ready for use.
+
+### Expected Benefits
+
+- **Increased Productivity:** Providing ready-made functions reduces repetitive code writing and accelerates the development of new modules.
+- **Unified Approach:** All developers will work with the same tools, simplifying project maintenance and knowledge transfer within the team.
+- **High Flexibility:** The ability to build complex forms (e.g., products with multiple unit-based prices) without needing to modify the base class.
+- **Comprehensive Documentation:** The documentation file (`Docs-FormFieldsManager-ar.md`) has been updated to include a thorough explanation of the new features with practical examples.
+
+### Conclusion
+
+These improvements represent a quantum leap for the `FormFieldsManager` class, which has now become an integrated platform for managing form fields with all their complexities.
+
+See [docs/Docs-FormFieldsHelperTrait-en.md](./docs/Docs-FormFieldsHelperTrait-en.md)
 

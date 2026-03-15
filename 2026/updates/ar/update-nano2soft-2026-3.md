@@ -307,15 +307,12 @@ See [docs/reporting/Docs-ReportQueryExporter-ar.md](./docs/reporting/Docs-Report
 
 See [docs/reporting/Docs-ReportQueryErrorHandler-ar.md](./docs/reporting/Docs-ReportQueryErrorHandler-ar.md)
 
-
-
 ## 2026-3-11 - 2026-3-12
 
 **إضافة دعم عرض JSON بشكل تفاعلي (JSON Viewer) In Nano.Jsondb**
 
 تم إضافة مجموعة من الملفات لتحسين عرض بيانات JSON داخل واجهة الإدارة (Backend) لنظام NanoSoft، بحيث يتم تحويل نصوص JSON إلى شجرة قابلة للطي والفتح مع تلوين أنواع البيانات. هذه الميزة مفيدة جداً لعرض البيانات المعقدة بشكل منظم وسهل القراءة.
 
----
 
 ### 1. الملفات المُضافة ووظائفها
 
@@ -350,7 +347,6 @@ See [docs/reporting/Docs-ReportQueryErrorHandler-ar.md](./docs/reporting/Docs-Re
   - إضافة علامات `+` و `-` لعناصر الطي عبر CSS (باستخدام `:before`).
   - التحكم في المسافات البادئة والترتيب البصري.
 
----
 
 ### 2. استخدام الميزة في لوحة التحكم جزء الإدارة 
 
@@ -385,5 +381,63 @@ See [docs/reporting/Docs-ReportQueryErrorHandler-ar.md](./docs/reporting/Docs-Re
 - تأكد من ضبط الإعداد `extend_jsonviewer = true` في ملف `nano/jsondb/config/config.php` (أو عبر متغير البيئة `NANO_JSONDB_EXTEND_JSONVIEWER`).  
 - بمجرد التفعيل، سيتم تضمين الملفات تلقائياً في جميع صفحات الإدارة.  
 
+## 2026-3-12 - 2026-3-14
+
+**تحسينات وتوسعات كلاس FormFieldsManager**  
+
+**Update Nano.Tags**
+1.0.19:
+    - Update FormFieldsManager Class In Nano.Tags
+    - Support FormFieldsHelperTrait Trait In Nano.Tags
+    - Update form_fields Config Support nestedform and repeater
+    - Create Docs FormFieldsHelperTrait Arabic And English
+
+### مقدمة
+
+تماشياً مع رؤية الشركة في تقديم حلول تقنية مرنة وقابلة للتوسع، تم إجراء حزمة من التحسينات والتوسعات على كلاس `FormFieldsManager` المسؤول عن إدارة وإعداد بيانات حقول النماذج في تطبيقات Nano2Soft . تهدف هذه التحديثات إلى رفع كفاءة الكلاس، وتسهيل عملية بناء النماذج المعقدة، وتوفير أدوات مساعدة متقدمة للمطورين، بما يضمن توحيد الجهود وتسريع وتيرة التطوير.
+
+
+### أبرز التحديثات
+
+#### 1. إضافة Trait مساعد (`FormFieldsHelperTrait`)
+تم إنشاء Trait منفصل يضم مجموعة كبيرة من الدوال المساعدة التي توسع إمكانيات الكلاس دون التأثير على هيكله الأساسي. يمكن للمطور استخدام هذا الـ Trait بسهولة عبر `use` داخل الكلاس الرئيسي أو أي كلاس آخر يحتاج نفس الوظائف.
+
+**المجالات التي يغطيها الـ Trait:**
+- **التحقق من القيم (Validation Simulation):** دوال مثل `validateFieldValue()` لمحاكاة التحقق من القيم المدخلة، و`getValidationRulesFlattened()` لتحويل قواعد التحقق إلى صيغة Laravel النصية.
+- **توليد المخرجات:** دوال مثل `toHtml()` لتوليد كود HTML تمهيدي للحقل، و`toJsonSchema()` لإنشاء هيكل JSON Schema خاص بالحقول.
+- **التصفية المتقدمة:** دوال مثل `getFieldsByType()`، `getFieldsByContext()`، `getFieldsByDataSourceType()`، `getFieldsWithValidation()`، `getFieldsByTabGroup()`، `groupFieldsByType()` وغيرها لتصفية الحقول بناءً على خصائص متعددة.
+- **البحث والاستعلام:** دوال مثل `findByName()`، `findBy()`، `hasFieldWithId()`، `filterByCallback()` لتسهيل الوصول إلى الحقول.
+- **تحويل البيانات ومعالجتها:** دوال مثل `extractFieldValues()`، `mapFieldsToAssoc()`، `sortFieldsBy()`، `sliceFields()`، `paginateFields()`، `localizeFields()`، `toArraySimple()` لتحويل وتنسيق بيانات الحقول بمرونة.
+
+#### 2. دعم الحقول المتداخلة (Nested Fields)
+تم إضافة نوع حقل جديد هو `nestedform`، وتعزيز نوع `repeater` ليشمل حقولاً داخلية عبر خاصية `fields`. يتيح هذا للمطورين بناء هياكل بيانات معقدة ومتعددة المستويات (مثل عنوان فرعي أو مجموعة من الأسعار المرتبطة بوحدة معينة).
+
+- تم تحديث ملف الـ JSON schema (`form-fields-settings-schema-no-default.json`) ليشمل النوع `nestedform` في قائمة `enum` الخاصة بـ `type`، وإضافة خاصية `fields` من نوع `array` تشير إلى نفس تعريف الحقل (باستخدام `$ref`) لضمان إمكانية التداخل غير المحدود.
+- تم تعديل دوال الكلاس: `applyTypeSpecific()` لمعالجة `fields` وتطبيعها، و`validateRecord()` للتحقق من صحة الحقول الداخلية، و`cleanValues()` للتعامل مع `fields` بشكل صحيح دون إزالة المصفوفات الفارغة.
+
+#### 3. تحسينات على ملف الإعدادات `form_fields.php`
+تم إعادة هيكلة جزء الأسعار في ملف الإعدادات النموذجي ليتوافق مع المنطق الجديد:  
+- إضافة حقل `is_units` من نوع checkbox يتحكم في ظهور مجموعتين بديلتين من الحقول.  
+- عند إلغاء تفعيل `is_units` (unchecked) تظهر حقول السعر المفرد (`price`، `old_price`، `currencys_id`، `is_show_price`، `is_show_old_price`، `is_parleying`) باستخدام `trigger` بشرط `unchecked`.  
+- عند تفعيل `is_units` (checked) يظهر حقل `units_prices` من نوع `repeater` يحتوي على حقول فرعية تمثل أسعار الوحدات (`units_id`, `price`, `old_price`, `currencys_id`, ...).  
+- هذا التصميم يجعل ملف الإعدادات أكثر ديناميكية ويعكس استخدامًا حقيقيًا لميزة `trigger` والحقول المتداخلة.
+
+#### 4. تحديث دالة `normalizeFields` لدعم التطبيع المتكرر
+تم تعديل `normalizeFields` بحيث تقوم باستدعاء `createRecord` على كل حقل، وهذا بدوره يستدعي `applyTypeSpecific` التي تقوم بتطبيع الحقول الداخلية إن وجدت. بهذا نضمن أن الحقول داخل `repeater` أو `nestedform` تستكمل بكل الخصائص الافتراضية (مثل `sort_order`، معالجة اللغات، إلخ) وتصبح جاهزة للاستخدام.
+
+
+### الفوائد المتوقعة
+
+- **زيادة الإنتاجية:** توفير دوال جاهزة يقلل من كتابة الكود المتكرر ويسرع تطوير الوحدات الجديدة.
+- **توحيد الأسلوب:** جميع المطورين سيعملون بنفس الأدوات، مما يسهل صيانة المشاريع ونقل المعرفة بين الفريق.
+- **مرونة عالية:** إمكانية بناء نماذج معقدة (مثل المنتجات ذات الأسعار المتعددة حسب الوحدات) دون الحاجة إلى تعديل الكلاس الأساسي.
+- **توثيق متكامل:** تم تحديث ملف التوثيق (`Docs-FormFieldsManager-ar.md`) ليشمل شرحاً وافياً للميزات الجديدة مع أمثلة تطبيقية.
+
+
+### خاتمة
+
+تمثل هذه التحسينات نقلة نوعية في كلاس `FormFieldsManager`، حيث أصبح الآن منصة متكاملة لإدارة حقول النماذج بكل تعقيداتها.
+
+See [docs/Docs-FormFieldsHelperTrait-ar.md](./docs/Docs-FormFieldsHelperTrait-ar.md)
 
 
