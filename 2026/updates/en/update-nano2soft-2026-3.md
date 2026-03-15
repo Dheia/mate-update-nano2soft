@@ -432,3 +432,167 @@ These improvements represent a quantum leap for the `FormFieldsManager` class, w
 
 See [docs/Docs-FormFieldsHelperTrait-en.md](./docs/Docs-FormFieldsHelperTrait-en.md)
 
+## 2026-3-13 - 2026-3-15
+
+### Development of the Repeater Fields System and Launch of a Unified API
+
+**A comprehensive update for managing repeater fields in the Tss Basic and Nano.BasicApi plugins: An integrated handler class and a RESTful API interface**
+
+Adding the `RepeaterFieldsData` class for unified handling of jsonable fields (phone, email, website, properties, links) with support for all input formats, and providing a complete API interface via the `RepeaterFields` controller to facilitate integration with front-end applications.
+
+---
+
+### 1. Introduction
+
+As part of our continuous efforts to improve code quality and unify mechanisms for handling repetitive data in NanoSoft projects, an integrated solution has been developed for repeater fields, which are frequently used in models containing variable lists such as phone numbers, email addresses, website links, additional properties, and links.
+
+The main challenges were the multiplicity of formats arriving from the API (single string, array of strings, single object, array of objects, mixed), and the absence of a unified mechanism to normalize this data before saving it in `jsonable` properties. Additionally, retrieving and displaying data required consistent formatting aligned with field definitions in YAML files.
+
+Therefore, the `Tss\Basic\Classes\RepeaterFieldsData` class was designed to handle these fields flexibly and efficiently, relying on YAML definitions to extract default values and field types. In parallel, the `Nano\BasicApi\APIControllers\RepeaterFields` controller was created to provide a RESTful interface covering all functionalities of the class, allowing developers to leverage these capabilities through a documented API.
+
+---
+
+### 2. Update Objectives
+
+- **Unify repeater field handling**: Create a single class that handles all fields (phone, email, website, properties, links) and normalizes various inputs into a unified structure ready for database storage.
+- **Rely on definitions (YAML)**: Read field definition files (`repeater_fields_*.yaml`) to extract default values and field types (switch, dropdown, mediafinder), making the class dynamic and modifiable without changing the code.
+- **Provide a comprehensive API interface**: Create the `RepeaterFields` controller offering RESTful endpoints for operations: input normalization, output formatting, extracting main values, data merging, validation, and retrieving supported fields.
+- **Improve developer experience**: Complete documentation for the class and controller with practical examples in both Arabic and English, facilitating integration and usage.
+- **Support all possible formats**: Handle single strings, string arrays, single objects, object arrays, and mixtures, while maintaining data integrity.
+- **Handle different field types**: Convert `switch` values to `'1'`/`'0'`, validate `dropdown` values, and convert `mediafinder` paths to full URLs during formatting.
+- **Provide helper methods for partial updates**: Merge new data with old data, and extract primary values (e.g., just phone numbers) to simplify front-end operations.
+
+---
+
+### 3. Developed and Enhanced Components
+
+#### 3.1 `Tss\Basic\Classes\RepeaterFieldsData` Class
+A completely new class was created at `tss/basic/classes/RepeaterFieldsData.php`, featuring the following methods:
+
+- **`processInput(string $fieldName, mixed $input): array`**  
+  Normalizes inputs into a unified array, adding default values from the YAML file and adding a `_group` field to distinguish the type.
+
+- **`formatOutput(string $fieldName, mixed $storedValue, bool $filterHidden = false, bool $resolveMedia = true): array`**  
+  Prepares stored data for output, with options to hide non-visible items and convert media paths to full URLs.
+
+- **`extractMainValues(string $fieldName, array $data, bool $includeDefaults = false): array`**  
+  Extracts primary values (e.g., phone numbers) from the data, with an option to include only default items.
+
+- **`mergeData(string $fieldName, array $oldData, array $newData, bool $replace = false): array`**  
+  Merges new data with old data, with options for full replacement or appending.
+
+- **`validate(string $fieldName, array $data): array`**  
+  Validates data against definitions (required fields, allowed dropdown values) and returns an array containing `valid` and `errors`.
+
+- **`runTests(): array`**  
+  Runs a suite of tests on all supported fields to ensure processing integrity and returns a detailed report.
+
+- **`getSupportedFields(): array`**  
+  Returns a list of supported field names.
+
+The class was implemented with caching for YAML definitions to improve performance and intelligent handling of different field types.
+
+#### 3.2 `Nano\BasicApi\APIControllers\RepeaterFields` Controller
+A new controller was created under the path `api/v1/basic/repeater-fields`, providing the following endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `supported` | GET | List of supported fields |
+| `process` | POST | Normalize input for a specific field |
+| `format` | POST | Format stored data for output |
+| `extract` | POST | Extract main values |
+| `merge` | POST | Merge new data with old data |
+| `validate` | POST | Validate data |
+| `tests` | GET | Run tests (developers only) |
+
+The controller was built following the same pattern as other NanoSoft controllers (e.g., `DynamicReports`) with `init`, `successResponse`, `errorResponse` methods, and unified exception handling that hides sensitive details in production.
+
+#### 3.3 Language Files
+Translation files for both Arabic and English were created in the `nano/basicapi/lang/` path, covering all messages used in the controller, making it easy to change texts and supporting multilingualism.
+
+#### 3.4 Comprehensive Documentation
+Two documentation files were prepared:
+- **`RepeaterFieldsData` Class Documentation** in both Arabic and English, explaining the class methods, usage, and examples for each field.
+- **`RepeaterFields` Controller Documentation** in both Arabic and English, detailing the endpoints, parameters, and responses with practical examples for each point.
+
+---
+
+### 4. Workflow (New Flow)
+
+1. **Receiving data from the API**:
+   - The client sends a request to `POST /api/v1/basic/repeater-fields/process` with `field` and `input` in any format.
+   - The controller calls `processInput`, which converts the input into a unified array.
+
+2. **Saving data to the model**:
+   - The output can be saved directly to the model's `jsonable` property (e.g., `$model->phone = $processedData`).
+
+3. **Displaying data**:
+   - When data needs to be displayed via API, `POST /api/v1/basic/repeater-fields/format` is called with the stored data.
+   - The class formats it, hides non-visible items, and converts media paths.
+
+4. **Partial updates**:
+   - `merge` can be used to append a new list to the old one without losing existing data.
+
+5. **Validation**:
+   - Before saving, `validate` can be called to ensure data correctness according to field definitions.
+
+6. **Testing**:
+   - Developers can run `tests` to verify that all cases work correctly after any modifications.
+
+---
+
+### 5. Key Achievements and Features
+
+- **Integrated handler class**: Covers all necessary operations for repeater fields in one place, reducing code duplication and unifying logic.
+- **Support for all possible input formats**: From single strings to complex arrays, maintaining data integrity.
+- **Dynamic reading of YAML definitions**: Default values and field types are loaded automatically, allowing field modifications without changing the class.
+- **Intelligent handling of field types**: Convert `switch` to boolean values, validate `dropdown`, and convert `mediafinder` paths.
+- **Unified API interface**: 7 endpoints covering all functionalities, with complete documentation and practical examples.
+- **Secure error handling**: Hide sensitive details in production while allowing debugging in development mode.
+- **Multilingual support**: Translation files for Arabic and English facilitate message maintenance.
+- **Built-in tests**: `runTests` method helps developers ensure class integrity after modifications.
+
+---
+
+### 6. Benefits and Added Value
+
+- **For developers**:
+  - Save significant time and effort in manually handling repeater fields.
+  - Clean, organized code relying on YAML definitions, easing maintenance and expansion.
+  - Clear and integrated interface for dealing with these fields from anywhere in the system.
+  - Ability to quickly test the class via `runTests`.
+
+- **For end users**:
+  - Smooth experience when entering data via API without worrying about the required format.
+  - Consistent and correctly formatted data when displayed.
+  - Ability to send partial updates without losing old data.
+
+- **For the system as a whole**:
+  - Unified method for handling repeater fields across all NanoSoft plugins.
+  - Reduced likelihood of errors due to differing input formats.
+  - Improved performance through caching of YAML definitions.
+
+---
+
+### 7. Future Development Plans
+
+- **Add more field types**: Integrate new types like `radio`, `checkbox`, `date` with handling in the class.
+- **Expand the class to cover other fields**: Such as `address` or `social_media` with their own definitions.
+- **Develop a graphical user interface in the backend**: To manage repeater field definitions via the control panel.
+- **Add support for custom validation rules**: By passing additional rules from the YAML file.
+- **Integrate the class with the event system**: To allow data modification before and after processing.
+
+---
+
+### 8. Conclusion
+
+The development of the `RepeaterFieldsData` class and the `RepeaterFields` controller represents a significant step towards unifying and simplifying the handling of repeater fields in NanoSoft projects. By providing a flexible mechanism for normalizing various inputs, relying on dynamic YAML definitions, and offering an integrated API interface, developers can now integrate these fields into their applications quickly and securely, ensuring data consistency and ease of maintenance.
+
+These updates have contributed to improving the developer experience and reducing development time, while also enhancing system reliability through secure error handling and built-in testing tools. We are confident that these additions will be of great value to current and future projects, and we look forward to receiving user feedback to continuously develop them.
+
+We thank all contributors to this achievement and look forward to continuing development based on the evolving requirements of NanoSoft's business.
+
+See [docs/Docs-RepeaterFieldsData-en.md](./docs/Docs-RepeaterFieldsData-en.md)
+
+See [docs/Docs-RepeaterFieldsData-API-en.md](./docs/Docs-RepeaterFieldsData-API-en.md)
+
