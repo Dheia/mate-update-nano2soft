@@ -620,3 +620,22 @@ New fields have been added to user profiles in both frontend and backend. These 
     - 'Add bio, website, and links columns to frontend user profile'
     - builder_table_add_bio_columns_to_frontend_users_table.php
 
+## 2026-3-17
+
+**Support WhatsApp field in Shop Products (Frontend, Backend, and API)**
+
+A new field for WhatsApp phone number has been added to products. This field is used in the Haraj, Taysir, and Souq Aqar platforms to allow product or ad owners to specify a separate number for WhatsApp communication, instead of relying on the previously existing mobile field.
+The interfaces in the admin panel have been updated, as well as the API section for products and product management. Documentation has also been updated.
+
+**Update Nano.Shop**
+1.1.12:
+    - Support WhatsApp field in Product Backend Interface
+    - Support HasWhatsappField in Product Models and Shop Managers Version 2
+
+**Update Nano.ShopApi**
+1.2.1:
+    - Support WhatsApp field in Shop Products API Version 2
+    - Support WhatsApp field in Shop Managers Products API Version 2
+    - Update shop/products API documentation Version 2
+    - Update shop/managers API documentation Version 2
+

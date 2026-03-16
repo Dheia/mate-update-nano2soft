@@ -630,3 +630,22 @@ See [docs/Docs-RepeaterFieldsData-API-ar.md](./docs/Docs-RepeaterFieldsData-API-
     - builder_table_add_bio_columns_to_frontend_users_table.php
 
 
+## 2026-3-17 
+
+**Support whatsapp field In Shop Products Front And Backend And API**
+
+تم اضافة حقل جديد خاص برقم هاتف الواتساب فى الاصناف حيث يستخدم هذا الحقل فى منصة حراج وتيسير وسوق عقار لكي يتيح لصاحب الضنف او الاعلان تخصيص رقم اخر للمراسلة واتس بدال من الاعتماد على حقل رقم الهاتف mobile الموجود سابقاً .
+تم تحديث الواجهات فى لوحة التحكم وكذالك تم تحديث جزء ال api الخاص بالاصناف وإدارة الاصناف وتم تحديث التوثيق ايضاً
+
+**Update Nano.Shop**
+1.1.12:
+    - Support whatsapp Field In Produc Backend Interface
+    - Support HasWhatsappField In Produc Models And Shop Managers Version 2
+
+**Update Nano.ShopApi**
+1.2.1:
+    - Support whatsapp field In Shop Products API Version 2
+    - Support whatsapp field In Shop Managers Products API Version 2
+    - Update shop/products Docs Api Version 2.
+    - Update shop/managers Docs Api Version 2.
+
