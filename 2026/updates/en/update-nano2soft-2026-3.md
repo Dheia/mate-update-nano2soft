@@ -596,3 +596,27 @@ See [docs/Docs-RepeaterFieldsData-en.md](./docs/Docs-RepeaterFieldsData-en.md)
 
 See [docs/Docs-RepeaterFieldsData-API-en.md](./docs/Docs-RepeaterFieldsData-API-en.md)
 
+## 2026-2-15 - 2026-3-16
+
+**Support bio, website, and links columns in all user profiles (Frontend, Backend, and API)**
+
+New fields have been added to user profiles in both frontend and backend. These fields are now supported in the admin panel interfaces and fully integrated into the API.
+
+**Update Nano.AuthApi**
+1.0.17:
+    - 'Add bio, website, and links columns to frontend user profile'
+    - builder_table_add_bio_columns_to_frontend_users_table.php
+1.0.18:
+    - Support processWebsiteInput and processLinksInput in AuthHelpers Class for user profile
+    - Support processing website and links input in API user profile
+
+**Update Nano.BackendUserPlus**
+1.0.7:
+    - 'Add bio, website, and links columns to backend user profile'
+    - builder_table_add_bio_columns_to_backend_users_table.php
+
+**Update Nano.UserPlus**
+1.1.6:
+    - 'Add bio, website, and links columns to frontend user profile'
+    - builder_table_add_bio_columns_to_frontend_users_table.php
+
