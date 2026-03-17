@@ -639,3 +639,349 @@ The interfaces in the admin panel have been updated, as well as the API section 
     - Update shop/products API documentation Version 2
     - Update shop/managers API documentation Version 2
 
+## 2026-01-28 - 2026-03-18
+
+**Comprehensive Development of the Units Management System and Addition of an Integrated Unit Converter**  
+Within the `Tss.Inventory` Package
+
+---
+
+### 1. Introduction
+
+An integrated development package has been implemented aimed at bringing about a quantum leap in units management within the TSS Inventory system. It is no longer limited to simply storing unit names; we now have an integrated system that supports **unit conversion**, **different contexts**, **subtypes**, and logical validation.
+
+Everything related to units has been completely restructured, starting from the database, through the models, and ending with helper classes that provide a rich and easy-to-use programming interface. The goal is to enable developers to handle units with high flexibility, whether in conversion operations, linking with products, or displaying data in user interfaces.
+
+This update aims to address advanced use cases such as:
+- Converting values between different measurement units (length, weight, volume, quantity, …) with high precision.
+- Handling complex quantity units (dozen, ream, pair, …) within their logical contexts.
+- Preventing illogical conversions between different contexts (e.g., converting dozen to ream).
+- Flexibly linking units to products with the ability to specify the main unit and conversion factors.
+- Providing helper classes for creating units, retrieving information, and advanced searching.
+
+---
+
+### 2. Developed Components
+
+#### 2.1 Conversion System Classes (within `Tss\Inventory\Classes\Units`)
+
+| Class | Description |
+|-------|-------------|
+| `UnitType` | A static class for defining unit types (length, weight, volume, …) and quantity subtypes. Provides methods for type validation, getting labels, and type categorization. |
+| `UnitNameHelper` | A helper class for handling unit names and symbols. Provides lists of units with Arabic and English labels, unit searching, retrieving unit information, and validity checking. |
+| `UnitConverter` | The heart of the conversion system. Contains the base conversion data for all types and performs conversion operations with precise support for temperatures. |
+| `UnitContextValidator` | Responsible for verifying the logical validity of conversions between different quantity units (contexts). Prevents illogical conversions such as dozen to ream. |
+| `UnitFactory` | A factory for creating `Unit` objects from symbols or types. |
+| `UnitHelper` | General helper functions for dealing with units, such as formatting, getting the best display unit, and generating HTML options. |
+| `UnitCreator` | A specialized class for creating units in the database and linking them to products and prices. Provides safe methods with transaction support. |
+| `ConversionForm` | (For testing purposes) Provides HTML forms to test conversions. |
+| `SmartUnitConverter` | Provides conversions with warnings or strict logical checking. |
+| `UnitsInformation` | Displays complete information about all supported units in a formatted HTML interface (for documentation and testing purposes). |
+
+#### 2.2 Model Enhancements
+
+The following models have been updated to support the new system:
+
+- **`Unit`**: Added new columns (`unit_symbol`, `conversion_factor`, `value`, `is_base_unit`, `is_public`, `is_published`, `published_at`, `unpublished_at`). Added Traits: `HasBaseUnit`, `HasDefault`, `HasRecordsOptions`, `ListObjects`, `ListOptions`, `FieldsOptions`, `HasScopesModel` to provide advanced features such as caching, record retrieval, and dynamic options.
+- **`ProductsUnit`**: Added `unit_symbol` and `type` columns to link units to products while retaining basic unit information. Improved duplicate checking.
+- **`ProductsPricesUnit`**: Added `unit_symbol` column for easier access and searching. Improved `makePrimary` and `makeIsActive` methods.
+
+#### 2.3 `UnitManager` (New Helper Class)
+
+A new class has been created at `Tss\Inventory\Classes\UnitManager` to provide static methods that simplify unit management and common operations such as creation, validation, and printing. This class relies on the subclasses (`UnitCreator`, `UnitConverter`, `UnitHelper`, …) and provides a unified interface for developers.
+
+**Available Methods**:
+- `createUnit`: Create a new unit in the database.
+- `checkUnit`: Validate a unit (its symbol, balance, …).
+- `getQueryDate`: Apply date conditions to queries.
+- `scopeWhereField`: A helper scope to apply conditions on fields with support for `*` and `all`.
+- `printReports`: Print unit reports.
+- `getAllUnitsGrouped`: Get all units grouped by type.
+- `getUnitsForType`: Get units of a specific type.
+- `getRentalTimeUnits`: Get time units used in rental contexts.
+- `formatDecimal`: Format decimal numbers without trailing zeros.
+
+#### 2.4 Database Updates (Migrations)
+
+Several migration files were added to prepare the tables for the new system:
+
+| Version | Description | File |
+|---------|-------------|------|
+| 1.1.13 | Add `unit_symbol` column to `tss_inventory_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_units.php` |
+| 1.1.14 | Add `unit_symbol` column to `tss_inventory_products_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_products_units.php` |
+| 1.1.15 | Add `unit_symbol` column to `tss_inventory_products_prices_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_products_prices_units.php` |
+| 1.1.16 | Add `conversion_factor` and `value` columns to `tss_inventory_units` | `builder_table_add_conversion_factor_columns_to_tss_inventory_units.php` |
+| 1.1.17 | Update `type` values in `tss_inventory_units` from old to new (Numerical → quantity, Mass → weight, …) | `update_type_values_in_iss_inventory_units_table.php` |
+| 1.1.18 | Add `is_base_unit` column to `tss_inventory_units` | `builder_table_add_is_base_unit_columns_to_tss_inventory_units.php` |
+| 1.1.19 | Add `type` column to `tss_inventory_products_units` | `builder_table_add_type_columns_to_tss_inventory_products_units.php` |
+| 1.1.20 | Add `is_public`, `is_published`, `published_at`, `unpublished_at` columns to `tss_inventory_units` | `builder_table_add_is_published_columns_to_tss_inventory_units.php` |
+| 1.1.21 | Add the same columns to `tss_inventory_prices` | `builder_table_add_is_published_columns_to_tss_inventory_prices.php` |
+| 1.1.22 | Support the new fields in the units and prices interfaces (reuse the same migration) | - |
+| 1.1.23 | Support the `CUSTOM` type in `UnitType` (code update) | - |
+| 1.1.24 | Change the `conversion_factor` and `value` columns to `decimal(20,10)` for higher precision | `builder_table_change_conversion_factor_columns_to_tss_inventory_units.php` |
+| 1.1.25 | Change the same columns in `tss_inventory_products_units` as well | `builder_table_change_conversion_factor_columns_to_tss_inventory_products_units.php` |
+
+---
+
+### 3. Details of Code Updates
+
+#### 3.1 `UnitType` – Redefining Types
+
+`UnitType` has been expanded to include main and subtypes:
+
+```php
+const LENGTH = 'length';
+const WEIGHT = 'weight';
+const VOLUME = 'volume';
+const AREA = 'area';
+const TEMPERATURE = 'temperature';
+const TIME = 'time';
+const SPEED = 'speed';
+const PRESSURE = 'pressure';
+const ENERGY = 'energy';
+const POWER = 'power';
+const DATA = 'data';
+const ANGLE = 'angle';
+const QUANTITY = 'quantity';
+const CUSTOM = 'custom';
+
+// Quantity subtypes
+const QUANTITY_GENERAL = 'quantity_general';
+const QUANTITY_PACKAGING = 'quantity_packaging';
+const QUANTITY_PAPER = 'quantity_paper';
+const QUANTITY_PAIRS = 'quantity_pairs';
+const QUANTITY_LARGE = 'quantity_large';
+```
+
+Methods such as `isQuantitySubtype`, `getMainType`, `getAllTypesWithLabels` were added to facilitate categorization.
+
+#### 3.2 `UnitNameHelper` – Unit Information
+
+This class provides comprehensive lists of all supported units with Arabic and English labels, and allows advanced searching:
+
+```php
+// Get a unit label
+UnitNameHelper::getUnitLabel('kg', 'ar'); // "كيلوجرام"
+
+// Advanced unit search
+UnitNameHelper::searchUnitAdvanced('كيلو'); // Returns info of the first matching unit
+
+// Get complete info
+UnitNameHelper::getUnitInfo('dozen', 'ar');
+/*
+[
+    'symbol' => 'dozen',
+    'label' => 'درزن',
+    'english_label' => 'Dozen',
+    'type' => 'quantity_packaging',
+    'type_label' => 'Packaging Quantity',
+    'is_base_unit' => true,
+    'context' => 'packaging',
+    'conversion_factor' => 12.0,
+    ...
+]
+*/
+```
+
+#### 3.3 `UnitConverter` – Unit Converter
+
+The heart of the system, based on optimized `CONVERSION_DATA` arrays. Supports conversion between any two compatible units, with special handling for temperatures.
+
+```php
+// Convert 5 kilograms to pounds
+$result = UnitConverter::convert(5, 'kg', 'lb', 4); // 11.0231
+
+// Convert temperature
+$result = UnitConverter::convert(100, 'c', 'f', 2); // 212.00
+
+// Check if conversion is possible
+UnitConverter::canConvert('dozen', 'ream'); // false
+```
+
+#### 3.4 `UnitContextValidator` – Logical Validation
+
+Ensures that conversions between quantity units are logical (within the same context):
+
+```php
+UnitContextValidator::isConversionLogical('dozen', 'box'); // true (both packaging)
+UnitContextValidator::isConversionLogical('dozen', 'ream'); // false (packaging → paper)
+```
+
+#### 3.5 Model Enhancements
+
+- **`Unit`**: Traits were added to organize the code and provide advanced features:
+  - `HasBaseUnit`: Handling the base unit of a type.
+  - `HasDefault`: Making a unit default.
+  - `ListObjects` & `ListOptions`: Caching records and option lists.
+  - `HasRecordsOptions`: `getRecords` method for flexible record retrieval.
+  - `FieldsOptions`: Field options methods (for interfaces).
+  - `HasScopesModel`: Advanced query scopes.
+
+- **`ProductsUnit`**: Added `unit_symbol` column to speed up queries, and `type` column for classification. Improved duplicate checking.
+
+- **`ProductsPricesUnit`**: Added `unit_symbol` column, and improved `makePrimary` and `makeIsActive` methods to correctly update records.
+
+#### 3.6 `UnitManager` – Unified Interface
+
+`UnitManager` was created as a single entry point for developers:
+
+```php
+use Tss\Inventory\Classes\UnitManager;
+
+// Create a new unit
+$result = UnitManager::createUnit([
+    'name' => 'Kilogram',
+    'unit_symbol' => 'kg',
+    'type' => UnitType::WEIGHT,
+    'is_base_unit' => true,
+]);
+
+// Validate a unit (e.g., a recharge card code)
+$result = UnitManager::checkUnit(['unit_symbol' => 'CARD123']);
+
+// Get rental time units
+$rentalUnits = UnitManager::getRentalTimeUnits('en'); // ['h' => 'Hour', 'day' => 'Day', ...]
+
+// Print a report
+UnitManager::printReports($options);
+```
+
+---
+
+### 4. Practical Examples
+
+#### 4.1 Creating a New Unit
+
+```php
+$result = UnitManager::createUnit([
+    'name' => 'Dozen',
+    'unit_symbol' => 'dozen',
+    'type' => UnitType::QUANTITY_PACKAGING,
+    'is_base_unit' => true,
+    'conversion_factor' => 12,
+]);
+
+if ($result['status']) {
+    echo "Unit created successfully: " . $result['model']->name;
+}
+```
+
+#### 4.2 Attaching a Unit to a Product
+
+```php
+use Tss\Inventory\Classes\Units\UnitCreator;
+
+$result = UnitCreator::attachUnitToProduct([
+    'products_id' => 123,
+    'units_id' => 5,
+    'is_main' => true,
+    'conversion_factor' => 1,
+]);
+```
+
+#### 4.3 Creating a Price for a Product Unit
+
+```php
+$result = UnitCreator::createProductUnitPrice([
+    'products_id' => 123,
+    'units_id' => 5,
+    'prices_id' => 1,
+    'value' => 100.50,
+    'currencys_id' => 1,
+]);
+```
+
+#### 4.4 Searching for a Unit
+
+```php
+$unitInfo = UnitNameHelper::searchUnitAdvanced('kilo');
+if ($unitInfo) {
+    echo $unitInfo['unit_name_en']; // "Kilogram"
+}
+```
+
+#### 4.5 Converting a Value Using `UnitConverter`
+
+```php
+$value = UnitConverter::convert(10, 'dozen', 'pcs'); // 120
+$description = UnitConverter::describeConversion(10, 'dozen', 'pcs');
+// "10 dozen = 120 pieces"
+```
+
+#### 4.6 Getting Rental Time Units
+
+```php
+$rentalUnits = UnitManager::getRentalTimeUnits('en');
+// ['h' => 'Hour', 'day' => 'Day', 'week' => 'Week', 'month' => 'Month']
+```
+
+#### 4.7 Using `Unit` Scopes
+
+```php
+$units = Unit::isActive()
+    ->whereType(UnitType::WEIGHT)
+    ->whereIsBaseUnit(true)
+    ->get();
+```
+
+#### 4.8 Creating All Standard Units for a Specific Type
+
+```php
+$result = UnitCreator::createStandardUnitsForType([
+    'type' => UnitType::LENGTH,
+    'companys_id' => 1,
+    'departments_id' => 2,
+]);
+```
+
+---
+
+### 5. Summary of Options in `UnitManager` and Helper Classes
+
+| Class / Method | Description |
+|----------------|-------------|
+| `UnitManager::createUnit()` | Create a new unit in the database |
+| `UnitManager::checkUnit()` | Validate a unit (symbol, balance, user) |
+| `UnitManager::getAllUnitsGrouped()` | Get all units grouped by type |
+| `UnitManager::getUnitsForType()` | Get units of a specific type |
+| `UnitManager::getRentalTimeUnits()` | Get time units used in rental contexts |
+| `UnitManager::formatDecimal()` | Format decimal numbers without trailing zeros |
+| `UnitCreator::attachUnitToProduct()` | Attach a unit to a product |
+| `UnitCreator::createProductUnitPrice()` | Create a price for a product unit |
+| `UnitConverter::convert()` | Convert a value between two units |
+| `UnitNameHelper::getUnitInfo()` | Get complete information about a unit |
+| `UnitNameHelper::searchUnitAdvanced()` | Advanced search for a unit |
+| `UnitContextValidator::isConversionLogical()` | Check if a conversion is logical |
+
+---
+
+### 6. Added Value
+
+- **For Developers**: An integrated system for handling units providing ready-made methods for conversion, linking, and querying. The system can be easily extended by adding new types.
+- **For End Users**: High precision in conversions, smarter interfaces that prevent illogical conversions, and broad support for various units.
+- **For the System**: A modular and clean design that separates data from logic, with caching used to improve performance.
+
+---
+
+### 7. Conclusion
+
+This update represents a quantum leap in units management within the TSS Inventory system. Thanks to the comprehensive restructuring and the addition of specialized classes, developers can now build applications that rely on complex conversions easily and safely. As development continues, this system will remain capable of meeting the needs of diverse projects thanks to its flexibility and robust design.
+
+See [docs/UnitManager/Docs-UnitManager-en.md](./docs/UnitManager/Docs-UnitManager-en.md)
+
+See [docs/UnitManager/Docs-UnitManager-Class-en.md](./docs/UnitManager/Docs-UnitManager-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitType-Class-en.md](./docs/UnitManager/Docs-UnitType-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitNameHelper-Class-en.md](./docs/UnitManager/Docs-UnitNameHelper-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitConverter-Class-en.md](./docs/UnitManager/Docs-UnitConverter-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitHelper-Class-en.md](./docs/UnitManager/Docs-UnitHelper-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitCreator-Class-en.md](./docs/UnitManager/Docs-UnitCreator-Class-en.md)
+
+See [docs/UnitManager/Docs-UnitsInformation-Class-en.md](./docs/UnitManager/Docs-UnitsInformation-Class-en.md)
+
+See [docs/UnitManager/Docs-ConversionForm-Class-en.md](./docs/UnitManager/Docs-ConversionForm-Class-en.md)
+

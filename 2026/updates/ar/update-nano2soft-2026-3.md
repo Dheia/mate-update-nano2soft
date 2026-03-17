@@ -649,3 +649,351 @@ See [docs/Docs-RepeaterFieldsData-API-ar.md](./docs/Docs-RepeaterFieldsData-API-
     - Update shop/products Docs Api Version 2.
     - Update shop/managers Docs Api Version 2.
 
+## 2026-1-28 - 2026-3-18
+
+**تطوير شامل لنظام إدارة الوحدات (Units Management) وإضافة محول وحدات متكامل**  
+ضمن حزمة `Tss.Inventory`
+
+---
+
+### 1. مقدمة
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى إحداث نقلة نوعية في إدارة الوحدات داخل نظام TSS Inventory. لم يعد الأمر مقتصراً على مجرد تخزين أسماء الوحدات، بل أصبح لدينا نظام متكامل يدعم **التحويل بين الوحدات**، **السياقات المختلفة**، **الأنواع الفرعية**، والتحقق من المنطقية.  
+
+تم إعادة هيكلة كل ما يتعلق بالوحدات بشكل كامل، بدءاً من قاعدة البيانات، مروراً بالنماذج (Models)، وانتهاءً بكلاسات المساعدة (Helpers) التي توفر واجهة برمجية غنية وسهلة الاستخدام. الهدف هو تمكين المطورين من التعامل مع الوحدات بمرونة عالية، سواء في عمليات التحويل، الربط مع المنتجات، أو عرض البيانات في واجهات المستخدم.
+
+يهدف هذا التحديث إلى تلبية حالات استخدام متقدمة مثل:
+- تحويل القيم بين وحدات القياس المختلفة (طول، وزن، حجم، كميات، ...) بدقة عالية.
+- التعامل مع وحدات الكميات المعقدة (درزن، ريم، زوج، ...) ضمن سياقاتها المنطقية.
+- منع التحويلات غير المنطقية بين سياقات مختلفة (مثلاً: تحويل درزن إلى ريم).
+- ربط الوحدات بالمنتجات بمرونة مع إمكانية تحديد الوحدة الرئيسية وعوامل التحويل.
+- توفير كلاسات مساعدة لإنشاء الوحدات، جلب المعلومات، والبحث المتقدم.
+
+---
+
+### 2. المكونات المطورة
+
+#### 2.1 كلاسات نظام التحويل (ضمن `Tss\Inventory\Classes\Units`)
+
+| الكلاس | الوصف |
+|--------|-------|
+| `UnitType` | كلاس ثابت لتعريف أنواع الوحدات (طول، وزن، حجم، ...) والأنواع الفرعية للكميات. يوفر دوال للتحقق من الأنواع، الحصول على التسميات، وتصنيف الأنواع. |
+| `UnitNameHelper` | كلاس مساعد للتعامل مع أسماء الوحدات ورموزها. يوفر قوائم الوحدات مع التسميات العربية والإنجليزية، البحث عن الوحدات، الحصول على معلومات الوحدة، والتحقق من صحتها. |
+| `UnitConverter` | قلب نظام التحويل. يحتوي على بيانات التحويل الأساسية لجميع الأنواع، ويقوم بإجراء عمليات التحويل مع دعم دقيق لدرجات الحرارة. |
+| `UnitContextValidator` | مسؤول عن التحقق من منطقية التحويلات بين وحدات الكميات المختلفة (السياقات). يمنع التحويلات غير المنطقية مثل تحويل درزن إلى ريم. |
+| `UnitFactory` | مصنع لإنشاء كائنات `Unit` من الرموز أو الأنواع. |
+| `UnitHelper` | دوال مساعدة عامة للتعامل مع الوحدات، مثل التنسيق، الحصول على أفضل وحدة للعرض، وتوليد خيارات HTML. |
+| `UnitCreator` | كلاس متخصص لإنشاء الوحدات في قاعدة البيانات وربطها بالمنتجات والأسعار. يوفر دوالاً آمنة مع دعم المعاملات. |
+| `ConversionForm` | (للاستخدام التجريبي) يقدم نماذج HTML لاختبار التحويلات. |
+| `SmartUnitConverter` | يوفر تحويلات مع تحذيرات أو تحقق صارم من المنطقية. |
+| `UnitsInformation` | يعرض معلومات كاملة عن جميع الوحدات المدعومة في واجهة HTML منسقة (لأغراض التوثيق والاختبار). |
+
+#### 2.2 تحسينات النماذج (Models)
+
+تم تحديث النماذج التالية لدعم النظام الجديد:
+
+- **`Unit`**: إضافة أعمدة جديدة (`unit_symbol`, `conversion_factor`, `value`, `is_base_unit`, `is_public`, `is_published`, `published_at`, `unpublished_at`). إضافة Traits: `HasBaseUnit`, `HasDefault`, `HasRecordsOptions`, `ListObjects`, `ListOptions`, `FieldsOptions`, `HasScopesModel` لتوفير وظائف متقدمة مثل التخزين المؤقت، الحصول على السجلات، والخيارات الديناميكية.
+- **`ProductsUnit`**: إضافة عمود `unit_symbol` و `type` لربط الوحدات بالمنتجات مع الاحتفاظ بالمعلومات الأساسية للوحدة. تحسين التحقق من التكرار.
+- **`ProductsPricesUnit`**: إضافة عمود `unit_symbol` لسهولة الوصول والبحث. تحسين دوال `makePrimary` و `makeIsActive`.
+
+#### 2.3 `UnitManager` (كلاس مساعد جديد)
+
+تم إنشاء كلاس جديد في المسار `Tss\Inventory\Classes\UnitManager` لتوفير دوال ثابتة تُسهل إدارة الوحدات وعملياتها الشائعة مثل الإنشاء، التحقق، والطباعة. هذا الكلاس يعتمد على الكلاسات الفرعية (`UnitCreator`, `UnitConverter`, `UnitHelper`, ...) ويوفر واجهة موحدة للمطورين.
+
+**الدوال المتوفرة**:
+- `createUnit`: إنشاء وحدة جديدة في قاعدة البيانات.
+- `checkUnit`: التحقق من صحة وحدة (رمزها، رصيدها، ...).
+- `getQueryDate`: تطبيق شروط تاريخية على الاستعلامات.
+- `scopeWhereField`: نطاق مساعد لتطبيق شروط على الحقول مع دعم `*` و `all`.
+- `printReports`: طباعة تقارير الوحدات.
+- `getAllUnitsGrouped`: الحصول على جميع الوحدات مصنفة حسب النوع.
+- `getUnitsForType`: الحصول على وحدات نوع معين.
+- `getRentalTimeUnits`: الحصول على وحدات الزمن المستخدمة في التأجير.
+- `formatDecimal`: تنسيق الأرقام العشرية بدون أصفار زائدة.
+
+#### 2.4 تحديثات قاعدة البيانات (Migrations)
+
+تمت إضافة عدة ملفات تحديث لتجهيز الجداول لدعم النظام الجديد:
+
+| الإصدار | الوصف | الملف |
+|--------|-------|-------|
+| 1.1.13 | إضافة عمود `unit_symbol` إلى `tss_inventory_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_units.php` |
+| 1.1.14 | إضافة عمود `unit_symbol` إلى `tss_inventory_products_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_products_units.php` |
+| 1.1.15 | إضافة عمود `unit_symbol` إلى `tss_inventory_products_prices_units` | `builder_table_add_unit_symbol_columns_to_tss_inventory_products_prices_units.php` |
+| 1.1.16 | إضافة عمودي `conversion_factor` و `value` إلى `tss_inventory_units` | `builder_table_add_conversion_factor_columns_to_tss_inventory_units.php` |
+| 1.1.17 | تحديث قيم `type` في `tss_inventory_units` من القديمة إلى الجديدة (Numerical → quantity, Mass → weight, ...) | `update_type_values_in_iss_inventory_units_table.php` |
+| 1.1.18 | إضافة عمود `is_base_unit` إلى `tss_inventory_units` | `builder_table_add_is_base_unit_columns_to_tss_inventory_units.php` |
+| 1.1.19 | إضافة عمود `type` إلى `tss_inventory_products_units` | `builder_table_add_type_columns_to_tss_inventory_products_units.php` |
+| 1.1.20 | إضافة أعمدة `is_public`, `is_published`, `published_at`, `unpublished_at` إلى `tss_inventory_units` | `builder_table_add_is_published_columns_to_tss_inventory_units.php` |
+| 1.1.21 | إضافة الأعمدة نفسها إلى `tss_inventory_prices` | `builder_table_add_is_published_columns_to_tss_inventory_prices.php` |
+| 1.1.22 | دعم الحقول الجديدة في واجهات الوحدات والأسعار (إعادة استخدام نفس الـ migration) | - |
+| 1.1.23 | دعم النوع المخصص `CUSTOM` في `UnitType` (تحديث برمجي) | - |
+| 1.1.24 | تغيير نوع عمودي `conversion_factor` و `value` إلى `decimal(20,10)` لزيادة الدقة | `builder_table_change_conversion_factor_columns_to_tss_inventory_units.php` |
+| 1.1.25 | تغيير نوع العمودين في `tss_inventory_products_units` أيضاً | `builder_table_change_conversion_factor_columns_to_tss_inventory_products_units.php` |
+
+---
+
+### 3. تفاصيل التحديثات البرمجية
+
+#### 3.1 `UnitType` – إعادة تعريف الأنواع
+
+تم توسيع `UnitType` ليشمل الأنواع الرئيسية والفرعية:
+
+```php
+const LENGTH = 'length';
+const WEIGHT = 'weight';
+const VOLUME = 'volume';
+const AREA = 'area';
+const TEMPERATURE = 'temperature';
+const TIME = 'time';
+const SPEED = 'speed';
+const PRESSURE = 'pressure';
+const ENERGY = 'energy';
+const POWER = 'power';
+const DATA = 'data';
+const ANGLE = 'angle';
+const QUANTITY = 'quantity';
+const CUSTOM = 'custom';
+
+// الأنواع الفرعية للكميات
+const QUANTITY_GENERAL = 'quantity_general';
+const QUANTITY_PACKAGING = 'quantity_packaging';
+const QUANTITY_PAPER = 'quantity_paper';
+const QUANTITY_PAIRS = 'quantity_pairs';
+const QUANTITY_LARGE = 'quantity_large';
+```
+
+أضيفت دوال مثل `isQuantitySubtype`، `getMainType`، `getAllTypesWithLabels` لتسهيل التصنيف.
+
+#### 3.2 `UnitNameHelper` – معلومات الوحدات
+
+يوفر هذا الكلاس قوائم شاملة بجميع الوحدات المدعومة مع تسميات عربية وإنجليزية، ويسمح بالبحث المتقدم:
+
+```php
+// الحصول على تسمية وحدة
+UnitNameHelper::getUnitLabel('kg', 'ar'); // "كيلوجرام"
+
+// البحث المتقدم عن وحدة
+UnitNameHelper::searchUnitAdvanced('كيلو'); // يُرجع معلومات الوحدة الأولى التي تطابق
+
+// الحصول على معلومات كاملة
+UnitNameHelper::getUnitInfo('dozen', 'ar');
+/*
+[
+    'symbol' => 'dozen',
+    'label' => 'درزن',
+    'english_label' => 'Dozen',
+    'type' => 'quantity_packaging',
+    'type_label' => 'كميات التعبئة',
+    'is_base_unit' => true,
+    'context' => 'packaging',
+    'conversion_factor' => 12.0,
+    ...
+]
+*/
+```
+
+#### 3.3 `UnitConverter` – محول الوحدات
+
+قلب النظام، يعتمد على مصفوفات `CONVERSION_DATA` المحسنة. يدعم التحويل بين أي وحدتين متوافقتين، مع معالجة خاصة لدرجات الحرارة.
+
+```php
+// تحويل 5 كيلوجرام إلى رطل
+$result = UnitConverter::convert(5, 'kg', 'lb', 4); // 11.0231
+
+// تحويل درجة حرارة
+$result = UnitConverter::convert(100, 'c', 'f', 2); // 212.00
+
+// التحقق من إمكانية التحويل
+UnitConverter::canConvert('dozen', 'ream'); // false
+```
+
+#### 3.4 `UnitContextValidator` – التحقق من المنطقية
+
+يضمن أن التحويلات بين وحدات الكميات منطقية (ضمن نفس السياق):
+
+```php
+UnitContextValidator::isConversionLogical('dozen', 'box'); // true (كلاهما تعبئة)
+UnitContextValidator::isConversionLogical('dozen', 'ream'); // false (تعبئة → ورق)
+```
+
+#### 3.5 تحسينات النماذج
+
+- **`Unit`**: تمت إضافة Traits لتنظيم الكود وتوفير وظائف متقدمة:
+  - `HasBaseUnit`: التعامل مع الوحدة الأساسية للنوع.
+  - `HasDefault`: جعل وحدة افتراضية.
+  - `ListObjects` و `ListOptions`: التخزين المؤقت للسجلات وقوائم الخيارات.
+  - `HasRecordsOptions`: دالة `getRecords` لاسترجاع السجلات بمرونة.
+  - `FieldsOptions`: دوال خيارات الحقول (للواجهات).
+  - `HasScopesModel`: نطاقات متقدمة للاستعلام.
+
+- **`ProductsUnit`**: إضافة عمود `unit_symbol` لتسريع الاستعلامات، وعمود `type` للتصنيف. تحسين التحقق من التكرار.
+
+- **`ProductsPricesUnit``: إضافة عمود `unit_symbol`، وتحسين دوال `makePrimary` و `makeIsActive` لتحديث السجلات بشكل صحيح.
+
+#### 3.6 `UnitManager` – واجهة موحدة
+
+تم إنشاء `UnitManager` ليكون نقطة دخول واحدة للمطورين:
+
+```php
+use Tss\Inventory\Classes\UnitManager;
+
+// إنشاء وحدة جديدة
+$result = UnitManager::createUnit([
+    'name' => 'كيلوجرام',
+    'unit_symbol' => 'kg',
+    'type' => UnitType::WEIGHT,
+    'is_base_unit' => true,
+]);
+
+// التحقق من صحة وحدة (رمز كرت الشحن مثلاً)
+$result = UnitManager::checkUnit(['unit_symbol' => 'CARD123']);
+
+// الحصول على وحدات التأجير
+$rentalUnits = UnitManager::getRentalTimeUnits('ar'); // ['h' => 'ساعة', 'day' => 'يوم', ...]
+
+// طباعة تقرير
+UnitManager::printReports($options);
+```
+
+---
+
+### 4. أمثلة تطبيقية
+
+#### 4.1 إنشاء وحدة جديدة
+
+```php
+$result = UnitManager::createUnit([
+    'name' => 'درزن',
+    'unit_symbol' => 'dozen',
+    'type' => UnitType::QUANTITY_PACKAGING,
+    'is_base_unit' => true,
+    'conversion_factor' => 12,
+]);
+
+if ($result['status']) {
+    echo "تم إنشاء الوحدة بنجاح: " . $result['model']->name;
+}
+```
+
+#### 4.2 ربط وحدة بمنتج
+
+```php
+use Tss\Inventory\Classes\Units\UnitCreator;
+
+$result = UnitCreator::attachUnitToProduct([
+    'products_id' => 123,
+    'units_id' => 5,
+    'is_main' => true,
+    'conversion_factor' => 1,
+]);
+```
+
+#### 4.3 إنشاء سعر لوحدة منتج
+
+```php
+$result = UnitCreator::createProductUnitPrice([
+    'products_id' => 123,
+    'units_id' => 5,
+    'prices_id' => 1,
+    'value' => 100.50,
+    'currencys_id' => 1,
+]);
+```
+
+#### 4.4 البحث عن وحدة
+
+```php
+$unitInfo = UnitNameHelper::searchUnitAdvanced('كيلو');
+if ($unitInfo) {
+    echo $unitInfo['unit_name_ar']; // "كيلوجرام"
+}
+```
+
+#### 4.5 تحويل قيمة باستخدام `UnitConverter`
+
+```php
+$value = UnitConverter::convert(10, 'dozen', 'pcs'); // 120
+$description = UnitConverter::describeConversion(10, 'dozen', 'pcs');
+// "10 درزن = 120 حبة"
+```
+
+#### 4.6 الحصول على وحدات التأجير
+
+```php
+$rentalUnits = UnitManager::getRentalTimeUnits('ar');
+// ['h' => 'ساعة', 'day' => 'يوم', 'week' => 'أسبوع', 'month' => 'شهر']
+```
+
+#### 4.7 استخدام نطاقات `Unit`
+
+```php
+$units = Unit::isActive()
+    ->whereType(UnitType::WEIGHT)
+    ->whereIsBaseUnit(true)
+    ->get();
+```
+
+#### 4.8 إنشاء جميع الوحدات القياسية لنوع معين
+
+```php
+$result = UnitCreator::createStandardUnitsForType([
+    'type' => UnitType::LENGTH,
+    'companys_id' => 1,
+    'departments_id' => 2,
+]);
+```
+
+---
+
+### 5. ملخص الخيارات في `UnitManager` والكلاسات المساعدة
+
+| الكلاس / الدالة | الوصف |
+|-----------------|-------|
+| `UnitManager::createUnit()` | إنشاء وحدة جديدة في قاعدة البيانات |
+| `UnitManager::checkUnit()` | التحقق من صحة وحدة (رمز، رصيد، مستخدم) |
+| `UnitManager::getAllUnitsGrouped()` | الحصول على جميع الوحدات مصنفة حسب النوع |
+| `UnitManager::getUnitsForType()` | الحصول على وحدات نوع معين |
+| `UnitManager::getRentalTimeUnits()` | الحصول على وحدات الزمن المستخدمة في التأجير |
+| `UnitManager::formatDecimal()` | تنسيق الأرقام العشرية بدون أصفار زائدة |
+| `UnitCreator::attachUnitToProduct()` | ربط وحدة بمنتج |
+| `UnitCreator::createProductUnitPrice()` | إنشاء سعر لوحدة منتج |
+| `UnitConverter::convert()` | تحويل قيمة بين وحدتين |
+| `UnitNameHelper::getUnitInfo()` | الحصول على معلومات كاملة عن وحدة |
+| `UnitNameHelper::searchUnitAdvanced()` | بحث متقدم عن وحدة |
+| `UnitContextValidator::isConversionLogical()` | التحقق من منطقية التحويل |
+
+---
+
+### 6. القيمة المضافة
+
+- **للمطورين**: نظام متكامل للتعامل مع الوحدات يوفر دوال جاهزة للتحويل، الربط، والاستعلام. إمكانية توسيع النظام بإضافة أنواع جديدة بسهولة.
+- **للمستخدمين النهائيين**: دقة عالية في التحويلات، واجهات أكثر ذكاءً تمنع التحويلات غير المنطقية، ودعم واسع للوحدات المختلفة.
+- **للنظام**: تصميم نمطي ونظيف يفصل بين البيانات والمنطق، مع استخدام التخزين المؤقت لتحسين الأداء.
+
+---
+
+### 7. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة الوحدات داخل نظام TSS Inventory. بفضل إعادة الهيكلة الشاملة وإضافة كلاسات متخصصة، أصبح بإمكان المطورين بناء تطبيقات تعتمد على تحويلات معقدة بسهولة وأمان. مع استمرار التطوير، سيبقى هذا النظام قادراً على تلبية احتياجات المشاريع المتنوعة بفضل مرونته وتصميمه المتين.
+
+
+See [docs/UnitManager/Docs-UnitManager-ar.md](./docs/UnitManager/Docs-UnitManager-ar.md)
+
+See [docs/UnitManager/Docs-UnitManager-Class-ar.md](./docs/UnitManager/Docs-UnitManager-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitType-Class-ar.md](./docs/UnitManager/Docs-UnitType-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitNameHelper-Class-ar.md](./docs/UnitManager/Docs-UnitNameHelper-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitConverter-Class-ar.md](./docs/UnitManager/Docs-UnitConverter-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitHelper-Class-ar.md](./docs/UnitManager/Docs-UnitHelper-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitCreator-Class-ar.md](./docs/UnitManager/Docs-UnitCreator-Class-ar.md)
+
+See [docs/UnitManager/Docs-UnitsInformation-Class-ar.md](./docs/UnitManager/Docs-UnitsInformation-Class-ar.md)
+
+See [docs/UnitManager/Docs-ConversionForm-Class-ar.md](./docs/UnitManager/Docs-ConversionForm-Class-ar.md)
+
+
