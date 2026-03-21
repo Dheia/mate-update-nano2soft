@@ -1010,4 +1010,250 @@ See [docs/UnitManager/Docs-ConversionForm-Class-ar.md](./docs/UnitManager/Docs-C
     - Update shop/managers Docs Api Version 2.
     - Create shop/units Docs Api Version 2.
 
+## 2026-3-19 - 2026-3-21
+
+**تطوير شامل لنظام ارتباطات المنتجات (Product Associations) وإضافة فلاتر ديناميكية متقدمة**  
+ضمن إضافة `Nano.Shop`
+
+---
+
+### 1. مقدمة
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تعزيز مرونة وفعالية إدارة الارتباطات بين المنتجات في نظام نانو سوفت. لم يعد الأمر مقتصراً على مجرد إنشاء علاقات بسيطة بين المنتجات (بدائل، مكملات، إصدارات أحدث)، بل أصبح بإمكان المطورين والمستخدمين النهائيين الاستفادة من نطاقات (Scopes) متقدمة للاستعلام، وفلاتر جاهزة للإدارة، وتحكم دقيق في اتجاه العلاقة ونوعها، بالإضافة إلى إمكانية التحكم في ظهور هذه الفلاتر عبر ملف الإعدادات، مما يسمح بتكييف النظام وفق احتياجات كل مشروع.
+
+يهدف هذا التحديث إلى تلبية حالات استخدام متقدمة مثل:
+- تصفية المنتجات التي لها بدائل (في أي اتجاه أو كأب فقط أو كهدف فقط).
+- تصفية المنتجات التي لا تملك أي ارتباط على الإطلاق.
+- دمج شروط الارتباط مع شروط أخرى باستخدام `orWhere`.
+- إضافة فلاتر إلى واجهة إدارة المنتجات بسهولة عبر كلاس مساعد.
+- التحكم في تفعيل أو تعطيل أنواع معينة من فلاتر الارتباطات من خلال متغيرات البيئة أو ملف الإعدادات.
+
+---
+
+### 2. المكونات المطورة
+
+#### 2.1 `AssociationsModel` (السلوك – Behavior)
+
+تم تحديث هذا السلوك بشكل جذري ليصبح أكثر مرونة وقوة. السلوك مسؤول عن إدارة العلاقات بين المنتجات وتوفير نطاقات استعلام متقدمة.
+
+##### أ. النطاقات الأساسية (لكل نوع ارتباط)
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeHasAlternate` | المنتجات التي لديها ارتباطات بديلة (في أي اتجاه) |
+| `scopeHasCrossSell` | المنتجات التي لديها ارتباطات مكملة |
+| `scopeHasUpSell` | المنتجات التي لديها إصدارات أحدث |
+| `scopeHasNotAlternate` | المنتجات التي ليس لديها بدائل |
+| `scopeHasNotCrossSell` | المنتجات التي ليس لديها مكملات |
+| `scopeHasNotUpSell` | المنتجات التي ليس لديها إصدارات أحدث |
+
+##### ب. نطاقات حسب الاتجاه
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeHasAlternateAsParent` | المنتجات التي هي آباء لبدائل |
+| `scopeHasAlternateAsTarget` | المنتجات التي هي أهداف (بدائل) |
+| `scopeHasCrossSellAsParent` | المنتجات التي هي آباء لمكملات |
+| `scopeHasCrossSellAsTarget` | المنتجات التي هي أهداف (مكملات) |
+| `scopeHasUpSellAsParent` | المنتجات التي هي آباء لإصدارات أحدث |
+| `scopeHasUpSellAsTarget` | المنتجات التي هي أهداف (إصدارات أحدث) |
+
+##### ج. نطاقات لأي ارتباط (وجود / عدم وجود)
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeHasAnyAssociationBoth` | المنتجات التي لها أي ارتباط (أب أو هدف) |
+| `scopeHasNotAnyAssociationBoth` | المنتجات التي ليس لها أي ارتباط |
+
+##### د. النطاق المتقدم `scopeWhereAssociation`
+
+هذا النطاق هو الأقوى والأكثر مرونة، حيث يقبل مصفوفة خيارات للتحكم الكامل في نوع الارتباط، اتجاهه، شروط إضافية، والدمج مع الاستعلام.
+
+```php
+scopeWhereAssociation($query, $options = [], $boolean = 'and', $not = false)
+```
+
+**الخيارات المدعومة**:
+- `type`: string|array|null – نوع العلاقة أو مجموعة منها (null يعني أي نوع).
+- `direction`: string|array|null – اتجاه العلاقة: `'parent'`، `'target'`، `'both'` (افتراضي both) أو مصفوفة.
+- `callback`: callable|null – دالة لتخصيص استعلام العلاقة.
+- `has`: bool – true للإيجاب (whereHas)، false للنفي (whereDoesntHave).
+
+**المعلمات الإضافية**:
+- `$boolean`: `'and'` أو `'or'` لدمج الشرط.
+- `$not`: true لتحويل الشرط إلى نفي.
+
+##### هـ. نطاقات مساعدة لـ OR و NOT
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeOrWhereAssociation` | شرط `orWhere` باستخدام نفس الخيارات |
+| `scopeWhereNotAssociation` | شرط نفي (doesntHave) |
+| `scopeOrWhereNotAssociation` | شرط `orWhere` مع نفي |
+
+##### و. نطاقات عامة لسهولة الاستخدام
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeHasAssociation` | وجود ارتباط من نوع معين |
+| `scopeHasNotAssociation` | عدم وجود ارتباط من نوع معين |
+| `scopeHasAnyAssociation` | وجود أي ارتباط |
+| `scopeHasNotAnyAssociation` | عدم وجود أي ارتباط |
+
+##### ز. نطاقات Toggle (خاصة بفلاتر الواجهة)
+
+| النطاق | الوصف |
+|--------|-------|
+| `scopeIsToggelAnyAssociation` | تبديل: إذا القيمة = 1 يرجع المنتجات ذات أي ارتباط، إذا 0 يرجع المنتجات بدون ارتباط |
+| `scopeIsToggelAnyAlternate` | تبديل للبدائل |
+| `scopeIsToggelAnyCrossSell` | تبديل للمكملات |
+| `scopeIsToggelAnyUpSell` | تبديل للإصدارات الأحدث |
+
+#### 2.2 `AssociationsHelper` (كلاس مساعد جديد)
+
+تم إنشاء كلاس جديد في المسار `Nano\Shop\Classes\AssociationsHelper` لتوفير دوال ثابتة تُسهل عملية إدارة فلاتر الارتباطات في واجهات الإدارة (مثل `ListController`).
+
+**الدوال المتوفرة**:
+
+- `getAlternateFilterScopes($defaultValue = 0, $is_force = false)`: تُعيد مصفوفة فلاتر البدائل (شاملة checkbox للوجود، للنفي، وللاتجاهات المختلفة، بالإضافة إلى فلتر toggle).
+- `getCrossSellFilterScopes($defaultValue = 0, $is_force = false)`: فلاتر المكملات.
+- `getUpSellFilterScopes($defaultValue = 0, $is_force = false)`: فلاتر الإصدارات الأحدث.
+- `getAnyAssociationFilterScopes($defaultValue = 0, $is_force = false)`: فلاتر "أي ارتباط" (وجود / عدم وجود مع toggle).
+- `getAllAssociationFilterScopes($defaultValue = 0, $is_force = false)`: دمج جميع الفلاتر السابقة.
+- `injectAssociationScopes($filter, $types = null, $defaultValue = 0, $is_force = false)`: حقن الفلاتر في أداة الفلتر (`$filter`). تدعم `$types` القيم التالية:
+  - `null` أو `false`: لا تضيف شيئاً.
+  - `true`: تضيف جميع الفلاتر.
+  - نص مثل `'any,alternate'`: تضيف الأنواع المحددة.
+  - مصفوفة مثل `['alternate', 'up_sell']`.
+- `removeAssociationScopes($filter, $types = null)`: إزالة فلاتر معينة من أداة الفلتر.
+- `isTypeEnabled($type)`: التحقق مما إذا كان نوع معين من الفلاتر مفعلاً حسب الإعدادات.
+
+---
+
+### 3. طريقة إضافة الفلاتر إلى واجهات إدارة المنتجات
+
+يمكن إضافة فلاتر الارتباطات إلى صفحة إدارة المنتجات عبر دالة `extendListFilterScopes` في متحكم `ShopProductsController`. باستخدام `AssociationsHelper`، يصبح الأمر بسيطاً ومرناً.
+
+#### مثال في ملف `Plugin.php`:
+
+```php
+use Nano\Shop\Classes\AssociationsHelper;
+
+public function boot()
+{
+    \ShopProductsController::extendListFilterScopes(function($filter) {
+        $allowFilter = \Config::get('nano.shop::products.associations.allow_filter', false);
+        if ($allowFilter && class_exists(AssociationsHelper::class)) {
+            AssociationsHelper::injectAssociationScopes($filter, $allowFilter);
+        }
+
+        // إزالة فلاتر البدائل إذا كانت غير مرغوبة
+        if (!\Config::get('nano.shop::allow_alternate_filter', true)) {
+            AssociationsHelper::removeAssociationScopes($filter, 'alternate');
+        }
+    });
+}
+```
+
+---
+
+### 4. التحكم عبر ملف الإعدادات
+
+تم إضافة مفتاح جديد في ملف `config.php` الخاص بإضافة `Nano.Shop` لتحديد أنواع فلاتر الارتباطات التي تظهر في الواجهة.
+
+```php
+// config.php
+'products' => [
+    'associations' => [
+        // يمكن أن تكون:
+        // - false: لا تظهر أي فلاتر ارتباطات.
+        // - true: تظهر جميع الفلاتر (any, alternate, cross_sell, up_sell).
+        // - نص مثل 'any,alternate': تظهر فقط الأنواع المذكورة.
+        'allow_filter' => env('NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER', false),
+    ],
+],
+```
+
+يمكن ضبط هذه القيمة عبر متغير البيئة `NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER` في ملف `.env`:
+
+```
+NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER=any,alternate
+```
+
+---
+
+### 5. أمثلة تطبيقية
+
+#### 5.1 استخدام النطاقات في المتحكم
+
+```php
+// المنتجات التي لها بدائل (في أي اتجاه)
+$products = Product::hasAlternate()->get();
+
+// المنتجات التي لها مكملات كأب فقط
+$products = Product::hasCrossSellAsParent()->get();
+
+// المنتجات التي ليس لها أي ارتباط
+$products = Product::hasNotAnyAssociationBoth()->get();
+
+// استخدام whereAssociation للبحث عن المنتجات التي لها بدائل أو مكملات
+$products = Product::whereAssociation([
+    'type' => ['alternate', 'cross_sell'],
+    'direction' => 'both'
+])->get();
+
+// الجمع مع شروط أخرى باستخدام orWhere
+$products = Product::where('price', '>', 100)
+    ->orWhereAssociation(['type' => 'up_sell', 'direction' => 'parent'])
+    ->get();
+```
+
+#### 5.2 استخدام `scopeHasAssociation` مع callback
+
+```php
+$products = Product::hasAssociation('cross_sell', 'both', function($q) {
+    $q->where('created_at', '>', now()->subDays(30));
+})->get();
+```
+
+#### 5.3 إضافة الفلاتر إلى واجهة الإدارة عبر `AssociationsHelper`
+
+```php
+// إضافة جميع الفلاتر
+AssociationsHelper::injectAssociationScopes($filter, true);
+
+// إضافة فلاتر البدائل والإصدارات الأحدث فقط
+AssociationsHelper::injectAssociationScopes($filter, 'alternate,up_sell');
+```
+
+---
+
+### 6. ملخص الخيارات في `AssociationsHelper`
+
+| الدالة | الوصف |
+|--------|-------|
+| `getAlternateFilterScopes()` | مصفوفة فلاتر البدائل (5 فلاتر) |
+| `getCrossSellFilterScopes()` | مصفوفة فلاتر المكملات (5 فلاتر) |
+| `getUpSellFilterScopes()` | مصفوفة فلاتر الإصدارات الأحدث (5 فلاتر) |
+| `getAnyAssociationFilterScopes()` | مصفوفة فلاتر أي ارتباط (3 فلاتر) |
+| `getAllAssociationFilterScopes()` | جميع الفلاتر المذكورة أعلاه (18 فلتراً) |
+| `injectAssociationScopes()` | حقن الفلاتر في أداة الفلتر |
+| `removeAssociationScopes()` | إزالة فلاتر محددة |
+| `isTypeEnabled()` | التحقق من تفعيل نوع معين |
+
+---
+
+### 7. القيمة المضافة
+
+- **للمطورين**: تحكم كامل في استعلامات الارتباطات عبر نطاقات مرنة تغطي جميع الحالات. إمكانية إضافة فلاتر جاهزة للواجهة بأسطر قليلة من الكود.
+- **للمستخدمين النهائيين**: تصفية دقيقة للمنتجات حسب ارتباطاتها (بدائل، مكملات، إصدارات أحدث) مما يحسن تجربة البحث والإدارة.
+- **للنظام**: تصميم نمطي وقابل للتوسع يسمح بإضافة أنواع جديدة من الارتباطات مستقبلاً دون الحاجة لإعادة هيكلة الكود.
+
+---
+
+### 8. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة ارتباطات المنتجات داخل نظام نانو سوفت. بفضل النطاقات المتقدمة والكلاس المساعد الجديد، أصبح بإمكان المطورين بناء واجهات إدارة متطورة بسهولة، والتحكم في سلوك النظام عبر إعدادات بسيطة. مع استمرار التطوير، سيظل هذا النظام قادراً على تلبية احتياجات المشاريع المتنوعة بفضل مرونته وتصميمه المتين.
+
+See [docs/Docs-AssociationsModel-Behaviors-ar.md](./docs/Docs-AssociationsModel-Behaviors-ar.md)
 
