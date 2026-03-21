@@ -985,3 +985,17 @@ See [docs/UnitManager/Docs-UnitsInformation-Class-en.md](./docs/UnitManager/Docs
 
 See [docs/UnitManager/Docs-ConversionForm-Class-en.md](./docs/UnitManager/Docs-ConversionForm-Class-en.md)
 
+
+## 2026-03-18 - 2026-03-19
+
+The Items Management section of the API has been updated to support all recent changes made to the unit system. A new API specifically for handling units has been created, along with its documentation. The documentation for the Items Management section has also been updated.
+
+**Update Nano.ShopApi Managers**
+1.1.29:
+    - Support api/v1/shop/units endpoint In Shop API Version 2
+    - Support api/v1/shop/managers/units endpoint In Shop API Version 2
+    - Support api/v1/shop/managers/groupsproducts endpoint In Shop API Version 2
+    - Update shop/products Docs Api Version 2.
+    - Update shop/managers Docs Api Version 2.
+    - Create shop/units Docs Api Version 2.
+

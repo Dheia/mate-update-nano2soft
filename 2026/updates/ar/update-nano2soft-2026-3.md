@@ -997,3 +997,17 @@ See [docs/UnitManager/Docs-UnitsInformation-Class-ar.md](./docs/UnitManager/Docs
 See [docs/UnitManager/Docs-ConversionForm-Class-ar.md](./docs/UnitManager/Docs-ConversionForm-Class-ar.md)
 
 
+## 2026-3-18 - 2026-3-19
+
+تم تحديث جزء إدارة الاصناف فى ال api لدعم كافة التحديثات التي تمت على نظام الوحدة وقمنا بانشاء api خاص بالتعامل مع الوحدات بشكل عام وتم انشاء التوثيق الخاص به وتم تحديث  توثيق جزء إدارة الاصناف . 
+
+**Update Nano.ShopApi Managers**
+1.1.29:
+    - Support api/v1/shop/units endpoint In Shop API Version 2
+    - Support api/v1/shop/managers/units endpoint In Shop API Version 2
+    - Support api/v1/shop/managers/groupsproducts endpoint In Shop API Version 2
+    - Update shop/products Docs Api Version 2.
+    - Update shop/managers Docs Api Version 2.
+    - Create shop/units Docs Api Version 2.
+
+
