@@ -999,171 +999,125 @@ The Items Management section of the API has been updated to support all recent c
     - Update shop/managers Docs Api Version 2.
     - Create shop/units Docs Api Version 2.
 
-## 2026-3-19 - 2026-3-21
+## 2026-3-19 - 2026-3-22
 
 **Comprehensive Development of the Product Associations System and Addition of Advanced Dynamic Filters**  
 Within the `Nano.Shop` Plugin
+
+Product Associations Behavior Update – Advanced Version
 
 ---
 
 ### 1. Introduction
 
-An integrated development package has been implemented aimed at enhancing the flexibility and effectiveness of managing product associations in the NanoSoft system. It is no longer limited to simply creating simple relationships between products (Alternates, Cross-Sells, Up-Sells); developers and end-users can now benefit from advanced query scopes, ready-to-use administrative filters, precise control over the direction and type of the relationship, in addition to the ability to control the appearance of these filters through the configuration file, allowing the system to be adapted according to the needs of each project.
+A comprehensive development has been made to the product associations system in the `Nano.Shop` framework, transforming the `AssociationsModel` behavior into a highly flexible tool that allows creating and querying relationships between products (alternatives, complements, newer versions) in advanced ways. This update adds:
 
-This update aims to address advanced use cases such as:
-- Filtering products that have alternates (in any direction, or only as parent, or only as target).
-- Filtering products that have no associations at all.
-- Combining association conditions with other conditions using `orWhere`.
-- Easily adding filters to the product management interface via a helper class.
-- Controlling the activation or deactivation of specific types of association filters through environment variables or the configuration file.
+- **Additional conditions** on the association table (e.g., `is_active`, `is_public`, `companys_id`, `departments_id`).
+- **Applying scopes** specific to the association table (`isCompany`, `isDepartment`, ...) with the ability to pass parameters.
+- **Customizing conditions per direction** (`conditionsPerDirection`, `scopesPerDirection`, `typePerDirection`).
+- **Full control over the relationship logic** between directions (`relationOperator`: `and` / `or`) and with the original scope (`boolean`: `and` / `or`).
+- **Advanced callback support** with direction name passed.
+- **Helper class `AssociationsHelper`** for easily injecting association filters into admin interfaces with configurable control.
 
 ---
 
-### 2. Developed Components
+### 2. Updates in `AssociationsModel`
 
-#### 2.1 `AssociationsModel` (Behavior)
+#### 2.1 The Advanced Scope `scopeWhereAssociation`
 
-This behavior has been radically updated to become more flexible and powerful. The behavior is responsible for managing relationships between products and providing advanced query scopes.
-
-##### a. Basic Scopes (for each association type)
-
-| Scope | Description |
-|-------|-------------|
-| `scopeHasAlternate` | Products that have alternate associations (in any direction) |
-| `scopeHasCrossSell` | Products that have cross-sell associations |
-| `scopeHasUpSell` | Products that have up-sell associations |
-| `scopeHasNotAlternate` | Products that do not have alternates |
-| `scopeHasNotCrossSell` | Products that do not have cross-sells |
-| `scopeHasNotUpSell` | Products that do not have up-sells |
-
-##### b. Direction-Specific Scopes
-
-| Scope | Description |
-|-------|-------------|
-| `scopeHasAlternateAsParent` | Products that are parents of alternates |
-| `scopeHasAlternateAsTarget` | Products that are targets (alternates) |
-| `scopeHasCrossSellAsParent` | Products that are parents of cross-sells |
-| `scopeHasCrossSellAsTarget` | Products that are targets (cross-sells) |
-| `scopeHasUpSellAsParent` | Products that are parents of up-sells |
-| `scopeHasUpSellAsTarget` | Products that are targets (up-sells) |
-
-##### c. Scopes for Any Association (Existence / Non-existence)
-
-| Scope | Description |
-|-------|-------------|
-| `scopeHasAnyAssociationBoth` | Products that have any association (parent or target) |
-| `scopeHasNotAnyAssociationBoth` | Products that have no associations |
-
-##### d. The Advanced Scope `scopeWhereAssociation`
-
-This is the most powerful and flexible scope, accepting an array of options for full control over the association type, its direction, additional conditions, and query combination.
+The core scope `scopeWhereAssociation` now accepts an extended options array that enables fine-grained control over the association query. Signature:
 
 ```php
-scopeWhereAssociation($query, $options = [], $boolean = 'and', $not = false)
+public function scopeWhereAssociation($query, $options = [], $boolean = 'and', $not = false)
 ```
 
-**Supported Options**:
-- `type`: string|array|null – the relationship type or an array of types (null means any type).
-- `direction`: string|array|null – the direction: `'parent'`, `'target'`, `'both'` (default both) or an array.
-- `callback`: callable|null – a callback to customize the relation query.
-- `has`: bool – true for positive (whereHas), false for negation (whereDoesntHave).
+**Supported Options Table:**
 
-**Additional Parameters**:
-- `$boolean`: `'and'` or `'or'` to combine the condition.
-- `$not`: true to negate the condition.
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | string\|array\|null | Relationship type (e.g., `'alternate'`) or array (`['alternate', 'cross_sell']`). |
+| `direction` | string\|array | Direction: `'parent'`, `'target'`, `'both'` or array of directions. (default `'both'`) |
+| `has` | bool | `true` = existence (whereHas), `false` = non-existence (whereDoesntHave). |
+| `boolean` | string | `'and'` or `'or'` to combine this condition with the main query. (default `'and'`) |
+| `relationOperator` | string\|null | `'and'` or `'or'` to combine multiple directions. If not specified: `'or'` if `has = true`, and `'and'` if `has = false`. |
+| `callback` | callable\|null | Function (relationship query, direction name) for additional customization per direction. |
+| `callbacks` | array | Array per direction: `['parent' => callable, 'target' => callable]`. |
+| `typePerDirection` | array | Customize relationship type per direction: `['parent' => 'alternate', 'target' => 'cross_sell']`. |
+| `conditions` | array\|callable\|null | Additional conditions on the relationship table (e.g., `['is_active' => 1]`). |
+| `scopes` | array | Scopes to apply to the relationship query (e.g., `['isCompany', 'isDepartment' => [1]]`). |
+| `conditionsPerDirection` | array | Conditions specific to each direction: `['parent' => ['is_active' => 1], 'target' => ['is_public' => 1]]`. |
+| `scopesPerDirection` | array | Scopes specific to each direction: `['parent' => ['isCompany'], 'target' => ['isDepartment' => [1]]]`. |
 
-##### e. Helper Scopes for OR and NOT
+> **Note:** The `callback` and `callbacks` options are still supported and can be combined with the new options.
 
-| Scope | Description |
-|-------|-------------|
-| `scopeOrWhereAssociation` | `orWhere` condition using the same options |
-| `scopeWhereNotAssociation` | Negation condition (doesntHave) |
-| `scopeOrWhereNotAssociation` | `orWhere` condition with negation |
+#### 2.2 New Helper Methods for Handling Conditions
 
-##### f. General Convenience Scopes
+Internal methods have been added to apply conditions and scopes cleanly:
 
-| Scope | Description |
-|-------|-------------|
-| `scopeHasAssociation` | Has an association of a specific type |
-| `scopeHasNotAssociation` | Does not have an association of a specific type |
-| `scopeHasAnyAssociation` | Has any association |
-| `scopeHasNotAnyAssociation` | Does not have any association |
+- `applyAssociationsRelationConditions($query, $type, $conditions, $scopes)`
+- `normalizeAssociationsDirections($direction)`
+- `prepareAssociationsCallbacks($options, $directions)`
+- `buildAssociationsRelationQuery($query, $baseMethod, $directions, $callbacks, $relationOperator)`
 
-##### g. Toggle Scopes (Specifically for Interface Filters)
+These methods make the code more maintainable and extensible.
 
-| Scope | Description |
-|-------|-------------|
-| `scopeIsToggelAnyAssociation` | Toggle: if value = 1 returns products with any association, if 0 returns products without any association |
-| `scopeIsToggelAnyAlternate` | Toggle for alternates |
-| `scopeIsToggelAnyCrossSell` | Toggle for cross-sells |
-| `scopeIsToggelAnyUpSell` | Toggle for up-sells |
+#### 2.3 Advanced Toggle Scopes
 
-#### 2.2 `AssociationsHelper` (New Helper Class)
-
-A new class has been created at `Nano\Shop\Classes\AssociationsHelper` to provide static methods that simplify the process of managing association filters in administration interfaces (such as `ListController`).
-
-**Available Methods**:
-
-- `getAlternateFilterScopes($defaultValue = 0, $is_force = false)`: Returns an array of alternate filters (including checkboxes for existence, non-existence, and different directions, in addition to a toggle filter).
-- `getCrossSellFilterScopes($defaultValue = 0, $is_force = false)`: Cross-sell filters.
-- `getUpSellFilterScopes($defaultValue = 0, $is_force = false)`: Up-sell filters.
-- `getAnyAssociationFilterScopes($defaultValue = 0, $is_force = false)`: "Any association" filters (existence / non-existence with toggle).
-- `getAllAssociationFilterScopes($defaultValue = 0, $is_force = false)`: Merges all the above filters.
-- `injectAssociationScopes($filter, $types = null, $defaultValue = 0, $is_force = false)`: Injects filters into the filter widget (`$filter`). `$types` supports the following values:
-  - `null` or `false`: adds nothing.
-  - `true`: adds all filters.
-  - A string like `'any,alternate'`: adds the specified types.
-  - An array like `['alternate', 'up_sell']`.
-- `removeAssociationScopes($filter, $types = null)`: Removes specific filters from the filter widget.
-- `isTypeEnabled($type)`: Checks whether a specific filter type is enabled according to the configuration.
+Toggle scopes such as `isToggelAnyAssociation`, `isToggelAnyAlternate`, `isToggelAnyCrossSell`, and `isToggelAnyUpSell` have been improved to respond correctly to values `1` and `0` while handling special cases coming from `post('scopeName')`.
 
 ---
 
-### 3. How to Add Filters to Product Management Interfaces
+### 3. `AssociationsHelper` – An Integrated Helper Class
 
-Association filters can be added to the product management page via the `extendListFilterScopes` method in the `ShopProductsController`. Using `AssociationsHelper` makes this simple and flexible.
+A new class `Nano\Shop\Classes\AssociationsHelper` has been created to facilitate managing association filters in admin interfaces (e.g., `ListController`). Main functions:
 
-#### Example in `Plugin.php`:
+#### 3.1 Functions Returning Filter Arrays
+
+| Function | Description |
+|----------|-------------|
+| `getAlternateFilterScopes($defaultValue = 0, $is_force = false)` | Array of alternative filters (5 filters: existence, negation, as parent, as target, toggle) |
+| `getCrossSellFilterScopes($defaultValue = 0, $is_force = false)` | Complement filters (5 filters) |
+| `getUpSellFilterScopes($defaultValue = 0, $is_force = false)` | Newer version filters (5 filters) |
+| `getAnyAssociationFilterScopes($defaultValue = 0, $is_force = false)` | Any association filters (3 filters: existence, negation, toggle) |
+| `getAllAssociationFilterScopes($defaultValue = 0, $is_force = false)` | Merges all the above filters (18 filters) |
+
+#### 3.2 Injection and Removal Functions
 
 ```php
-use Nano\Shop\Classes\AssociationsHelper;
+// Inject specified filters into the filter widget
+injectAssociationScopes($filter, $types = null, $defaultValue = 0, $is_force = false)
 
-public function boot()
-{
-    \ShopProductsController::extendListFilterScopes(function($filter) {
-        $allowFilter = \Config::get('nano.shop::products.associations.allow_filter', false);
-        if ($allowFilter && class_exists(AssociationsHelper::class)) {
-            AssociationsHelper::injectAssociationScopes($filter, $allowFilter);
-        }
+// Remove specific filters
+removeAssociationScopes($filter, $types = null)
 
-        // Remove alternate filters if not desired
-        if (!\Config::get('nano.shop::allow_alternate_filter', true)) {
-            AssociationsHelper::removeAssociationScopes($filter, 'alternate');
-        }
-    });
-}
+// Check whether a specific type is enabled according to settings
+isTypeEnabled($type)
 ```
 
+**The `$types` parameter** can be:
+- `null` or `false`: adds nothing.
+- `true`: adds all filters.
+- A string like `'any,alternate'`: adds the mentioned types.
+- An array like `['alternate', 'up_sell']`.
+
 ---
 
-### 4. Control via Configuration File
+### 4. Adding Control via Configuration File
 
-A new key has been added to the `config.php` file of the `Nano.Shop` plugin to determine which association filter types appear in the interface.
+In the extension's `config.php`, a key `products.associations.allow_filter` has been added:
 
 ```php
-// config.php
 'products' => [
     'associations' => [
-        // Can be:
-        // - false: no association filters appear.
-        // - true: all filters appear (any, alternate, cross_sell, up_sell).
-        // - a string like 'any,alternate': only the mentioned types appear.
+        // false: show no association filters.
+        // true: show all filters (any, alternate, cross_sell, up_sell).
+        // string: e.g., 'any,alternate' show only the mentioned types.
         'allow_filter' => env('NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER', false),
     ],
 ],
 ```
 
-This value can be set via the environment variable `NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER` in the `.env` file:
+It can be set via `.env`:
 
 ```
 NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER=any,alternate
@@ -1171,78 +1125,128 @@ NANO_SHOP_PRODUCTS_ASSOCIATIONS_ALLOW_FILTER=any,alternate
 
 ---
 
-### 5. Practical Examples
+### 5. Practical Examples of New Features
 
-#### 5.1 Using Scopes in a Controller
+#### 5.1 Using `conditions` and `scopes` with `whereAssociation`
 
 ```php
-// Products that have alternates (in any direction)
-$products = Product::hasAlternate()->get();
-
-// Products that have cross-sells only as parent
-$products = Product::hasCrossSellAsParent()->get();
-
-// Products that have no associations
-$products = Product::hasNotAnyAssociationBoth()->get();
-
-// Using whereAssociation to find products that have alternates or cross-sells
+// Products that have active alternatives (is_active = 1) and belong to the current company
 $products = Product::whereAssociation([
-    'type' => ['alternate', 'cross_sell'],
-    'direction' => 'both'
+    'type' => 'alternate',
+    'conditions' => ['is_active' => 1],
+    'scopes' => ['isCompany']
 ])->get();
+```
 
-// Combining with other conditions using orWhere
+#### 5.2 Customizing Type Per Direction (`typePerDirection`)
+
+```php
+// Products that have alternatives as parent or complements as target
+$products = Product::whereAssociation([
+    'direction' => ['parent', 'target'],
+    'typePerDirection' => [
+        'parent' => 'alternate',
+        'target' => 'cross_sell'
+    ]
+])->get();
+```
+
+#### 5.3 Different Conditions Per Direction (`conditionsPerDirection`)
+
+```php
+// Products that have active associations as parent, or public associations as target
+$products = Product::whereAssociation([
+    'direction' => 'both',
+    'type' => 'cross_sell',
+    'conditionsPerDirection' => [
+        'parent' => ['is_active' => 1],
+        'target' => ['is_public' => 1]
+    ]
+])->get();
+```
+
+#### 5.4 Controlling Relationship Logic Between Directions (`relationOperator`)
+
+```php
+// Products that have associations in both directions (parent and target) at the same time
+$products = Product::whereAssociation([
+    'direction' => 'both',
+    'relationOperator' => 'and',
+    'conditions' => ['is_active' => 1]
+])->get();
+```
+
+#### 5.5 Using `callback` with Direction Awareness
+
+```php
+$products = Product::whereAssociation([
+    'type' => 'cross_sell',
+    'callback' => function($query, $direction) {
+        if ($direction === 'parent') {
+            $query->where('sort_order', '>', 0);
+        } else {
+            $query->where('is_public', 1);
+        }
+    }
+])->get();
+```
+
+#### 5.6 Combining with Other Conditions using `orWhereAssociation`
+
+```php
 $products = Product::where('price', '>', 100)
-    ->orWhereAssociation(['type' => 'up_sell', 'direction' => 'parent'])
+    ->orWhereAssociation([
+        'type' => 'up_sell',
+        'conditions' => ['is_active' => 1]
+    ])
     ->get();
 ```
 
-#### 5.2 Using `scopeHasAssociation` with a Callback
+#### 5.7 Injecting Filters in Admin Interface
 
 ```php
-$products = Product::hasAssociation('cross_sell', 'both', function($q) {
-    $q->where('created_at', '>', now()->subDays(30));
-})->get();
-```
+use Nano\Shop\Classes\AssociationsHelper;
 
-#### 5.3 Adding Filters to the Admin Interface via `AssociationsHelper`
+\ShopProductsController::extendListFilterScopes(function($filter) {
+    $allowFilter = \Config::get('nano.shop::products.associations.allow_filter', false);
+    if ($allowFilter && class_exists(AssociationsHelper::class)) {
+        AssociationsHelper::injectAssociationScopes($filter, $allowFilter);
+    }
 
-```php
-// Add all filters
-AssociationsHelper::injectAssociationScopes($filter, true);
-
-// Add only alternate and up-sell filters
-AssociationsHelper::injectAssociationScopes($filter, 'alternate,up_sell');
+    // Remove alternative filters if they are not desired
+    if (!\Config::get('nano.shop::allow_alternate_filter', true)) {
+        AssociationsHelper::removeAssociationScopes($filter, 'alternate');
+    }
+});
 ```
 
 ---
 
-### 6. Summary of Options in `AssociationsHelper`
+### 6. Summary of Key Changes
 
-| Method | Description |
-|--------|-------------|
-| `getAlternateFilterScopes()` | Array of alternate filters (5 filters) |
-| `getCrossSellFilterScopes()` | Array of cross-sell filters (5 filters) |
-| `getUpSellFilterScopes()` | Array of up-sell filters (5 filters) |
-| `getAnyAssociationFilterScopes()` | Array of any-association filters (3 filters) |
-| `getAllAssociationFilterScopes()` | All the above filters combined (18 filters) |
-| `injectAssociationScopes()` | Injects filters into the filter widget |
-| `removeAssociationScopes()` | Removes specific filters |
-| `isTypeEnabled()` | Checks if a specific type is enabled |
+- **Added advanced options** in `scopeWhereAssociation` (conditions, scopes, typePerDirection, conditionsPerDirection, scopesPerDirection, relationOperator).
+- **Improved negation logic** (when `has = false` and `direction = both`) to use `AND` between the two directions instead of `OR`.
+- **Added `AssociationsHelper` class** to simplify integrating filters in the backend.
+- **Added configuration settings** to control filter visibility.
+- **Updated helper scopes** (`hasAssociation`, `hasNotAssociation`, ...) to remain compatible with legacy interfaces.
+- **Fixed issue** in negation scopes (e.g., `hasNotAnyAssociationBoth`) that were returning incorrect results.
 
 ---
 
 ### 7. Added Value
 
-- **For Developers**: Full control over association queries through flexible scopes covering all cases. Ability to add ready-made interface filters with just a few lines of code.
-- **For End Users**: Precise filtering of products by their associations (alternates, cross-sells, up-sells), improving the search and management experience.
-- **For the System**: A modular and extensible design that allows adding new association types in the future without needing to restructure the code.
+- **Maximum flexibility**: You can now query products based on complex conditions on the association table (activity, company, department, date, ...).
+- **Ease of use**: Simple helper scopes are still available, while `whereAssociation` provides full control for professional developers.
+- **Integration with admin interfaces**: `AssociationsHelper` provides a unified way to add association filters in any controller using `ListController` or `Filter`.
+- **Extensibility**: New association types (`type`) can be added in the future without needing to change the core scopes.
 
 ---
 
 ### 8. Conclusion
 
-This update represents a quantum leap in managing product associations within the NanoSoft system. Thanks to the advanced scopes and the new helper class, developers can now easily build sophisticated administration interfaces and control system behavior through simple settings. As development continues, this system will remain capable of meeting the needs of diverse projects thanks to its flexibility and robust design.
+This update represents a major leap in how product associations are managed and queried within `Nano.Shop`. By combining advanced scopes, fine-grained condition control, and a practical helper class, the system becomes more powerful and ready for use in complex e-commerce projects. We recommend developers review the full documentation and advanced examples to get the most out of these features.
 
-See [docs/Docs-AssociationsModel-Behaviors-en.md](./docs/Docs-AssociationsModel-Behaviors-en.md)
+**Reference Documentation:**
 
+- [Basic Documentation for AssociationsModel Behavior](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-en.md)
+- [Advanced Practical Examples](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-Advanced-Examples-en.md)
