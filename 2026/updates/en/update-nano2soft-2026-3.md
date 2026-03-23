@@ -1354,3 +1354,235 @@ We recommend developers review the complete documentation and advanced examples 
 - [Basic Documentation for AssociationsModel Behavior](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-ar.md)
 - [Advanced Practical Examples](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-Advenced-Examples-ar.md)
 
+## 2026-3-22 - 2026-3-23
+
+Comprehensive Update for Query Scopes in Reviews, Markables, and Proposals Systems
+
+**Comprehensive Development of Query Scopes in Behaviors for:**
+
+- Reviews (`ReviewRateable`)
+- Favorites (`FavoriteableModel`)
+- Likes (`LikeableModel`)
+- Reactions (`ReactionableModel`)
+- Bookmarks (`BookmarkableModel`)
+- Proposals (`ProposalModel`)
+
+Within the `Nano.Reviews`, `Nano.Markable`, and `Nano2.Proposals` packages
+
+---
+
+### 1. Introduction
+
+An integrated development package has been implemented to improve the performance and flexibility of queries related to reviews, favorites, likes, reactions, bookmarks, and proposals. Developers no longer need to write complex queries or misuse `GROUP BY` and `LIMIT` inside subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Sorting by **the date of the latest item** (newest).
+- Sorting by **the count of items** (most).
+- Adding computed columns to `SELECT` (such as `last_created_at` or `count`) without affecting the sorting.
+- The ability to filter by **value** (`value`) in systems that support it (e.g., likes and reactions).
+- The ability to filter by **type** (`type`) in the proposals system.
+
+Existing scopes in all mentioned behaviors have been restructured, and new scopes have been added to ensure correct results and high performance, while providing a unified and easy-to-use programming interface.
+
+This update aims to meet advanced use cases such as:
+- Sorting products by **highest rated** (based on average ratings).
+- Sorting products by **most recently rated** (latest review date).
+- Sorting articles by **most liked** (differentiating between `like` and `dislike`).
+- Sorting content by **most reacted** (specific reactions like `wow`, `sad`).
+- Obtaining a list of products with the **most reports** of a specific type (`reports` or `complaints`).
+- Adding a computed column containing the **latest review date** or **review count** to the query result without affecting sorting.
+
+---
+
+### 2. Developed Components
+
+#### 2.1 Behaviors and Added Scopes
+
+| Behavior | Added Scopes | Description |
+|----------|--------------|-------------|
+| `ReviewRateable` | `scopeSortByCreatedAtReviews`, `scopeAddSortByCreatedAtReviews`, `scopeWithSortByCreatedAtReviews`<br>`scopeSortByAvgRating`, `scopeAddSortByAvgRating`, `scopeWithSortByAvgRating`<br>`scopeSortByCountReviews`, `scopeAddSortByCountReviews`, `scopeWithSortByCountReviews` | Sorting and adding computed columns for reviews by date (latest review), by average rating, and by review count. |
+| `FavoriteableModel` | `scopeSortByCreatedAtFavorites`, `scopeAddSortByCreatedAtFavorites`, `scopeWithSortByCreatedAtFavorites`<br>`scopeSortByCountFavorites`, `scopeAddSortByCountFavorites`, `scopeWithSortByCountFavorites` | Sorting and adding computed columns for favorites by date and count. |
+| `LikeableModel` | `scopeSortByCreatedAtLikes`, `scopeAddSortByCreatedAtLikes`, `scopeWithSortByCreatedAtLikes`<br>`scopeSortByCountLikes`, `scopeAddSortByCountLikes`, `scopeWithSortByCountLikes` | Sorting and adding computed columns for likes by date and count, with the ability to filter by value (`like`/`dislike`) using the `$value` parameter. |
+| `ReactionableModel` | `scopeSortByCreatedAtReactions`, `scopeAddSortByCreatedAtReactions`, `scopeWithSortByCreatedAtReactions`<br>`scopeSortByCountReactions`, `scopeAddSortByCountReactions`, `scopeWithSortByCountReactions` | Sorting and adding computed columns for reactions by date and count, with the ability to filter by value (e.g., `wow`, `sad`, `angry`). |
+| `BookmarkableModel` | `scopeSortByCreatedAtBookmarks`, `scopeAddSortByCreatedAtBookmarks`, `scopeWithSortByCreatedAtBookmarks`<br>`scopeSortByCountBookmarks`, `scopeAddSortByCountBookmarks`, `scopeWithSortByCountBookmarks` | Sorting and adding computed columns for bookmarks by date and count, with the ability to filter by value (e.g., `favorite`, `read_later`). |
+| `ProposalModel` | `scopeSortByCreatedAtProposals`, `scopeAddSortByCreatedAtProposals`, `scopeWithSortByCreatedAtProposals`<br>`scopeSortByCountProposals`, `scopeAddSortByCountProposals`, `scopeWithSortByCountProposals` | Sorting and adding computed columns for proposals by date and count, with the ability to filter by type (`proposals`, `reports`, `complaints`) using the `$type` parameter. |
+
+---
+
+### 3. Details of Code Updates
+
+#### 3.1 Fixing Common Errors in Subqueries
+
+Old scopes (in some behaviors) relied on using `GROUP BY` and `LIMIT` inside correlated subqueries to obtain an aggregated value (`MAX`, `AVG`, `COUNT`). This approach leads to incorrect and random results because `GROUP BY` creates multiple groups, and then `LIMIT 1` selects only the first group arbitrarily.
+
+**New Approach**:
+- Use an aggregate function (`MAX`, `AVG`, `COUNT`) directly in the subquery without `GROUP BY` or `LIMIT`. The aggregate function in a correlated subquery automatically operates on all rows matching the join condition.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (such as `value`, `type`, `approved`) via `where` inside the subquery.
+
+Example of the correct scope for sorting by latest review (`ReviewRateable`):
+
+```php
+public function scopeSortByCreatedAtReviews(Builder $query, $orderDirection = 'DESC')
+{
+    $orderDirection = strtoupper($orderDirection) === 'ASC' ? 'ASC' : 'DESC';
+    
+    $subQuery = Review::selectRaw('MAX(nano_reviews_reviews.created_at)')
+        ->whereColumn('nano_reviews_reviews.reviewrateable_id', $this->model->getTable() . '.id')
+        ->where('nano_reviews_reviews.reviewrateable_type', $this->model->getMorphClass());
+    
+    return $query->orderBy($subQuery, $orderDirection);
+}
+```
+
+#### 3.2 Unifying the Scope Interface
+
+The function signatures (parameters) have been unified across all behaviors to be as follows:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$filter` (or `$value`/`$type`): An optional value to filter results by value (in `Likeable`, `Reactionable`, `Bookmarkable`) or by type (in `ProposalModel`). In `ReviewRateable`, a parameter `$approved` can be added to filter only approved reviews (optional).
+- `$columnName`: The name of the added column in the case of `AddSortBy` and `WithSortBy` (a suitable default like `last_created_at_reviews` or `avg_rating`).
+
+This unification makes it easier for developers to remember and use scopes across different behaviors.
+
+#### 3.3 Handling Default Values in `LikeableModel`
+
+Since `LikeableModel` relies on the `value` field to distinguish between like and dislike, the logic for obtaining the default value from the `Like` class via `Like::getDefaultValue()` has been integrated when no value is passed.
+
+```php
+if (is_null($value) && $defaultValue = Like::getDefaultValue()) {
+    $value = $defaultValue;
+}
+```
+
+#### 3.4 Adding Average Rating Scopes (`ReviewRateable`)
+
+Special scopes for average rating (`avg_rating`) have been added because they are a common requirement in rating systems:
+
+```php
+public function scopeSortByAvgRating(Builder $query, $orderDirection = 'DESC', $columnName = 'avg_rating')
+{
+    $orderDirection = strtoupper($orderDirection) === 'ASC' ? 'ASC' : 'DESC';
+    
+    $subQuery = Review::selectRaw('AVG(rating)')
+        ->whereColumn('reviewrateable_id', $this->model->getTable() . '.id')
+        ->where('reviewrateable_type', $this->model->getMorphClass())
+        ->where('approved', true); // Optional: can be made a parameter
+    
+    return $query->orderBy($subQuery, $orderDirection);
+}
+```
+
+#### 3.5 Scopes for Adding Computed Columns
+
+In addition to sorting scopes (`SortBy`), `AddSortBy` scopes have been provided that only add the computed column to `SELECT`, and `WithSortBy` scopes that both add the column and sort. This gives developers full flexibility in controlling the query.
+
+Example of `AddSortByCountFavorites`:
+
+```php
+public function scopeAddSortByCountFavorites(Builder $query, $orderDirection = 'DESC', $value = null, $columnName = 'count_favorites')
+{
+    $subQuery = Favorite::selectRaw('COUNT(nano_markable_favorites.id)')
+        ->whereColumn('nano_markable_favorites.markable_id', $this->model->getTable() . '.id')
+        ->where('nano_markable_favorites.markable_type', $this->model->getMorphClass());
+
+    if ($value) {
+        $subQuery->where('nano_markable_favorites.value', $value);
+    }
+
+    return $query->addSelect([$columnName => $subQuery]);
+}
+```
+
+---
+
+### 4. Practical Examples
+
+#### 4.1 Reviews System (`ReviewRateable`)
+
+```php
+// Fetch products sorted by highest rated (average rating)
+$products = Product::sortByAvgRating('desc')->get();
+
+// Fetch products with an added column for the latest review date
+$products = Product::addSortByCreatedAtReviews('desc', 'last_review_date')->get();
+
+// Fetch products sorted by review count with the column added
+$products = Product::withSortByCountReviews('desc', 'reviews_count')->get();
+```
+
+#### 4.2 Favorites System (`FavoriteableModel`)
+
+```php
+// Most favorited
+$products = Product::sortByCountFavorites('desc')->get();
+
+// Latest favorited with date column added
+$products = Product::withSortByCreatedAtFavorites('desc', 'last_favorite_at')->get();
+```
+
+#### 4.3 Likes System (`LikeableModel`)
+
+```php
+// Most liked (likes only)
+$articles = Article::sortByCountLikes('desc', 'like')->get();
+
+// Most disliked
+$articles = Article::sortByCountLikes('desc', 'dislike')->get();
+
+// Add likes count column
+$articles = Article::addSortByCountLikes('desc', 'like', 'likes_count')->get();
+```
+
+#### 4.4 Reactions System (`ReactionableModel`)
+
+```php
+// Most reacted with type 'wow'
+$posts = Post::sortByCountReactions('desc', 'wow')->get();
+
+// Latest reactions (all reactions)
+$posts = Post::sortByCreatedAtReactions('desc')->get();
+```
+
+#### 4.5 Bookmarks System (`BookmarkableModel`)
+
+```php
+// Most bookmarked of type 'favorite'
+$products = Product::sortByCountBookmarks('desc', 'favorite')->get();
+
+// Add last bookmark date column
+$products = Product::addSortByCreatedAtBookmarks('desc', null, 'last_bookmark')->get();
+```
+
+#### 4.6 Proposals System (`ProposalModel`)
+
+```php
+// Most reported of type 'reports'
+$products = Product::sortByCountProposals('desc', 'reports')->get();
+
+// Latest proposal of type 'complaints'
+$products = Product::sortByCreatedAtProposals('desc', 'complaints')->get();
+```
+
+#### 4.7 Combining Scopes
+
+```php
+// Fetch active products, sorted by most favorited, with favorites count column added
+$products = Product::isActive()
+    ->withSortByCountFavorites('desc', 'favorites_count')
+    ->get();
+```
+
+---
+
+### 5. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. Developers no longer need to write complex subqueries or worry about result correctness. The unified interface facilitates learning and usage across different behaviors.
+- **For End Users**: The ability to present intelligently sorted lists (most popular, most recent activity, highest rated) improves user experience and increases application effectiveness.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that misused `GROUP BY` and `LIMIT`. Correlated subqueries now work with high efficiency.
+- **Flexibility**: The ability to filter by value or type allows building complex systems such as distinguishing likes from dislikes, categorizing reports, or handling multiple reactions.
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 6. Conclusion
+
+This update represents a qualitative leap in managing queries for reviews, markables, and proposals within the system. By restructuring and unifying scopes across all relevant behaviors, developers can now build applications relying on advanced sorting and filtering with ease and safety. As development continues, this system will remain capable of meeting the needs of diverse projects thanks to its flexibility and robust design.

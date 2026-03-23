@@ -1365,3 +1365,235 @@ AssociationsHelper::injectAssociationScopes($filter, 'alternate,up_sell');
 - [التوثيق الأساسي لسلوك AssociationsModel](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-ar.md)
 - [أمثلة عملية متقدمة](./docs/AssociationsModel/Docs-AssociationsModel-Behaviors-Advenced-Examples-ar.md)
 
+## 2026-3-22 - 2026-3-23
+
+ تحديث شامل لنطاقات الاستعلام في أنظمة التقييمات والعلامات والبلاغات
+
+**تطوير شامل لنطاقات (Scopes) الاستعلام في السلوكيات (Behaviors) الخاصة بـ:**
+
+- التقييمات (`ReviewRateable`)
+- التفضيلات (`FavoriteableModel`)
+- الإعجابات (`LikeableModel`)
+- التفاعلات (`ReactionableModel`)
+- الإشارات المرجعية (`BookmarkableModel`)
+- البلاغات (`ProposalModel`)
+
+ضمن حزمة `Nano.Reviews` وحزمة `Nano.Markable` وحزمة `Nano2.Proposals`
+
+---
+
+### 1. مقدمة
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بالتقييمات، التفضيلات، الإعجابات، التفاعلات، الإشارات المرجعية، والبلاغات. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو استخدام `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات (Scopes) الجاهزة التي تتيح:
+
+- الترتيب حسب **تاريخ آخر عنصر** (الأحدث).
+- الترتيب حسب **عدد العناصر** (الأكثر).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `last_created_at` أو `count`) دون التأثير على الترتيب.
+- إمكانية التصفية حسب **القيمة** (`value`) في الأنظمة التي تدعمها (مثل الإعجابات والتفاعلات).
+- إمكانية التصفية حسب **النوع** (`type`) في نظام البلاغات.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً في جميع السلوكيات المذكورة، وإضافة نطاقات جديدة، لضمان الحصول على نتائج صحيحة وأداء عالي، مع توفير واجهة برمجية موحدة وسهلة الاستخدام.
+
+يهدف هذا التحديث إلى تلبية حالات استخدام متقدمة مثل:
+- ترتيب المنتجات حسب **الأعلى تقييماً** (بناءً على متوسط التقييمات).
+- ترتيب المنتجات حسب **الأحدث تقييماً** (آخر تاريخ تقييم).
+- ترتيب المقالات حسب **الأكثر إعجاباً** (تفريق بين `like` و `dislike`).
+- ترتيب المحتوى حسب **الأكثر تفاعلاً** (تفاعلات معينة مثل `wow`, `sad`).
+- الحصول على قائمة بالمنتجات **الأكثر بلاغات** من نوع معين (`reports` أو `complaints`).
+- إضافة عمود محسوب يحتوي على **آخر تاريخ تقييم** أو **عدد التقييمات** إلى نتيجة الاستعلام دون التأثير على الترتيب.
+
+---
+
+### 2. المكونات المطورة
+
+#### 2.1 السلوكيات (Behaviors) والنطاقات المضافة
+
+| السلوك | النطاقات المضافة | الوصف |
+|--------|-------------------|-------|
+| `ReviewRateable` | `scopeSortByCreatedAtReviews`, `scopeAddSortByCreatedAtReviews`, `scopeWithSortByCreatedAtReviews`<br>`scopeSortByAvgRating`, `scopeAddSortByAvgRating`, `scopeWithSortByAvgRating`<br>`scopeSortByCountReviews`, `scopeAddSortByCountReviews`, `scopeWithSortByCountReviews` | ترتيب وإضافة أعمدة محسوبة للتقييمات حسب التاريخ (آخر تقييم)، حسب متوسط التقييم، وحسب عدد التقييمات. |
+| `FavoriteableModel` | `scopeSortByCreatedAtFavorites`, `scopeAddSortByCreatedAtFavorites`, `scopeWithSortByCreatedAtFavorites`<br>`scopeSortByCountFavorites`, `scopeAddSortByCountFavorites`, `scopeWithSortByCountFavorites` | ترتيب وإضافة أعمدة محسوبة للتفضيلات حسب التاريخ والعدد. |
+| `LikeableModel` | `scopeSortByCreatedAtLikes`, `scopeAddSortByCreatedAtLikes`, `scopeWithSortByCreatedAtLikes`<br>`scopeSortByCountLikes`, `scopeAddSortByCountLikes`, `scopeWithSortByCountLikes` | ترتيب وإضافة أعمدة محسوبة للإعجابات حسب التاريخ والعدد، مع إمكانية تصفية حسب القيمة (`like`/`dislike`) باستخدام الباراميتر `$value`. |
+| `ReactionableModel` | `scopeSortByCreatedAtReactions`, `scopeAddSortByCreatedAtReactions`, `scopeWithSortByCreatedAtReactions`<br>`scopeSortByCountReactions`, `scopeAddSortByCountReactions`, `scopeWithSortByCountReactions` | ترتيب وإضافة أعمدة محسوبة للتفاعلات حسب التاريخ والعدد، مع إمكانية تصفية حسب القيمة (مثل `wow`, `sad`, `angry`). |
+| `BookmarkableModel` | `scopeSortByCreatedAtBookmarks`, `scopeAddSortByCreatedAtBookmarks`, `scopeWithSortByCreatedAtBookmarks`<br>`scopeSortByCountBookmarks`, `scopeAddSortByCountBookmarks`, `scopeWithSortByCountBookmarks` | ترتيب وإضافة أعمدة محسوبة للإشارات المرجعية حسب التاريخ والعدد، مع إمكانية تصفية حسب القيمة (مثلاً `favorite`, `read_later`). |
+| `ProposalModel` | `scopeSortByCreatedAtProposals`, `scopeAddSortByCreatedAtProposals`, `scopeWithSortByCreatedAtProposals`<br>`scopeSortByCountProposals`, `scopeAddSortByCountProposals`, `scopeWithSortByCountProposals` | ترتيب وإضافة أعمدة محسوبة للبلاغات حسب التاريخ والعدد، مع إمكانية تصفية حسب النوع (`proposals`, `reports`, `complaints`) باستخدام الباراميتر `$type`. |
+
+---
+
+### 3. تفاصيل التحديثات البرمجية
+
+#### 3.1 إصلاح الأخطاء الشائعة في الاستعلامات الفرعية
+
+كانت النطاقات القديمة (في بعض السلوكيات) تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية المرتبطة (correlated subqueries) للحصول على قيمة مجمعة (`MAX`, `AVG`, `COUNT`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية، لأن `GROUP BY` ينشئ عدة مجموعات ثم `LIMIT 1` يختار أول مجموعة فقط.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية (`MAX`, `AVG`, `COUNT`) مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`. الدالة التجميعية في استعلام فرعي مرتبط تعمل تلقائياً على جميع الصفوف المطابقة لشرط الربط.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `value`, `type`, `approved`) عبر `where` داخل الاستعلام الفرعي.
+
+مثال على النطاق الصحيح لترتيب حسب آخر تقييم (`ReviewRateable`):
+
+```php
+public function scopeSortByCreatedAtReviews(Builder $query, $orderDirection = 'DESC')
+{
+    $orderDirection = strtoupper($orderDirection) === 'ASC' ? 'ASC' : 'DESC';
+    
+    $subQuery = Review::selectRaw('MAX(nano_reviews_reviews.created_at)')
+        ->whereColumn('nano_reviews_reviews.reviewrateable_id', $this->model->getTable() . '.id')
+        ->where('nano_reviews_reviews.reviewrateable_type', $this->model->getMorphClass());
+    
+    return $query->orderBy($subQuery, $orderDirection);
+}
+```
+
+#### 3.2 توحيد واجهة النطاقات
+
+تم توحيد توقيع الدوال (parameters) في جميع السلوكيات لتكون كالتالي:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$filter` (أو `$value`/`$type`): قيمة اختيارية لتصفية النتائج حسب القيمة (في `Likeable`, `Reactionable`, `Bookmarkable`) أو حسب النوع (في `ProposalModel`). في `ReviewRateable`، يمكن إضافة باراميتر `$approved` لتصفية التقييمات المعتمدة فقط (اختياري).
+- `$columnName`: اسم العمود المضاف في حالة `AddSortBy` و `WithSortBy` (افتراضي مناسب مثل `last_created_at_reviews` أو `avg_rating`).
+
+هذا التوحيد يسهل على المطورين تذكر واستخدام النطاقات عبر مختلف السلوكيات.
+
+#### 3.3 معالجة القيم الافتراضية في `LikeableModel`
+
+بما أن `LikeableModel` يعتمد على حقل `value` للتمييز بين الإعجاب (`like`) وعدم الإعجاب (`dislike`)، تم دمج منطق الحصول على القيمة الافتراضية من الكلاس `Like` عبر `Like::getDefaultValue()` عند عدم تمرير قيمة.
+
+```php
+if (is_null($value) && $defaultValue = Like::getDefaultValue()) {
+    $value = $defaultValue;
+}
+```
+
+#### 3.4 إضافة نطاقات متوسط التقييمات (`ReviewRateable`)
+
+تمت إضافة نطاقات خاصة بمتوسط التقييمات (`avg_rating`) لأنها مطلب شائع في أنظمة التقييم:
+
+```php
+public function scopeSortByAvgRating(Builder $query, $orderDirection = 'DESC', $columnName = 'avg_rating')
+{
+    $orderDirection = strtoupper($orderDirection) === 'ASC' ? 'ASC' : 'DESC';
+    
+    $subQuery = Review::selectRaw('AVG(rating)')
+        ->whereColumn('reviewrateable_id', $this->model->getTable() . '.id')
+        ->where('reviewrateable_type', $this->model->getMorphClass())
+        ->where('approved', true); // اختياري: يمكن جعله باراميتر
+    
+    return $query->orderBy($subQuery, $orderDirection);
+}
+```
+
+#### 3.5 نطاقات إضافة الأعمدة المحسوبة
+
+بالإضافة إلى نطاقات الترتيب (`SortBy`)، تم توفير نطاقات `AddSortBy` التي تضيف العمود المحسوب إلى `SELECT` فقط، ونطاقات `WithSortBy` التي تقوم بالإضافة والترتيب معاً. هذا يمنح المطور مرونة كاملة في التحكم بالاستعلام.
+
+مثال على `AddSortByCountFavorites`:
+
+```php
+public function scopeAddSortByCountFavorites(Builder $query, $orderDirection = 'DESC', $value = null, $columnName = 'count_favorites')
+{
+    $subQuery = Favorite::selectRaw('COUNT(nano_markable_favorites.id)')
+        ->whereColumn('nano_markable_favorites.markable_id', $this->model->getTable() . '.id')
+        ->where('nano_markable_favorites.markable_type', $this->model->getMorphClass());
+
+    if ($value) {
+        $subQuery->where('nano_markable_favorites.value', $value);
+    }
+
+    return $query->addSelect([$columnName => $subQuery]);
+}
+```
+
+---
+
+### 4. أمثلة تطبيقية
+
+#### 4.1 نظام التقييمات (`ReviewRateable`)
+
+```php
+// جلب المنتجات مرتبة حسب الأعلى تقييماً (متوسط التقييمات)
+$products = Product::sortByAvgRating('desc')->get();
+
+// جلب المنتجات مع إضافة عمود آخر تاريخ تقييم
+$products = Product::addSortByCreatedAtReviews('desc', 'last_review_date')->get();
+
+// جلب المنتجات مرتبة حسب عدد التقييمات مع إضافة العمود
+$products = Product::withSortByCountReviews('desc', 'reviews_count')->get();
+```
+
+#### 4.2 نظام التفضيلات (`FavoriteableModel`)
+
+```php
+// الأكثر تفضيلاً
+$products = Product::sortByCountFavorites('desc')->get();
+
+// الأحدث تفضيلاً مع إضافة عمود التاريخ
+$products = Product::withSortByCreatedAtFavorites('desc', 'last_favorite_at')->get();
+```
+
+#### 4.3 نظام الإعجابات (`LikeableModel`)
+
+```php
+// الأكثر إعجاباً (إعجابات فقط)
+$articles = Article::sortByCountLikes('desc', 'like')->get();
+
+// الأكثر عدم إعجاب (dislike)
+$articles = Article::sortByCountLikes('desc', 'dislike')->get();
+
+// إضافة عمود عدد الإعجابات
+$articles = Article::addSortByCountLikes('desc', 'like', 'likes_count')->get();
+```
+
+#### 4.4 نظام التفاعلات (`ReactionableModel`)
+
+```php
+// الأكثر تفاعلاً من نوع 'wow'
+$posts = Post::sortByCountReactions('desc', 'wow')->get();
+
+// الأحدث تفاعلاً (جميع التفاعلات)
+$posts = Post::sortByCreatedAtReactions('desc')->get();
+```
+
+#### 4.5 نظام الإشارات المرجعية (`BookmarkableModel`)
+
+```php
+// الأكثر إشارة مرجعية من نوع 'favorite'
+$products = Product::sortByCountBookmarks('desc', 'favorite')->get();
+
+// إضافة عمود آخر تاريخ إشارة
+$products = Product::addSortByCreatedAtBookmarks('desc', null, 'last_bookmark')->get();
+```
+
+#### 4.6 نظام البلاغات (`ProposalModel`)
+
+```php
+// الأكثر بلاغات من نوع 'reports'
+$products = Product::sortByCountProposals('desc', 'reports')->get();
+
+// الأحدث بلاغاً من نوع 'complaints'
+$products = Product::sortByCreatedAtProposals('desc', 'complaints')->get();
+```
+
+#### 4.7 الجمع بين النطاقات
+
+```php
+// جلب المنتجات النشطة، مرتبة حسب الأكثر تفضيلاً، مع إضافة عمود عدد التفضيلات
+$products = Product::isActive()
+    ->withSortByCountFavorites('desc', 'favorites_count')
+    ->get();
+```
+
+---
+
+### 5. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. لم يعد المطور بحاجة لكتابة استعلامات فرعية معقدة أو القلق بشأن صحة النتائج. الواجهة الموحدة تسهل التعلم والاستخدام عبر مختلف السلوكيات.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر شهرة، الأحدث نشاطاً، الأعلى تقييماً) مما يحسن تجربة المستخدم ويزيد من فعالية التطبيقات.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ. الاستعلامات الفرعية المرتبطة الآن تعمل بكفاءة عالية.
+- **المرونة**: إمكانية التصفية حسب القيمة أو النوع تسمح ببناء أنظمة معقدة مثل تمييز الإعجابات عن عدم الإعجابات، أو تصنيف البلاغات، أو التعامل مع تفاعلات متعددة.
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 6. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات التقييمات والعلامات والبلاغات داخل النظام. من خلال إعادة هيكلة النطاقات وتوحيدها في جميع السلوكيات المعنية، أصبح بإمكان المطورين بناء تطبيقات تعتمد على ترتيب وتصفية متقدمة بسهولة وأمان. مع استمرار التطوير، سيبقى هذا النظام قادراً على تلبية احتياجات المشاريع المتنوعة بفضل مرونته وتصميمه المتين.
