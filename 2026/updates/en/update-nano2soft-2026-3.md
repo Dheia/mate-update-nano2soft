@@ -1783,3 +1783,175 @@ This update represents a qualitative shift in managing review queries within Nan
 See [docs/ReviewRateable/Docs-ReviewRateable-en.md](./docs/ReviewRateable/Docs-ReviewRateable-en.md)
 
 See [docs/ReviewRateable/Docs-ReviewRateable-Advenced-Examples-en.md](./docs/ReviewRateable/Docs-ReviewRateable-Advenced-Examples-en.md)
+
+## 2026-3-24 - 2026-3-25
+
+### Comprehensive Update of Query Scopes in `FollowableModel` Behavior
+
+**Complete development of query scopes and helper functions within the `Nano.Follows` package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the Follows system in NanoSoft applications. Developers no longer need to write complex queries or rely on incorrect usage of `GROUP BY` and `LIMIT` within subqueries; instead, they have a set of ready‑made scopes that enable:
+
+- Sorting by **number of follows** (most followed).
+- Sorting by **latest follow date** (most recently active).
+- Sorting by **earliest follow date** (first follow).
+- Adding computed columns to `SELECT` (such as `follows_count` or `latest_follow_at`) without affecting ordering.
+- Filtering objects that are followed (or not followed) by a specific user.
+- Filtering objects that have (or do not have) followers, with the ability to specify a minimum count.
+- Adding the `is_followed_by_user` column that indicates whether the current user follows the object.
+- Advanced statistical functions to get total followers, their distribution by user type, and the list of follower users.
+
+Existing scopes have been restructured and new scopes added, while preserving backward compatibility via wrapper functions marked `@deprecated`. All scopes and helper functions have been moved to a standalone trait `FollowableScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `FollowableModel` | `FollowableScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the follow system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Follow Count** | `scopeAddCountFollows` | Adds a follow count column to `SELECT` (without sorting). |
+| | `scopeSortByCountFollows` | Sorts results by follow count (without adding the column). |
+| | `scopeWithCountFollows` | Adds the column and sorts together. |
+| **Latest Date** | `scopeAddLatestFollow` | Adds a column with the latest follow date. |
+| | `scopeSortByLatestFollow` | Sorts by the latest follow date. |
+| | `scopeWithLatestFollow` | Adds the column and sorts together. |
+| **Earliest Date** | `scopeAddEarliestFollow` | Adds a column with the earliest follow date. |
+| | `scopeSortByEarliestFollow` | Sorts by the earliest follow date. |
+| | `scopeWithEarliestFollow` | Adds the column and sorts together. |
+| **Filtering by User** | `scopeFollowedByUser` | Filters objects followed by a specific user. |
+| | `scopeNotFollowedByUser` | Filters objects not followed by a specific user. |
+| | `scopeWhereHasFollow` (legacy) | For backward compatibility; `FollowedByUser` is recommended. |
+| | `scopeWhereHasFollows` (legacy) | Alias of the legacy one. |
+| **Filtering by Follower Presence** | `scopeHasFollowers` | Filters objects that have followers (with a minimum count). |
+| | `scopeHasNoFollowers` | Filters objects that have no followers. |
+| **User Status Column** | `scopeWithIsFollowedByUser` | Adds the `is_followed_by_user` column indicating whether the current user follows. |
+| **Special Scopes** | `scopeTopFollowed` | Retrieves the most followed objects (with a limit). |
+| | `scopeSortByAcceptedFollowsCount` | Shortcut to sort by accepted follows only. |
+| | `scopeSortByActiveFollowsCount` | Shortcut to sort by active follows only. |
+
+#### New Helper Functions
+
+| Function | Description |
+|----------|-------------|
+| `getFollowersCountByType` | Returns the number of followers grouped by `user_type`. |
+| `getTotalFollowers` | Total number of followers with filtering options. |
+| `getFollowersUsers` | Returns the collection of users who follow the object. |
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Some previous queries (in legacy scopes not present in this behavior) might have used `GROUP BY` and `LIMIT` inside subqueries to obtain aggregated values (e.g., `MAX` or `COUNT`). This approach leads to incorrect and unpredictable results. In the current update, subqueries are built correctly using direct aggregate functions without `GROUP BY` or `LIMIT`, with the full table name prefixed to each field to avoid ambiguity.
+
+Example of the correct query for sorting by follow count:
+
+```php
+$subQuery = Follow::selectRaw('COUNT(' . $followTable . '.id)')
+    ->whereColumn($followTable . '.followable_id', $this->model->getTable() . '.id')
+    ->where($followTable . '.followable_type', $this->model->getMorphClass())
+    ->where(...);
+```
+
+#### 2.2 Unifying Scope Signatures
+Function signatures have been unified to include:
+- `$orderDirection`: sort direction (default `DESC`).
+- `$columnName`: name of the added column (with a sensible default such as `follows_count`, `latest_follow_at`).
+- `$onlyAccepted` / `$onlyActive` / `$withTrashed`: optional filtering parameters.
+- For date scopes, an additional `$field` parameter has been added to specify the timestamp field to use (`created_at`, `updated_at`, `accepted_at`, `re_follow_at`).
+
+#### 2.3 Supporting `withTrashed` (Soft‑Deleted Follows)
+The `$withTrashed` parameter has been added to all scopes and statistical functions. When `true` is passed, soft‑deleted follow records are included in the subquery. This requires that the `Follow` model uses the `SoftDeletes` trait.
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Follows\Behaviors\FollowableModel\FollowableScopesAndHelpers`
+
+This trait is then used inside the `FollowableModel` behavior via `use`.
+
+#### 2.5 Backward Compatibility
+Legacy scopes (such as `addSortByCountFollows`, `withSortByLatestAtFollows`, etc.) have been retained as wrapper functions in the main class, with a `@deprecated` annotation to guide developers toward the new alternatives. This ensures that existing code relying on these names does not break.
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Sorting by Follow Count
+```php
+// Most followed products (accepted only)
+$products = Product::topFollowed(10)->get();
+
+// Descending order by number of active follows (including soft‑deleted)
+$products = Product::sortByCountFollows('DESC', 'follows_count', null, true, true)->get();
+```
+
+#### 3.2 Adding a Follow Count Column
+```php
+$products = Product::addCountFollows()->get();
+foreach ($products as $product) {
+    echo $product->follows_count;
+}
+```
+
+#### 3.3 Filtering by Current User
+```php
+$myFollowed = Product::followedByUser()->get();
+```
+
+#### 3.4 Filtering by Follower Presence
+```php
+// Products with at least 5 accepted followers
+$products = Product::hasFollowers(5, true)->get();
+```
+
+#### 3.5 Adding the `is_followed_by_user` Column
+```php
+$products = Product::withIsFollowedByUser()->paginate(20);
+foreach ($products as $product) {
+    if ($product->is_followed_by_user) echo "Followed";
+}
+```
+
+#### 3.6 Sorting by Latest Follow (Custom Field)
+```php
+$products = Product::sortByLatestFollow('DESC', 'latest_follow_at', true, null, false, 'accepted_at')->get();
+```
+
+#### 3.7 Statistics
+```php
+$product = Product::find(1);
+echo $product->getTotalFollowers(true, true); // Accepted and active
+print_r($product->getFollowersCountByType(true, true)->toArray());
+$users = $product->getFollowersUsers(true, true);
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: A comprehensive set of ready‑made scopes saves time and reduces errors. Developers no longer need to write complex subqueries or worry about result correctness. The unified interface makes learning and usage easier across different behaviors.
+- **For End Users**: Ability to present intelligently sorted lists (most followed, most recently active) improves user experience and increases the effectiveness of social applications.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`. The correlated subqueries now operate with high efficiency.
+- **Flexibility**: Filtering by acceptance, activity, and soft‑deleted follows allows building complex systems such as "pending follows" or "follow statistics over time."
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative leap in managing follow‑system queries within NanoSoft applications. By restructuring scopes and moving them to a standalone trait, while adding advanced sorting, filtering, and statistical functions, developers can now build sophisticated follow systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open wide possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and its usage, please refer to the documentation file `Docs-FollowableModel-en.md` or review the examples provided above.
+
+See [docs/FollowableModel/Docs-FollowableModel-en.md](./docs/FollowableModel/Docs-FollowableModel-en.md)
+
+See [docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-en.md](./docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-en.md)
+
