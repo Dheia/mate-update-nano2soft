@@ -1586,3 +1586,200 @@ $products = Product::isActive()
 ### 6. Conclusion
 
 This update represents a qualitative leap in managing queries for reviews, markables, and proposals within the system. By restructuring and unifying scopes across all relevant behaviors, developers can now build applications relying on advanced sorting and filtering with ease and safety. As development continues, this system will remain capable of meeting the needs of diverse projects thanks to its flexibility and robust design.
+
+## 2026-3-23 - 2026-3-24
+
+### Comprehensive Update for Query Scopes in `ReviewRateable` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano.Reviews` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the reviews system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **number of reviews**.
+- Ordering by **average rating**.
+- Ordering by **latest review date** (most recent).
+- Ordering by **earliest review date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `reviews_count`, `avg_rating`, `latest_review_at`) without affecting the ordering.
+- Filtering objects that a specific user has rated (or has not rated).
+- Filtering objects that have reviews (with a minimum count) or that have no reviews.
+- Adding the column `is_rated_by_user` which indicates whether the current user has rated the object.
+- Advanced statistical functions to get total ratings, average rating, distribution of ratings by user type, and the list of users who rated the object.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `ReviewScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `ReviewRateable` | `ReviewScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the reviews system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Number of Reviews** | `scopeAddCountReviews` | Add a review count column to `SELECT` (without ordering). |
+| | `scopeSortByCountReviews` | Order results by number of reviews (without adding the column). |
+| | `scopeWithCountReviews` | Add the column and ordering together. |
+| **Average Rating** | `scopeAddAvgRating` | Add an average rating column (with rounding). |
+| | `scopeSortByAvgRating` | Order by average rating. |
+| | `scopeWithAvgRating` | Add the column and ordering together. |
+| **Latest Review Date** | `scopeAddLatestReview` | Add a column with the latest review date. |
+| | `scopeSortByLatestReview` | Order by the latest review date. |
+| | `scopeWithLatestReview` | Add the column and ordering together. |
+| **Earliest Review Date** | `scopeAddEarliestReview` | Add a column with the earliest review date. |
+| | `scopeSortByEarliestReview` | Order by the earliest review date. |
+| | `scopeWithEarliestReview` | Add the column and ordering together. |
+| **Filtering by User** | `scopeRatedByUser` | Filter objects that a specific user has rated. |
+| | `scopeNotRatedByUser` | Filter objects that a specific user has not rated. |
+| **Filtering by Existence of Reviews** | `scopeHasRatings` | Filter objects that have reviews (with a minimum count). |
+| | `scopeHasNoRatings` | Filter objects that have no reviews. |
+| **Status Column for User** | `scopeWithIsRatedByUser` | Add the `is_rated_by_user` column. |
+| **Special Scopes** | `scopeTopRated` | Retrieve the highest-rated objects (by average rating). |
+| | `scopeTopRatedByCount` | Retrieve the most-reviewed objects (by number of reviews). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalRatings` | Total number of ratings (sum of `rating`) with filtering options. |
+| `getAverageRating` | Average rating with filtering options. |
+| `getRatingsCountByType` | Distribution of ratings by user type (`user_type`). |
+| `getRatersUsers` | List of users who rated the object. |
+
+All functions and scopes support filtering options: `$onlyActive`, `$onlyApproved`, `$withTrashed`, `$isPositive`, `$ratingValue`.
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `AVG`, `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results, because `GROUP BY` creates multiple groups and then `LIMIT 1` selects only the first group.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`. An aggregate function in a related subquery automatically works on all rows matching the join condition.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `approved`, `is_positive`, `rating`) via `where` inside the subquery.
+
+Example of a correct query for ordering by number of reviews:
+
+```php
+$subQuery = Review::selectRaw('COUNT(' . $table . '.id)')
+    ->whereColumn($table . '.reviewrateable_id', $this->model->getTable() . '.id')
+    ->where($table . '.reviewrateable_type', $this->model->getMorphClass())
+    ->where(...);
+```
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `reviews_count`, `avg_rating`, `latest_review_at`).
+- `$onlyActive`: Filter by `is_active`.
+- `$withTrashed`: Include soft-deleted records.
+- `$onlyApproved`: Filter by `approved` (approved reviews only).
+- `$isPositive`: Filter by `is_positive` (positive/negative rating).
+- `$ratingValue`: Filter by rating value (e.g., 5 stars).
+- In date scopes, a `$field` parameter was added to specify the temporal field used (`created_at`, `updated_at`).
+
+#### 2.3 Supporting `withTrashed` (Soft-Deleted Reviews)
+The `$withTrashed` parameter was added to all scopes and statistical functions. When `true` is passed, soft-deleted review records are included in the subquery. This requires that the `Review` model uses the `SoftDeletes` trait.
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Reviews\Behaviors\ReviewRateable\ReviewScopesAndHelpers`
+
+This trait is then used inside the `ReviewRateable` behavior via `use`.
+
+#### 2.5 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment to guide developers toward the new alternatives.
+
+**List of Supported Old Functions:**
+- `scopeSortByRating` → `scopeSortByAvgRating`
+- `scopeWithRating` → `scopeWithAvgRating`
+- `scopeAddSortByRating` → `scopeAddAvgRating`
+- `scopeWithSortByCountReviews` → `scopeWithCountReviews`
+- `scopeSortByCountReviewsOld` → `scopeSortByCountReviews`
+- `scopeSortByCreatedAtReviews` → `scopeSortByLatestReview`
+- `scopeAddSortByCreatedAtReviews` → `scopeAddLatestReview`
+- `scopeWithSortByCreatedAtReviews` → `scopeWithLatestReview`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Number of Reviews
+```php
+// Most reviewed products (by number of reviews)
+$products = Product::sortByCountReviews('DESC', 'reviews_count')->take(10)->get();
+
+// Add a review count column
+$products = Product::addCountReviews()->get();
+foreach ($products as $product) {
+    echo $product->reviews_count;
+}
+```
+
+#### 3.2 Ordering by Average Rating
+```php
+$products = Product::sortByAvgRating('DESC', 'avg_rating', null, false, true)->get(); // approved reviews only
+```
+
+#### 3.3 Adding the `is_rated_by_user` Column for the Current User
+```php
+$products = Product::withIsRatedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_rated_by_user ? 'You rated' : 'You did not rate';
+}
+```
+
+#### 3.4 Filtering Products that the Current User Has Rated
+```php
+$ratedProducts = Product::ratedByUser()->get();
+```
+
+#### 3.5 Filtering by Positive Reviews Only
+```php
+$products = Product::hasRatings(1, true, false, true, true)->get(); // at least one positive review
+```
+
+#### 3.6 Statistics
+```php
+$product = Product::find(1);
+echo "Total ratings: " . $product->getTotalRatings(true, false, true);
+echo "Average rating: " . $product->getAverageRating(true, false, true);
+print_r($product->getRatingsCountByType(true, false, true)->toArray());
+$users = $product->getRatersUsers(true, false, true);
+```
+
+#### 3.7 Combining Advanced Scopes
+```php
+// Products that have at least 5 approved reviews, ordered by average rating
+$products = Product::hasRatings(5, true, false, true)
+    ->sortByAvgRating('DESC', 'avg_rating')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. Developers no longer need to write complex subqueries or worry about result correctness. The unified interface makes learning and usage easy across different behaviors.
+- **For End Users**: The ability to present intelligently ordered lists (highest rated, latest reviewed) improves the user experience and increases application effectiveness.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: The ability to filter by `approved`, `is_positive`, `ratingValue` allows building advanced rating systems (e.g., filter positive reviews only, or 5-star ratings).
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing review queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated rating systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `ReviewRateable` behavior documentation file or review the examples provided above.
+
+See [docs/ReviewRateable/Docs-ReviewRateable-en.md](./docs/ReviewRateable/Docs-ReviewRateable-en.md)
+
+See [docs/ReviewRateable/Docs-ReviewRateable-Advenced-Examples-en.md](./docs/ReviewRateable/Docs-ReviewRateable-Advenced-Examples-en.md)
