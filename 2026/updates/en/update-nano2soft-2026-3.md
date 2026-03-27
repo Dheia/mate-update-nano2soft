@@ -1955,3 +1955,172 @@ See [docs/FollowableModel/Docs-FollowableModel-en.md](./docs/FollowableModel/Doc
 
 See [docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-en.md](./docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-en.md)
 
+## 2026-3-26 - 2026-3-27
+
+### Comprehensive Update for Query Scopes in `FavoriteableModel` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano.Markable` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the favorites system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **favorite count**.
+- Ordering by **latest favorite date** (most recent).
+- Ordering by **earliest favorite date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `favorites_count`, `latest_favorite_at`) without affecting the ordering.
+- Filtering objects that a specific user has favorited (or has not favorited).
+- Filtering objects that have favorites (with a minimum count) or that have no favorites.
+- Adding the column `is_favorited_by_user` which indicates whether the current user has favorited the object.
+- Advanced statistical functions to get total favorites, distribution of favorites by user type, and the list of users who favorited the object.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `FavoriteScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `FavoriteableModel` | `FavoriteScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the favorites system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Favorite Count** | `scopeAddCountFavorites` | Add a favorite count column to `SELECT` (without ordering). |
+| | `scopeSortByCountFavorites` | Order results by favorite count (without adding the column). |
+| | `scopeWithCountFavorites` | Add the column and ordering together. |
+| **Latest Favorite Date** | `scopeAddLatestFavorite` | Add a column with the latest favorite date. |
+| | `scopeSortByLatestFavorite` | Order by the latest favorite date. |
+| | `scopeWithLatestFavorite` | Add the column and ordering together. |
+| **Earliest Favorite Date** | `scopeAddEarliestFavorite` | Add a column with the earliest favorite date. |
+| | `scopeSortByEarliestFavorite` | Order by the earliest favorite date. |
+| | `scopeWithEarliestFavorite` | Add the column and ordering together. |
+| **Filtering by User** | `scopeFavoritedByUser` | Filter objects that a specific user has favorited. |
+| | `scopeNotFavoritedByUser` | Filter objects that a specific user has not favorited. |
+| **Filtering by Existence of Favorites** | `scopeHasFavorites` | Filter objects that have favorites (with a minimum count). |
+| | `scopeHasNoFavorites` | Filter objects that have no favorites. |
+| **Status Column for User** | `scopeWithIsFavoritedByUser` | Add the `is_favorited_by_user` column. |
+| **Special Scopes** | `scopeTopFavorited` | Retrieve the objects with the most favorites (by favorite count). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalFavorites` | Total number of favorites (sum of `COUNT`) with filtering options. |
+| `getFavoritesCountByType` | Distribution of favorites by user type (`user_type`). |
+| `getFavoritersUsers` | List of users who have favorited the object. |
+
+All functions and scopes support filtering options: `$value` (to filter favorite type, e.g., `like`/`favorite`).
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `value`) via `where` inside the subquery.
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `favorites_count`, `latest_favorite_at`).
+- `$value`: Filter by favorite value (e.g., `like`).
+- Other optional parameters (`$onlyActive`, `$withTrashed`) to prepare for future expansion.
+
+#### 2.3 Supporting `$value` to Distinguish Favorite Types
+The `$value` parameter has been added to all scopes and statistical functions, allowing filtering for a specific favorite type (e.g., `like`, `favorite`, `bookmark`).
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Markable\Behaviors\FavoriteableModel\FavoriteScopesAndHelpers`
+
+#### 2.5 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment. The old functions (`scopeWhereHasFavorite`, `scopeWhereHasFavorites`, `scopeWhereHasUserFavorite`, `scopeWhereHasUserFavorites`) have also been improved to support the `$isForceUser` parameter for controlling query behavior when no user is present, with the default value read from settings.
+
+**List of Supported Old Functions:**
+- `scopeSortByCountFavoritesOld` → `scopeSortByCountFavorites`
+- `scopeWithSortByCountFavorites` → `scopeWithCountFavorites`
+- `scopeAddSortByCountFavorites` → `scopeAddCountFavorites`
+- `scopeSortByCreatedAtFavorites` → `scopeSortByLatestFavorite`
+- `scopeAddSortByCreatedAtFavorites` → `scopeAddLatestFavorite`
+- `scopeWithSortByCreatedAtFavorites` → `scopeWithLatestFavorite`
+- `scopeWhereHasFavorite` → `scopeFavoritedByUser` (with improvements)
+- `scopeWhereHasFavorites` → `scopeFavoritedByUser`
+- `scopeWhereHasUserFavorite` → `scopeFavoritedByUser`
+- `scopeWhereHasUserFavorites` → `scopeFavoritedByUser`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Favorite Count
+```php
+// Most favorited products
+$products = Product::topFavorited(10)->get();
+
+// Add favorite count column with ordering
+$products = Product::withCountFavorites('DESC', 'favorites_count')->get();
+```
+
+#### 3.2 Adding the `is_favorited_by_user` Column for the Current User
+```php
+$products = Product::withIsFavoritedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_favorited_by_user ? 'Favorite' : 'Not favorite';
+}
+```
+
+#### 3.3 Filtering Products that the Current User Has Favorited
+```php
+$myFavorites = Product::favoritedByUser()->get();
+```
+
+#### 3.4 Filtering by Favorite Type (e.g., `like`)
+```php
+$likedProducts = Product::hasFavorites(1, 'like')->get();
+```
+
+#### 3.5 Statistics
+```php
+$product = Product::find(1);
+echo "Number of favorites: " . $product->getTotalFavorites();
+print_r($product->getFavoritesCountByType()->toArray());
+$users = $product->getFavoritersUsers();
+```
+
+#### 3.6 Combining Advanced Scopes
+```php
+// Products that have more than 5 favorites of type 'like', ordered by latest favorite
+$products = Product::hasFavorites(5, 'like')
+    ->sortByLatestFavorite('DESC', 'latest_favorite_at')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. The unified interface makes learning and usage easy.
+- **For End Users**: The ability to present intelligently ordered lists (most favorited, latest favorited) improves the user experience.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: The ability to filter by `value` allows building multi-type systems (likes, favorites, bookmarks).
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing favorite queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated favorite systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `FavoriteableModel` behavior documentation file or review the examples provided above.
+
+See [docs/FavoriteableModel/Docs-FavoriteableModel-en.md](./docs/FavoriteableModel/Docs-FavoriteableModel-en.md)
+
+See [docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-en.md](./docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-en.md)
+

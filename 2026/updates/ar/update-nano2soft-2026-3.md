@@ -1966,4 +1966,173 @@ See [docs/FollowableModel/Docs-FollowableModel-ar.md](./docs/FollowableModel/Doc
 
 See [docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-ar.md](./docs/FollowableModel/Docs-FollowableModel-Advenced-Examples-ar.md)
 
+## 2026-3-26 - 2026-3-27
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `FavoriteableModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano.Markable`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام المفضلات (Favorites) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد المفضلات**.
+- الترتيب حسب **أحدث تاريخ تفضيل** (الأحدث).
+- الترتيب حسب **أقدم تاريخ تفضيل** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `favorites_count`, `latest_favorite_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي أضافها مستخدم معين إلى المفضلة (أو لم يضفها).
+- تصفية الكائنات التي لديها مفضلات (مع حد أدنى للعدد) أو التي لا مفضلات لها.
+- إضافة عمود `is_favorited_by_user` الذي يوضح ما إذا كان المستخدم الحالي قد أضاف الكائن إلى المفضلة.
+- دوال إحصائية متقدمة للحصول على إجمالي المفضلات، توزيع المفضلات حسب نوع المستخدم، وقائمة المستخدمين المفضلين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `FavoriteScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `FavoriteableModel` | `FavoriteScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام المفضلات. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد المفضلات** | `scopeAddCountFavorites` | إضافة عمود عدد المفضلات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountFavorites` | ترتيب النتائج حسب عدد المفضلات (دون إضافة العمود). |
+| | `scopeWithCountFavorites` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ تفضيل** | `scopeAddLatestFavorite` | إضافة عمود بأحدث تاريخ تفضيل. |
+| | `scopeSortByLatestFavorite` | ترتيب حسب أحدث تاريخ تفضيل. |
+| | `scopeWithLatestFavorite` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ تفضيل** | `scopeAddEarliestFavorite` | إضافة عمود بأقدم تاريخ تفضيل. |
+| | `scopeSortByEarliestFavorite` | ترتيب حسب أقدم تاريخ تفضيل. |
+| | `scopeWithEarliestFavorite` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم** | `scopeFavoritedByUser` | تصفية الكائنات التي أضافها مستخدم معين إلى المفضلة. |
+| | `scopeNotFavoritedByUser` | تصفية الكائنات التي لم يضفها مستخدم معين إلى المفضلة. |
+| **التصفية حسب وجود مفضلات** | `scopeHasFavorites` | تصفية الكائنات التي لديها مفضلات (مع حد أدنى). |
+| | `scopeHasNoFavorites` | تصفية الكائنات التي لا مفضلات لها. |
+| **عمود الحالة للمستخدم** | `scopeWithIsFavoritedByUser` | إضافة عمود `is_favorited_by_user`. |
+| **نطاقات خاصة** | `scopeTopFavorited` | جلب الكائنات الأكثر تفضيلاً (بعدد المفضلات). |
+
+#### الدوال الإحصائية المساعدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalFavorites` | إجمالي عدد المفضلات (مجموع `COUNT`) مع خيارات التصفية. |
+| `getFavoritesCountByType` | توزيع المفضلات حسب نوع المستخدم (`user_type`). |
+| `getFavoritersUsers` | قائمة المستخدمين الذين أضافوا الكائن إلى المفضلة. |
+
+جميع الدوال والنطاقات تدعم خيارات التصفية: `$value` (لتصفية نوع المفضلة، مثل `like`/`favorite`).
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `value`) عبر `where` داخل الاستعلام الفرعي.
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `favorites_count`, `latest_favorite_at`).
+- `$value`: تصفية حسب قيمة المفضلة (مثلاً `like`).
+- باراميترات اختيارية أخرى (`$onlyActive`, `$withTrashed`) للاستعداد للتوسع المستقبلي.
+
+#### 2.3 دعم `$value` لتمييز أنواع المفضلات
+تم إضافة باراميتر `$value` في جميع النطاقات والدوال الإحصائية، مما يسمح بتصفية نوع معين من المفضلات (مثلاً `like`, `favorite`, `bookmark`).
+
+#### 2.4 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano\Markable\Behaviors\FavoriteableModel\FavoriteScopesAndHelpers`
+
+#### 2.5 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated`. كما تم تحسين الدوال القديمة (`scopeWhereHasFavorite`, `scopeWhereHasFavorites`, `scopeWhereHasUserFavorite`, `scopeWhereHasUserFavorites`) لدعم معامل `$isForceUser` للتحكم في سلوك الاستعلام عند عدم وجود مستخدم، مع قراءة القيمة الافتراضية من الإعدادات.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountFavoritesOld` → `scopeSortByCountFavorites`
+- `scopeWithSortByCountFavorites` → `scopeWithCountFavorites`
+- `scopeAddSortByCountFavorites` → `scopeAddCountFavorites`
+- `scopeSortByCreatedAtFavorites` → `scopeSortByLatestFavorite`
+- `scopeAddSortByCreatedAtFavorites` → `scopeAddLatestFavorite`
+- `scopeWithSortByCreatedAtFavorites` → `scopeWithLatestFavorite`
+- `scopeWhereHasFavorite` → `scopeFavoritedByUser` (مع تحسينات)
+- `scopeWhereHasFavorites` → `scopeFavoritedByUser`
+- `scopeWhereHasUserFavorite` → `scopeFavoritedByUser`
+- `scopeWhereHasUserFavorites` → `scopeFavoritedByUser`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد المفضلات
+```php
+// المنتجات الأكثر تفضيلاً
+$products = Product::topFavorited(10)->get();
+
+// إضافة عمود عدد المفضلات مع الترتيب
+$products = Product::withCountFavorites('DESC', 'favorites_count')->get();
+```
+
+#### 3.2 إضافة عمود `is_favorited_by_user` للمستخدم الحالي
+```php
+$products = Product::withIsFavoritedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_favorited_by_user ? 'مفضل' : 'غير مفضل';
+}
+```
+
+#### 3.3 تصفية المنتجات التي أضافها المستخدم الحالي إلى المفضلة
+```php
+$myFavorites = Product::favoritedByUser()->get();
+```
+
+#### 3.4 التصفية حسب نوع المفضلة (مثل `like`)
+```php
+$likedProducts = Product::hasFavorites(1, 'like')->get();
+```
+
+#### 3.5 الإحصائيات
+```php
+$product = Product::find(1);
+echo "عدد المفضلات: " . $product->getTotalFavorites();
+print_r($product->getFavoritesCountByType()->toArray());
+$users = $product->getFavoritersUsers();
+```
+
+#### 3.6 الجمع بين النطاقات المتقدمة
+```php
+// المنتجات التي لها أكثر من 5 مفضلات من نوع 'like'، مرتبة حسب أحدث تفضيل
+$products = Product::hasFavorites(5, 'like')
+    ->sortByLatestFavorite('DESC', 'latest_favorite_at')
+    ->get();
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. الواجهة الموحدة تسهل التعلم والاستخدام.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر تفضيلاً، الأحدث تفضيلاً) مما يحسن تجربة المستخدم.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب `value` تسمح ببناء أنظمة متعددة الأنواع (إعجابات، مفضلات، إشارات مرجعية).
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات المفضلات داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة مفضلات متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `FavoriteableModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/FavoriteableModel/Docs-FavoriteableModel-ar.md](./docs/FavoriteableModel/Docs-FavoriteableModel-ar.md)
+
+See [docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-ar.md](./docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-ar.md)
+
 
