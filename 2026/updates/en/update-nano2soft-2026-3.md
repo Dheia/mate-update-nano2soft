@@ -2124,3 +2124,184 @@ See [docs/FavoriteableModel/Docs-FavoriteableModel-en.md](./docs/FavoriteableMod
 
 See [docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-en.md](./docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-en.md)
 
+## 2026-3-26 - 2026-3-27 
+
+### Comprehensive Update for Query Scopes in `BookmarkableModel` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano.Markable` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the bookmark system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **bookmark count** (with the ability to distinguish bookmark types such as `favorite`, `read_later`).
+- Ordering by **latest bookmark date** (most recent).
+- Ordering by **earliest bookmark date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `bookmarks_count`, `latest_bookmark_at`) without affecting the ordering.
+- Filtering objects that a specific user has bookmarked (or has not bookmarked).
+- Filtering objects that have bookmarks (with a minimum count) or that have no bookmarks.
+- Adding the column `is_bookmarked_by_user` which indicates whether the current user has bookmarked the object.
+- Advanced statistical functions to get total bookmarks, distribution of bookmarks by user type, and the list of users who bookmarked the object.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `BookmarkScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `BookmarkableModel` | `BookmarkScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the bookmark system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Bookmark Count** | `scopeAddCountBookmarks` | Add a bookmark count column to `SELECT` (without ordering). |
+| | `scopeSortByCountBookmarks` | Order results by bookmark count (without adding the column). |
+| | `scopeWithCountBookmarks` | Add the column and ordering together. |
+| **Latest Bookmark Date** | `scopeAddLatestBookmark` | Add a column with the latest bookmark date. |
+| | `scopeSortByLatestBookmark` | Order by the latest bookmark date. |
+| | `scopeWithLatestBookmark` | Add the column and ordering together. |
+| **Earliest Bookmark Date** | `scopeAddEarliestBookmark` | Add a column with the earliest bookmark date. |
+| | `scopeSortByEarliestBookmark` | Order by the earliest bookmark date. |
+| | `scopeWithEarliestBookmark` | Add the column and ordering together. |
+| **Filtering by User** | `scopeBookmarkedByUser` | Filter objects that a specific user has bookmarked. |
+| | `scopeNotBookmarkedByUser` | Filter objects that a specific user has not bookmarked. |
+| **Filtering by Existence of Bookmarks** | `scopeHasBookmarks` | Filter objects that have bookmarks (with a minimum count). |
+| | `scopeHasNoBookmarks` | Filter objects that have no bookmarks. |
+| **Status Column for User** | `scopeWithIsBookmarkedByUser` | Add the `is_bookmarked_by_user` column. |
+| **Special Scopes** | `scopeTopBookmarked` | Retrieve the objects with the most bookmarks (by bookmark count). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalBookmarks` | Total number of bookmarks (sum of `COUNT`) with filtering options. |
+| `getBookmarksCountByType` | Distribution of bookmarks by user type (`user_type`). |
+| `getBookmarkersUsers` | List of users who have bookmarked the object. |
+
+All functions and scopes support filtering options: `$value` (to distinguish bookmark type, e.g., `favorite`, `read_later`).
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `value`) via `where` inside the subquery.
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `bookmarks_count`, `latest_bookmark_at`).
+- `$value`: Filter by bookmark type (e.g., `favorite`, `read_later`).
+- `$field`: In date scopes, to specify the temporal field used (`created_at`, `updated_at`).
+
+#### 2.3 Supporting `value` to Distinguish Bookmark Types
+The `$value` parameter has been added to all scopes and statistical functions, allowing filtering by the desired bookmark type (e.g., `favorite`, `read_later`).
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Markable\Behaviors\BookmarkableModel\BookmarkScopesAndHelpers`
+
+#### 2.5 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment. The old functions (`scopeWhereHasBookmark`, `scopeWhereHasBookmarks`, `scopeWhereHasUserBookmark`, `scopeWhereHasUserBookmarks`) have also been improved to support the `$isForceUser` parameter for controlling query behavior when no user is present, with the default value read from settings.
+
+**List of Supported Old Functions:**
+- `scopeSortByCountBookmarksOld` → `scopeSortByCountBookmarks`
+- `scopeWithSortByCountBookmarks` → `scopeWithCountBookmarks`
+- `scopeAddSortByCountBookmarks` → `scopeAddCountBookmarks`
+- `scopeSortByCreatedAtBookmarks` → `scopeSortByLatestBookmark`
+- `scopeAddSortByCreatedAtBookmarks` → `scopeAddLatestBookmark`
+- `scopeWithSortByCreatedAtBookmarks` → `scopeWithLatestBookmark`
+- `scopeWhereHasBookmark` → `scopeBookmarkedByUser` (with improvements)
+- `scopeWhereHasBookmarks` → `scopeBookmarkedByUser`
+- `scopeWhereHasUserBookmark` → `scopeBookmarkedByUser`
+- `scopeWhereHasUserBookmarks` → `scopeBookmarkedByUser`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Bookmark Count
+```php
+// Products with the most bookmarks (all types)
+$topProducts = Product::sortByCountBookmarks('DESC')->get();
+
+// Add bookmark count column with ordering
+$products = Product::withCountBookmarks('DESC', 'bookmarks_count')->get();
+```
+
+#### 3.2 Ordering by Bookmark Count with Type Filtering
+```php
+// Products with the most bookmarks of type 'favorite'
+$topFavorites = Product::sortByCountBookmarks('DESC', 'favorites_count', 'favorite')->get();
+
+// Products with the most bookmarks of type 'read_later'
+$topReadLater = Product::sortByCountBookmarks('DESC', 'read_later_count', 'read_later')->get();
+```
+
+#### 3.3 Adding the `is_bookmarked_by_user` Column for the Current User
+```php
+$products = Product::withIsBookmarkedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_bookmarked_by_user ? 'Favorite' : 'Not favorite';
+}
+```
+
+#### 3.4 Filtering Products that the Current User Has Bookmarked
+```php
+$myBookmarks = Product::bookmarkedByUser()->get();
+
+// Filter products that the user has bookmarked as type 'favorite'
+$myFavorites = Product::bookmarkedByUser(null, 'favorite')->get();
+```
+
+#### 3.5 Filtering by Bookmarks of a Specific Type
+```php
+$favoriteProducts = Product::hasBookmarks(1, 'favorite')->get();
+```
+
+#### 3.6 Statistics
+```php
+$product = Product::find(1);
+echo "Number of bookmarks of type 'favorite': " . $product->getTotalBookmarks('favorite');
+print_r($product->getBookmarksCountByType('favorite')->toArray());
+$users = $product->getBookmarkersUsers('favorite');
+```
+
+#### 3.7 Combining Advanced Scopes
+```php
+// Products that have more than 5 bookmarks of type 'favorite', ordered by latest bookmark
+$products = Product::hasBookmarks(5, 'favorite')
+    ->sortByLatestBookmark('DESC', 'latest_favorite_at')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. The unified interface makes learning and usage easy.
+- **For End Users**: The ability to present intelligently ordered lists (most bookmarked, latest bookmarked) improves the user experience.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: The ability to filter by `value` allows building multi-type systems (favorites, read-later lists, various bookmarks).
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing bookmark queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated bookmark systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `BookmarkableModel` behavior documentation file or review the examples provided above.
+
+See [docs/BookmarkableModel/Docs-BookmarkableModel-en.md](./docs/BookmarkableModel/Docs-BookmarkableModel-en.md)
+
+See [docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-en.md](./docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-en.md)
+

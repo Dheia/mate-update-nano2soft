@@ -2135,4 +2135,185 @@ See [docs/FavoriteableModel/Docs-FavoriteableModel-ar.md](./docs/FavoriteableMod
 
 See [docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-ar.md](./docs/FavoriteableModel/Docs-FavoriteableModel-Advenced-Examples-ar.md)
 
+## 2026-3-26 - 2026-3-27
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `BookmarkableModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano.Markable`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام الإشارات المرجعية (Bookmarks) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد الإشارات المرجعية** (مع إمكانية تمييز أنواع الإشارات مثل `favorite`, `read_later`).
+- الترتيب حسب **أحدث تاريخ إشارة** (الأحدث).
+- الترتيب حسب **أقدم تاريخ إشارة** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `bookmarks_count`, `latest_bookmark_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي أضافها مستخدم معين إلى الإشارات المرجعية (أو لم يضفها).
+- تصفية الكائنات التي لديها إشارات (مع حد أدنى للعدد) أو التي لا إشارات لها.
+- إضافة عمود `is_bookmarked_by_user` الذي يوضح ما إذا كان المستخدم الحالي قد أضاف الكائن إلى الإشارات المرجعية.
+- دوال إحصائية متقدمة للحصول على إجمالي الإشارات، توزيع الإشارات حسب نوع المستخدم، وقائمة المستخدمين المفضلين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `BookmarkScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `BookmarkableModel` | `BookmarkScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام الإشارات المرجعية. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد الإشارات** | `scopeAddCountBookmarks` | إضافة عمود عدد الإشارات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountBookmarks` | ترتيب النتائج حسب عدد الإشارات (دون إضافة العمود). |
+| | `scopeWithCountBookmarks` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ إشارة** | `scopeAddLatestBookmark` | إضافة عمود بأحدث تاريخ إشارة. |
+| | `scopeSortByLatestBookmark` | ترتيب حسب أحدث تاريخ إشارة. |
+| | `scopeWithLatestBookmark` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ إشارة** | `scopeAddEarliestBookmark` | إضافة عمود بأقدم تاريخ إشارة. |
+| | `scopeSortByEarliestBookmark` | ترتيب حسب أقدم تاريخ إشارة. |
+| | `scopeWithEarliestBookmark` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم** | `scopeBookmarkedByUser` | تصفية الكائنات التي أضافها مستخدم معين إلى الإشارات المرجعية. |
+| | `scopeNotBookmarkedByUser` | تصفية الكائنات التي لم يضفها مستخدم معين إلى الإشارات المرجعية. |
+| **التصفية حسب وجود إشارات** | `scopeHasBookmarks` | تصفية الكائنات التي لديها إشارات (مع حد أدنى). |
+| | `scopeHasNoBookmarks` | تصفية الكائنات التي لا إشارات لها. |
+| **عمود الحالة للمستخدم** | `scopeWithIsBookmarkedByUser` | إضافة عمود `is_bookmarked_by_user`. |
+| **نطاقات خاصة** | `scopeTopBookmarked` | جلب الكائنات الأكثر إشارة (بعدد الإشارات). |
+
+#### الدوال الإحصائية المساعدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalBookmarks` | إجمالي عدد الإشارات المرجعية (مجموع `COUNT`) مع خيارات التصفية. |
+| `getBookmarksCountByType` | توزيع الإشارات حسب نوع المستخدم (`user_type`). |
+| `getBookmarkersUsers` | قائمة المستخدمين الذين أضافوا الكائن إلى الإشارات المرجعية. |
+
+جميع الدوال والنطاقات تدعم خيارات التصفية: `$value` (لتمييز نوع الإشارة، مثل `favorite`, `read_later`).
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `value`) عبر `where` داخل الاستعلام الفرعي.
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `bookmarks_count`, `latest_bookmark_at`).
+- `$value`: تصفية حسب نوع الإشارة المرجعية (مثل `favorite`, `read_later`).
+- `$field`: في نطاقات التاريخ، لتحديد الحقل الزمني المستخدم (`created_at`, `updated_at`).
+
+#### 2.3 دعم `value` لتمييز أنواع الإشارات المرجعية
+تم إضافة باراميتر `$value` في جميع النطاقات والدوال الإحصائية، مما يسمح بالتصفية حسب نوع الإشارة المطلوب (مثل `favorite`, `read_later`).
+
+#### 2.4 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano\Markable\Behaviors\BookmarkableModel\BookmarkScopesAndHelpers`
+
+#### 2.5 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated`. كما تم تحسين الدوال القديمة (`scopeWhereHasBookmark`, `scopeWhereHasBookmarks`, `scopeWhereHasUserBookmark`, `scopeWhereHasUserBookmarks`) لدعم معامل `$isForceUser` للتحكم في سلوك الاستعلام عند عدم وجود مستخدم، مع قراءة القيمة الافتراضية من الإعدادات.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountBookmarksOld` → `scopeSortByCountBookmarks`
+- `scopeWithSortByCountBookmarks` → `scopeWithCountBookmarks`
+- `scopeAddSortByCountBookmarks` → `scopeAddCountBookmarks`
+- `scopeSortByCreatedAtBookmarks` → `scopeSortByLatestBookmark`
+- `scopeAddSortByCreatedAtBookmarks` → `scopeAddLatestBookmark`
+- `scopeWithSortByCreatedAtBookmarks` → `scopeWithLatestBookmark`
+- `scopeWhereHasBookmark` → `scopeBookmarkedByUser` (مع تحسينات)
+- `scopeWhereHasBookmarks` → `scopeBookmarkedByUser`
+- `scopeWhereHasUserBookmark` → `scopeBookmarkedByUser`
+- `scopeWhereHasUserBookmarks` → `scopeBookmarkedByUser`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد الإشارات المرجعية
+```php
+// المنتجات الأكثر إشارة (جميع الإشارات)
+$topProducts = Product::sortByCountBookmarks('DESC')->get();
+
+// إضافة عمود عدد الإشارات مع الترتيب
+$products = Product::withCountBookmarks('DESC', 'bookmarks_count')->get();
+```
+
+#### 3.2 ترتيب حسب عدد الإشارات مع تمييز النوع
+```php
+// المنتجات الأكثر إشارة من نوع 'favorite'
+$topFavorites = Product::sortByCountBookmarks('DESC', 'favorites_count', 'favorite')->get();
+
+// المنتجات الأكثر إشارة من نوع 'read_later'
+$topReadLater = Product::sortByCountBookmarks('DESC', 'read_later_count', 'read_later')->get();
+```
+
+#### 3.3 إضافة عمود `is_bookmarked_by_user` للمستخدم الحالي
+```php
+$products = Product::withIsBookmarkedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_bookmarked_by_user ? 'مفضل' : 'غير مفضل';
+}
+```
+
+#### 3.4 تصفية المنتجات التي أضافها المستخدم الحالي إلى الإشارات المرجعية
+```php
+$myBookmarks = Product::bookmarkedByUser()->get();
+
+// تصفية المنتجات التي أضافها المستخدم كنوع 'favorite'
+$myFavorites = Product::bookmarkedByUser(null, 'favorite')->get();
+```
+
+#### 3.5 التصفية حسب الإشارات من نوع معين
+```php
+$favoriteProducts = Product::hasBookmarks(1, 'favorite')->get();
+```
+
+#### 3.6 الإحصائيات
+```php
+$product = Product::find(1);
+echo "عدد الإشارات من نوع 'favorite': " . $product->getTotalBookmarks('favorite');
+print_r($product->getBookmarksCountByType('favorite')->toArray());
+$users = $product->getBookmarkersUsers('favorite');
+```
+
+#### 3.7 الجمع بين النطاقات المتقدمة
+```php
+// المنتجات التي لها أكثر من 5 إشارات من نوع 'favorite'، مرتبة حسب أحدث إشارة
+$products = Product::hasBookmarks(5, 'favorite')
+    ->sortByLatestBookmark('DESC', 'latest_favorite_at')
+    ->get();
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. الواجهة الموحدة تسهل التعلم والاستخدام.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر إشارة، الأحدث إشارة) مما يحسن تجربة المستخدم.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب `value` تسمح ببناء أنظمة متعددة الأنواع (مفضلات، قوائم قراءة لاحقاً، إشارات متنوعة).
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات الإشارات المرجعية داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة إشارات مرجعية متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `BookmarkableModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/BookmarkableModel/Docs-BookmarkableModel-ar.md](./docs/BookmarkableModel/Docs-BookmarkableModel-ar.md)
+
+See [docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-ar.md](./docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-ar.md)
+
 
