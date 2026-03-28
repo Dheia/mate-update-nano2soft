@@ -2304,4 +2304,185 @@ This update represents a qualitative shift in managing bookmark queries within N
 See [docs/BookmarkableModel/Docs-BookmarkableModel-en.md](./docs/BookmarkableModel/Docs-BookmarkableModel-en.md)
 
 See [docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-en.md](./docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-en.md)
+## 2026-3-27 - 2026-3-28 
+
+### Comprehensive Update for Query Scopes in `LikeableModel` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano.Markable` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the likes system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **like count** (with the ability to distinguish `like` from `dislike`).
+- Ordering by **latest like date** (most recent).
+- Ordering by **earliest like date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `likes_count`, `latest_like_at`) without affecting the ordering.
+- Filtering objects that a specific user has liked (or has not liked).
+- Filtering objects that have likes (with a minimum count) or that have no likes.
+- Adding the column `is_liked_by_user` which indicates whether the current user has liked the object.
+- Advanced statistical functions to get total likes, distribution of likes by user type, and the list of users who liked the object.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `LikeScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `LikeableModel` | `LikeScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the likes system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Like Count** | `scopeAddCountLikes` | Add a like count column to `SELECT` (without ordering). |
+| | `scopeSortByCountLikes` | Order results by like count (without adding the column). |
+| | `scopeWithCountLikes` | Add the column and ordering together. |
+| **Latest Like Date** | `scopeAddLatestLike` | Add a column with the latest like date. |
+| | `scopeSortByLatestLike` | Order by the latest like date. |
+| | `scopeWithLatestLike` | Add the column and ordering together. |
+| **Earliest Like Date** | `scopeAddEarliestLike` | Add a column with the earliest like date. |
+| | `scopeSortByEarliestLike` | Order by the earliest like date. |
+| | `scopeWithEarliestLike` | Add the column and ordering together. |
+| **Filtering by User** | `scopeLikedByUser` | Filter objects that a specific user has liked. |
+| | `scopeNotLikedByUser` | Filter objects that a specific user has not liked. |
+| **Filtering by Existence of Likes** | `scopeHasLikes` | Filter objects that have likes (with a minimum count). |
+| | `scopeHasNoLikes` | Filter objects that have no likes. |
+| **Status Column for User** | `scopeWithIsLikedByUser` | Add the `is_liked_by_user` column. |
+| **Special Scopes** | `scopeTopLiked` | Retrieve the objects with the most likes (by like count). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalLikes` | Total number of likes (sum of `COUNT`) with filtering options. |
+| `getLikesCountByType` | Distribution of likes by user type (`user_type`). |
+| `getLikersUsers` | List of users who liked the object. |
+
+All functions and scopes support filtering options: `$value` (to distinguish `like` from `dislike`, or any other custom value).
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `value`) via `where` inside the subquery.
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `likes_count`, `latest_like_at`).
+- `$value`: Filter by like type (e.g., `like` or `dislike`).
+- `$field`: In date scopes, to specify the temporal field used (`created_at`, `updated_at`).
+
+#### 2.3 Supporting `value` to Distinguish Like Types
+The `$value` parameter has been added to all scopes and statistical functions, with the default value read from `Like::getDefaultValue()` when needed (for compatibility with `like`/`dislike`).
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Markable\Behaviors\LikeableModel\LikeScopesAndHelpers`
+
+#### 2.5 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment. The old functions (`scopeWhereHasLike`, `scopeWhereHasLikes`, `scopeWhereHasUserLike`, `scopeWhereHasUserLikes`) have also been improved to support the `$isForceUser` parameter for controlling query behavior when no user is present, with the default value read from settings.
+
+**List of Supported Old Functions:**
+- `scopeSortByCountLikesOld` → `scopeSortByCountLikes`
+- `scopeWithSortByCountLikes` → `scopeWithCountLikes`
+- `scopeSortByCreatedAtLikes` → `scopeSortByLatestLike`
+- `scopeAddSortByCreatedAtLikes` → `scopeAddLatestLike`
+- `scopeWithSortByCreatedAtLikes` → `scopeWithLatestLike`
+- `scopeWhereHasLike` → `scopeLikedByUser` (with improvements)
+- `scopeWhereHasLikes` → `scopeLikedByUser`
+- `scopeWhereHasUserLike` → `scopeLikedByUser`
+- `scopeWhereHasUserLikes` → `scopeLikedByUser`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Like Count
+```php
+// Most liked products (likes of type 'like' only)
+$topProducts = Product::topLiked(10)->get();
+
+// Add like count column with ordering
+$products = Product::withCountLikes('DESC', 'likes_count')->get();
+```
+
+#### 3.2 Ordering by Like Count with Type Filtering
+```php
+// Most liked products of type 'like'
+$topLiked = Product::sortByCountLikes('DESC', 'likes_count', 'like')->get();
+
+// Most disliked products of type 'dislike'
+$topDisliked = Product::sortByCountLikes('DESC', 'dislikes_count', 'dislike')->get();
+```
+
+#### 3.3 Adding the `is_liked_by_user` Column for the Current User
+```php
+$products = Product::withIsLikedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_liked_by_user ? 'Liked' : 'Not liked';
+}
+```
+
+#### 3.4 Filtering Products that the Current User Has Liked
+```php
+$myLikedProducts = Product::likedByUser()->get();
+
+// Filter products that the user has liked as type 'like'
+$myLikes = Product::likedByUser(null, 'like')->get();
+```
+
+#### 3.5 Filtering by Likes Only (Excluding Dislikes)
+```php
+$likedOnly = Product::hasLikes(1, 'like')->get();
+```
+
+#### 3.6 Statistics
+```php
+$product = Product::find(1);
+echo "Number of likes: " . $product->getTotalLikes('like');
+echo "Number of dislikes: " . $product->getTotalLikes('dislike');
+print_r($product->getLikesCountByType('like')->toArray());
+$users = $product->getLikersUsers('like');
+```
+
+#### 3.7 Combining Advanced Scopes
+```php
+// Products that have more than 5 likes of type 'like', ordered by latest like
+$products = Product::hasLikes(5, 'like')
+    ->sortByLatestLike('DESC', 'latest_like_at')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. The unified interface makes learning and usage easy.
+- **For End Users**: The ability to present intelligently ordered lists (most liked, latest liked) improves the user experience.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: The ability to filter by `value` allows building multi-type systems (likes, dislikes, custom reactions).
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing like queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated like systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `LikeableModel` behavior documentation file or review the examples provided above.
+
+See [docs/LikeableModel/Docs-LikeableModel-en.md](./docs/LikeableModel/Docs-LikeableModel-en.md)
+
+See [docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-en.md](./docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-en.md)
+
 

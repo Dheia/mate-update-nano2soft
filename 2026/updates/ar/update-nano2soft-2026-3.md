@@ -2316,4 +2316,185 @@ See [docs/BookmarkableModel/Docs-BookmarkableModel-ar.md](./docs/BookmarkableMod
 
 See [docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-ar.md](./docs/BookmarkableModel/Docs-BookmarkableModel-Advenced-Examples-ar.md)
 
+## 2026-3-27 - 2026-3-28 
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `LikeableModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano.Markable`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام الإعجابات (Likes) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد الإعجابات** (مع إمكانية تمييز `like` عن `dislike`).
+- الترتيب حسب **أحدث تاريخ إعجاب** (الأحدث).
+- الترتيب حسب **أقدم تاريخ إعجاب** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `likes_count`, `latest_like_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي أعجب بها مستخدم معين (أو لم يعجب بها).
+- تصفية الكائنات التي لديها إعجابات (مع حد أدنى للعدد) أو التي لا إعجابات لها.
+- إضافة عمود `is_liked_by_user` الذي يوضح ما إذا كان المستخدم الحالي قد أعجب بالكائن.
+- دوال إحصائية متقدمة للحصول على إجمالي الإعجابات، توزيع الإعجابات حسب نوع المستخدم، وقائمة المستخدمين المعجبين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `LikeScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `LikeableModel` | `LikeScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام الإعجابات. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد الإعجابات** | `scopeAddCountLikes` | إضافة عمود عدد الإعجابات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountLikes` | ترتيب النتائج حسب عدد الإعجابات (دون إضافة العمود). |
+| | `scopeWithCountLikes` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ إعجاب** | `scopeAddLatestLike` | إضافة عمود بأحدث تاريخ إعجاب. |
+| | `scopeSortByLatestLike` | ترتيب حسب أحدث تاريخ إعجاب. |
+| | `scopeWithLatestLike` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ إعجاب** | `scopeAddEarliestLike` | إضافة عمود بأقدم تاريخ إعجاب. |
+| | `scopeSortByEarliestLike` | ترتيب حسب أقدم تاريخ إعجاب. |
+| | `scopeWithEarliestLike` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم** | `scopeLikedByUser` | تصفية الكائنات التي أعجب بها مستخدم معين. |
+| | `scopeNotLikedByUser` | تصفية الكائنات التي لم يعجب بها مستخدم معين. |
+| **التصفية حسب وجود إعجابات** | `scopeHasLikes` | تصفية الكائنات التي لديها إعجابات (مع حد أدنى). |
+| | `scopeHasNoLikes` | تصفية الكائنات التي لا إعجابات لها. |
+| **عمود الحالة للمستخدم** | `scopeWithIsLikedByUser` | إضافة عمود `is_liked_by_user`. |
+| **نطاقات خاصة** | `scopeTopLiked` | جلب الكائنات الأكثر إعجاباً (بعدد الإعجابات). |
+
+#### الدوال الإحصائية المساعدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalLikes` | إجمالي عدد الإعجابات (مجموع `COUNT`) مع خيارات التصفية. |
+| `getLikesCountByType` | توزيع الإعجابات حسب نوع المستخدم (`user_type`). |
+| `getLikersUsers` | قائمة المستخدمين الذين أعجبوا بالكائن. |
+
+جميع الدوال والنطاقات تدعم خيارات التصفية: `$value` (لتمييز `like` عن `dislike`، أو أي قيمة مخصصة أخرى).
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `value`) عبر `where` داخل الاستعلام الفرعي.
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `likes_count`, `latest_like_at`).
+- `$value`: تصفية حسب نوع الإعجاب (مثل `like` أو `dislike`).
+- `$field`: في نطاقات التاريخ، لتحديد الحقل الزمني المستخدم (`created_at`, `updated_at`).
+
+#### 2.3 دعم `value` لتمييز أنواع الإعجابات
+تم إضافة باراميتر `$value` في جميع النطاقات والدوال الإحصائية، مع قراءة القيمة الافتراضية من `Like::getDefaultValue()` عند الحاجة (للتوافق مع `like`/`dislike`).
+
+#### 2.4 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano\Markable\Behaviors\LikeableModel\LikeScopesAndHelpers`
+
+#### 2.5 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated`. كما تم تحسين الدوال القديمة (`scopeWhereHasLike`, `scopeWhereHasLikes`, `scopeWhereHasUserLike`, `scopeWhereHasUserLikes`) لدعم معامل `$isForceUser` للتحكم في سلوك الاستعلام عند عدم وجود مستخدم، مع قراءة القيمة الافتراضية من الإعدادات.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountLikesOld` → `scopeSortByCountLikes`
+- `scopeWithSortByCountLikes` → `scopeWithCountLikes`
+- `scopeSortByCreatedAtLikes` → `scopeSortByLatestLike`
+- `scopeAddSortByCreatedAtLikes` → `scopeAddLatestLike`
+- `scopeWithSortByCreatedAtLikes` → `scopeWithLatestLike`
+- `scopeWhereHasLike` → `scopeLikedByUser` (مع تحسينات)
+- `scopeWhereHasLikes` → `scopeLikedByUser`
+- `scopeWhereHasUserLike` → `scopeLikedByUser`
+- `scopeWhereHasUserLikes` → `scopeLikedByUser`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد الإعجابات
+```php
+// المنتجات الأكثر إعجاباً (إعجابات من نوع 'like' فقط)
+$topProducts = Product::topLiked(10)->get();
+
+// إضافة عمود عدد الإعجابات مع الترتيب
+$products = Product::withCountLikes('DESC', 'likes_count')->get();
+```
+
+#### 3.2 ترتيب حسب عدد الإعجابات مع تمييز النوع
+```php
+// المنتجات الأكثر إعجاباً من نوع 'like'
+$topLiked = Product::sortByCountLikes('DESC', 'likes_count', 'like')->get();
+
+// المنتجات الأكثر عدم إعجاب من نوع 'dislike'
+$topDisliked = Product::sortByCountLikes('DESC', 'dislikes_count', 'dislike')->get();
+```
+
+#### 3.3 إضافة عمود `is_liked_by_user` للمستخدم الحالي
+```php
+$products = Product::withIsLikedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_liked_by_user ? 'أعجبك' : 'لم يعجبك';
+}
+```
+
+#### 3.4 تصفية المنتجات التي أعجب بها المستخدم الحالي
+```php
+$myLikedProducts = Product::likedByUser()->get();
+
+// تصفية المنتجات التي أعجب بها المستخدم كنوع 'like'
+$myLikes = Product::likedByUser(null, 'like')->get();
+```
+
+#### 3.5 التصفية حسب الإعجابات فقط (بدون عدم الإعجاب)
+```php
+$likedOnly = Product::hasLikes(1, 'like')->get();
+```
+
+#### 3.6 الإحصائيات
+```php
+$product = Product::find(1);
+echo "عدد الإعجابات: " . $product->getTotalLikes('like');
+echo "عدد عدم الإعجاب: " . $product->getTotalLikes('dislike');
+print_r($product->getLikesCountByType('like')->toArray());
+$users = $product->getLikersUsers('like');
+```
+
+#### 3.7 الجمع بين النطاقات المتقدمة
+```php
+// المنتجات التي لها أكثر من 5 إعجابات من نوع 'like'، مرتبة حسب أحدث إعجاب
+$products = Product::hasLikes(5, 'like')
+    ->sortByLatestLike('DESC', 'latest_like_at')
+    ->get();
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. الواجهة الموحدة تسهل التعلم والاستخدام.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر إعجاباً، الأحدث إعجاباً) مما يحسن تجربة المستخدم.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب `value` تسمح ببناء أنظمة متعددة الأنواع (إعجابات، عدم إعجاب، تفاعلات مخصصة).
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات الإعجابات داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة إعجابات متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `LikeableModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/LikeableModel/Docs-LikeableModel-ar.md](./docs/LikeableModel/Docs-LikeableModel-ar.md)
+
+See [docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-ar.md](./docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-ar.md)
+
 
