@@ -2665,3 +2665,129 @@ See [docs/ReactionableModel/Docs-ReactionableModel-en.md](./docs/ReactionableMod
 
 See [docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-en.md](./docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-en.md)
 
+## 2026-3-28 - 2026-3-29
+
+### Comprehensive Update for OTP Verification Settings in `VerifyCode` Plugin
+
+**Adding an integrated settings system to manage OTP verification settings through the backend user interface**
+
+A development package has been implemented to enable full control over the settings of the `Nano2\VerifyCode` plugin via the OctoberCMS backend interface, instead of relying solely on the `config.php` file. This update allows developers and system administrators to easily and flexibly modify OTP settings (expiration time, sending channels, test mode, frontend and backend configurations), with the ability to customize different settings for each type of verification operation (mobile, login, email) and for both frontend and backend.
+
+---
+
+### 1. Developed Components
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `Settings` | `Nano2\VerifyCode\Models\Settings` | Settings model that extends `System\Behaviors\SettingsModel` and contains all configuration options. |
+| `fields.yaml` | `models/settings/fields.yaml` | Field definitions for displaying settings in the backend UI. |
+| `Plugin` (modified) | `Plugin.php` | Added `registerSettings` and `registerPermissions` methods, and called `Settings::registerConfig` in `boot`. |
+| `config.php` (updated) | `config/config.php` | Added all required settings (including `url` and `param` for each type) with detailed comments. |
+| `Manager` (modified) | `Classes/Manager.php` | Reads settings from `Config` which are merged with the database via `Settings::registerConfig`. |
+| Translation files | `lang/ar/lang.php` and `lang/en/lang.php` | Added translation keys for all new fields in the settings. |
+
+---
+
+### 2. Technical Implementation Details
+
+#### 2.1 Creating the `Settings` Model
+A model was created that extends `System\Behaviors\SettingsModel`, with `$settingsCode = 'nano2_verifycode_settings'` and `$settingsFields = 'fields.yaml'`. The model contains:
+
+- `initSettingsData()`: initializes default settings from the `config.php` file.
+- `afterSave()`: reloads settings into `Config` after any save operation.
+- Helper functions `buildStructuredSettings` and `deepMergeArr` to construct the nested structure.
+- Static method `registerConfig($isTraceLog, $force)` to merge database-stored settings with `config.php` and load them into `Config`.
+
+#### 2.2 Creating `fields.yaml`
+All fields were defined within organized tabs:
+- **General**: general settings (default expiration, sending channels, general activation URL, etc.).
+- **Testing**: test mode settings (test values, test token, enable test for all operations).
+- **Frontend**: separate settings for `mobile`, `check_login`, and `email` (expiration, test, activation URL, query parameter).
+- **Backend**: same structure for the backend.
+
+Appropriate field types were used: `switch`, `number`, `text`, `taglist`, `dropdown`.
+
+#### 2.3 Modifying `Plugin.php`
+Two methods were added:
+```php
+public function registerSettings()
+{
+    return [
+        'settings' => [
+            'label'       => 'nano2.verifycode::lang.settings.menu_label',
+            'description' => 'nano2.verifycode::lang.settings.menu_description',
+            'category'    => 'nano2.verifycode::lang.menus.settings_category',
+            'icon'        => 'icon-check-circle',
+            'class'       => 'Nano2\VerifyCode\Models\Settings',
+            'order'       => 600,
+            'permissions' => ['nano2.verifycode.settings']
+        ]
+    ];
+}
+
+public function registerPermissions()
+{
+    return [
+        'nano2.verifycode.settings' => [
+            'label' => 'nano2.verifycode::lang.permissions.settings.label',
+            'tab'   => 'nano2.verifycode::lang.permissions.settings.tab',
+        ],
+        // ... other permissions
+    ];
+}
+```
+Additionally, `\Nano2\VerifyCode\Models\Settings::registerConfig()` is called in the `boot()` method to apply settings at startup.
+
+#### 2.4 Updating `config.php`
+All required settings were added with detailed comments, including:
+- General settings.
+- Testing settings.
+- Frontend settings (mobile, check_login, email) with `url` and `param` for each.
+- Backend settings with the same structure.
+- Alternate formats for compatibility with functions looking for `frontend.expiration.mobile`, etc.
+
+#### 2.5 Updating `Manager.php`
+Methods that read settings such as `getExpiration`, `getTestToken`, `getAllowTest`, etc., were adjusted to read from `Config`, which now holds the merged settings. Their interfaces remained unchanged to ensure backward compatibility.
+
+#### 2.6 Adding Translation Files
+Translation keys were added for each new field in `fields.yaml` under the `settings` array in both Arabic and English language files.
+
+---
+
+### 3. Usage Examples
+
+#### 3.1 Accessing Settings via Backend
+In the OctoberCMS settings menu, a new category "OTP Verification Management" appears, containing a link "Verification Settings". Clicking it opens an interface with all settings organized in tabs.
+
+#### 3.2 Customizing Different Settings for Frontend and Backend
+An administrator can set OTP expiration for frontend mobile to 5 minutes, and for backend mobile to 3 minutes. They can also set different activation URLs for frontend email (e.g., `/verify-email`) and backend email (e.g., `/admin/verify-email`).
+
+#### 3.3 Enabling Test Mode
+Test mode can be enabled to simulate the system without sending real messages, define a list of test phone numbers/emails, and set a fixed OTP code for them (e.g., `111111`).
+
+#### 3.4 Using Settings in `Manager`
+All functions in `Manager` use `Config::get('nano2.verifycode::...')`, which now returns values stored in the database after merging with `config.php`. For example:
+```php
+$expiration = Config::get('nano2.verifycode::frontend.mobile.expiration', 5);
+```
+This will return the value from the database if present, otherwise the value from `config.php`.
+
+---
+
+### 4. Added Value
+
+- **For developers and administrators**: OTP settings can now be easily modified via a graphical interface without editing code files or environment variables. This reduces errors and simplifies configuration.
+- **For end users**: The verification experience (expiration, activation URL) can be tailored for each operation type (login, password recovery, email activation) and for each platform (frontend, backend).
+- **For the system**: Settings were restructured to be easily extensible. Adding a new setting in the future involves simply adding it to `config.php`, `fields.yaml`, and the `Settings` model.
+- **Flexibility**: Default settings can be defined in `config.php` and overridden by database values, enabling compatibility with different environments (development, production).
+
+---
+
+### 5. Conclusion
+
+This update marks a significant shift in managing the `VerifyCode` plugin from static configuration files to a dynamic settings system through the backend UI. The solution was designed to be comprehensive, covering all settings used by `Manager` methods while maintaining backward compatibility for existing projects. System administrators can now easily control OTP service behavior, enabling precise customization of the verification experience in NanoSoft applications.
+
+---
+
+**Note**: For more details on each setting and how to use it, refer to the translation files, the `Settings` model, and the `fields.yaml` file within the plugin.
+
