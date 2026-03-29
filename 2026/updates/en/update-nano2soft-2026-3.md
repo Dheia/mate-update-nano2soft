@@ -2671,7 +2671,7 @@ See [docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-en.md](./do
 
 **Adding an integrated settings system to manage OTP verification settings through the backend user interface**
 
-A development package has been implemented to enable full control over the settings of the `Nano2\VerifyCode` plugin via the OctoberCMS backend interface, instead of relying solely on the `config.php` file. This update allows developers and system administrators to easily and flexibly modify OTP settings (expiration time, sending channels, test mode, frontend and backend configurations), with the ability to customize different settings for each type of verification operation (mobile, login, email) and for both frontend and backend.
+A development package has been implemented to enable full control over the settings of the `Nano2\VerifyCode` plugin via the NanoSoft App backend interface, instead of relying solely on the `config.php` file. This update allows developers and system administrators to easily and flexibly modify OTP settings (expiration time, sending channels, test mode, frontend and backend configurations), with the ability to customize different settings for each type of verification operation (mobile, login, email) and for both frontend and backend.
 
 ---
 
@@ -2757,7 +2757,7 @@ Translation keys were added for each new field in `fields.yaml` under the `setti
 ### 3. Usage Examples
 
 #### 3.1 Accessing Settings via Backend
-In the OctoberCMS settings menu, a new category "OTP Verification Management" appears, containing a link "Verification Settings". Clicking it opens an interface with all settings organized in tabs.
+In the NanoSoft App settings menu, a new category "OTP Verification Management" appears, containing a link "Verification Settings". Clicking it opens an interface with all settings organized in tabs.
 
 #### 3.2 Customizing Different Settings for Frontend and Backend
 An administrator can set OTP expiration for frontend mobile to 5 minutes, and for backend mobile to 3 minutes. They can also set different activation URLs for frontend email (e.g., `/verify-email`) and backend email (e.g., `/admin/verify-email`).
