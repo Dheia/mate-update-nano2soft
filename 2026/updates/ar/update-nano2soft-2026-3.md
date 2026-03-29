@@ -2497,4 +2497,184 @@ See [docs/LikeableModel/Docs-LikeableModel-ar.md](./docs/LikeableModel/Docs-Like
 
 See [docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-ar.md](./docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-ar.md)
 
+## 2026-3-28 - 2026-3-29 
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `ReactionableModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano.Markable`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام التفاعلات (Reactions) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد التفاعلات** (مع إمكانية تمييز أنواع التفاعلات مثل `like`, `heart`, `wow`).
+- الترتيب حسب **أحدث تاريخ تفاعل** (الأحدث).
+- الترتيب حسب **أقدم تاريخ تفاعل** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `reactions_count`, `latest_reaction_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي تفاعل معها مستخدم معين (أو لم يتفاعل).
+- تصفية الكائنات التي لديها تفاعلات (مع حد أدنى للعدد) أو التي لا تفاعلات لها.
+- إضافة عمود `is_reacted_by_user` الذي يوضح ما إذا كان المستخدم الحالي قد تفاعل مع الكائن.
+- دوال إحصائية متقدمة للحصول على إجمالي التفاعلات، توزيع التفاعلات حسب نوع المستخدم، وقائمة المستخدمين المتفاعلين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `ReactionScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `ReactionableModel` | `ReactionScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام التفاعلات. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد التفاعلات** | `scopeAddCountReactions` | إضافة عمود عدد التفاعلات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountReactions` | ترتيب النتائج حسب عدد التفاعلات (دون إضافة العمود). |
+| | `scopeWithCountReactions` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ تفاعل** | `scopeAddLatestReaction` | إضافة عمود بأحدث تاريخ تفاعل. |
+| | `scopeSortByLatestReaction` | ترتيب حسب أحدث تاريخ تفاعل. |
+| | `scopeWithLatestReaction` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ تفاعل** | `scopeAddEarliestReaction` | إضافة عمود بأقدم تاريخ تفاعل. |
+| | `scopeSortByEarliestReaction` | ترتيب حسب أقدم تاريخ تفاعل. |
+| | `scopeWithEarliestReaction` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم** | `scopeReactedByUser` | تصفية الكائنات التي تفاعل معها مستخدم معين. |
+| | `scopeNotReactedByUser` | تصفية الكائنات التي لم يتفاعل معها مستخدم معين. |
+| **التصفية حسب وجود تفاعلات** | `scopeHasReactions` | تصفية الكائنات التي لديها تفاعلات (مع حد أدنى). |
+| | `scopeHasNoReactions` | تصفية الكائنات التي لا تفاعلات لها. |
+| **عمود الحالة للمستخدم** | `scopeWithIsReactedByUser` | إضافة عمود `is_reacted_by_user`. |
+| **نطاقات خاصة** | `scopeTopReacted` | جلب الكائنات الأكثر تفاعلاً (بعدد التفاعلات). |
+
+#### الدوال الإحصائية المساعدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalReactions` | إجمالي عدد التفاعلات (مجموع `COUNT`) مع خيارات التصفية. |
+| `getReactionsCountByType` | توزيع التفاعلات حسب نوع المستخدم (`user_type`). |
+| `getReactorsUsers` | قائمة المستخدمين الذين تفاعلوا مع الكائن. |
+
+جميع الدوال والنطاقات تدعم خيارات التصفية: `$value` (لتمييز نوع التفاعل، مثل `like`, `heart`, `wow`).
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `value`) عبر `where` داخل الاستعلام الفرعي.
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `reactions_count`, `latest_reaction_at`).
+- `$value`: تصفية حسب نوع التفاعل (مثل `like` أو `heart`).
+- `$field`: في نطاقات التاريخ، لتحديد الحقل الزمني المستخدم (`created_at`, `updated_at`).
+
+#### 2.3 دعم `value` لتمييز أنواع التفاعلات
+تم إضافة باراميتر `$value` في جميع النطاقات والدوال الإحصائية، مما يسمح بالتصفية حسب نوع التفاعل المطلوب (مثل `like`, `heart`, `wow`).
+
+#### 2.4 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano\Markable\Behaviors\ReactionableModel\ReactionScopesAndHelpers`
+
+#### 2.5 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated`. كما تم تحسين الدوال القديمة (`scopeWhereHasReaction`, `scopeWhereHasReactions`, `scopeWhereHasUserReaction`, `scopeWhereHasUserReactions`) لدعم معامل `$isForceUser` للتحكم في سلوك الاستعلام عند عدم وجود مستخدم، مع قراءة القيمة الافتراضية من الإعدادات.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountReactionsOld` → `scopeSortByCountReactions`
+- `scopeWithSortByCountReactions` → `scopeWithCountReactions`
+- `scopeSortByCreatedAtReactions` → `scopeSortByLatestReaction`
+- `scopeAddSortByCreatedAtReactions` → `scopeAddLatestReaction`
+- `scopeWithSortByCreatedAtReactions` → `scopeWithLatestReaction`
+- `scopeWhereHasReaction` → `scopeReactedByUser` (مع تحسينات)
+- `scopeWhereHasReactions` → `scopeReactedByUser`
+- `scopeWhereHasUserReaction` → `scopeReactedByUser`
+- `scopeWhereHasUserReactions` → `scopeReactedByUser`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد التفاعلات
+```php
+// المنتجات الأكثر تفاعلاً (جميع التفاعلات)
+$topProducts = Product::sortByCountReactions('DESC')->get();
+
+// إضافة عمود عدد التفاعلات مع الترتيب
+$products = Product::withCountReactions('DESC', 'reactions_count')->get();
+```
+
+#### 3.2 ترتيب حسب عدد التفاعلات مع تمييز النوع
+```php
+// المنتجات الأكثر تفاعلاً من نوع 'heart'
+$topHearts = Product::sortByCountReactions('DESC', 'hearts_count', 'heart')->get();
+
+// المنتجات الأكثر تفاعلاً من نوع 'wow'
+$topWow = Product::sortByCountReactions('DESC', 'wow_count', 'wow')->get();
+```
+
+#### 3.3 إضافة عمود `is_reacted_by_user` للمستخدم الحالي
+```php
+$products = Product::withIsReactedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_reacted_by_user ? 'تفاعلت' : 'لم تتفاعل';
+}
+```
+
+#### 3.4 تصفية المنتجات التي تفاعل معها المستخدم الحالي
+```php
+$myReactedProducts = Product::reactedByUser()->get();
+
+// تصفية المنتجات التي تفاعل معها المستخدم كنوع 'heart'
+$myHearts = Product::reactedByUser(null, 'heart')->get();
+```
+
+#### 3.5 التصفية حسب التفاعلات من نوع معين
+```php
+$heartProducts = Product::hasReactions(1, 'heart')->get();
+```
+
+#### 3.6 الإحصائيات
+```php
+$product = Product::find(1);
+echo "إجمالي التفاعلات من نوع 'heart': " . $product->getTotalReactions('heart');
+print_r($product->getReactionsCountByType('heart')->toArray());
+$users = $product->getReactorsUsers('heart');
+```
+
+#### 3.7 الجمع بين النطاقات المتقدمة
+```php
+// المنتجات التي لها أكثر من 5 تفاعلات من نوع 'heart'، مرتبة حسب أحدث تفاعل
+$products = Product::hasReactions(5, 'heart')
+    ->sortByLatestReaction('DESC', 'latest_heart_at')
+    ->get();
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. الواجهة الموحدة تسهل التعلم والاستخدام.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر تفاعلاً، الأحدث تفاعلاً) مما يحسن تجربة المستخدم.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب `value` تسمح ببناء أنظمة متعددة الأنواع (تفاعلات متنوعة مثل `like`, `heart`, `wow`).
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات التفاعلات داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة تفاعلات متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `ReactionableModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/ReactionableModel/Docs-ReactionableModel-ar.md](./docs/ReactionableModel/Docs-ReactionableModel-ar.md)
+
+See [docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-ar.md](./docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-ar.md)
+
 

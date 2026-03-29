@@ -2485,4 +2485,183 @@ See [docs/LikeableModel/Docs-LikeableModel-en.md](./docs/LikeableModel/Docs-Like
 
 See [docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-en.md](./docs/LikeableModel/Docs-LikeableModel-Advenced-Examples-en.md)
 
+## 2026-3-28 - 2026-3-29
+
+### Comprehensive Update for Query Scopes in `ReactionableModel` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano.Markable` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the reactions system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **reaction count** (with the ability to distinguish reaction types such as `like`, `heart`, `wow`).
+- Ordering by **latest reaction date** (most recent).
+- Ordering by **earliest reaction date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `reactions_count`, `latest_reaction_at`) without affecting the ordering.
+- Filtering objects that a specific user has reacted to (or has not reacted to).
+- Filtering objects that have reactions (with a minimum count) or that have no reactions.
+- Adding the column `is_reacted_by_user` which indicates whether the current user has reacted to the object.
+- Advanced statistical functions to get total reactions, distribution of reactions by user type, and the list of users who reacted to the object.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `ReactionScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `ReactionableModel` | `ReactionScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the reactions system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Reaction Count** | `scopeAddCountReactions` | Add a reaction count column to `SELECT` (without ordering). |
+| | `scopeSortByCountReactions` | Order results by reaction count (without adding the column). |
+| | `scopeWithCountReactions` | Add the column and ordering together. |
+| **Latest Reaction Date** | `scopeAddLatestReaction` | Add a column with the latest reaction date. |
+| | `scopeSortByLatestReaction` | Order by the latest reaction date. |
+| | `scopeWithLatestReaction` | Add the column and ordering together. |
+| **Earliest Reaction Date** | `scopeAddEarliestReaction` | Add a column with the earliest reaction date. |
+| | `scopeSortByEarliestReaction` | Order by the earliest reaction date. |
+| | `scopeWithEarliestReaction` | Add the column and ordering together. |
+| **Filtering by User** | `scopeReactedByUser` | Filter objects that a specific user has reacted to. |
+| | `scopeNotReactedByUser` | Filter objects that a specific user has not reacted to. |
+| **Filtering by Existence of Reactions** | `scopeHasReactions` | Filter objects that have reactions (with a minimum count). |
+| | `scopeHasNoReactions` | Filter objects that have no reactions. |
+| **Status Column for User** | `scopeWithIsReactedByUser` | Add the `is_reacted_by_user` column. |
+| **Special Scopes** | `scopeTopReacted` | Retrieve the objects with the most reactions (by reaction count). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalReactions` | Total number of reactions (sum of `COUNT`) with filtering options. |
+| `getReactionsCountByType` | Distribution of reactions by user type (`user_type`). |
+| `getReactorsUsers` | List of users who reacted to the object. |
+
+All functions and scopes support filtering options: `$value` (to distinguish reaction type, e.g., `like`, `heart`, `wow`).
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `value`) via `where` inside the subquery.
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `reactions_count`, `latest_reaction_at`).
+- `$value`: Filter by reaction type (e.g., `like` or `heart`).
+- `$field`: In date scopes, to specify the temporal field used (`created_at`, `updated_at`).
+
+#### 2.3 Supporting `value` to Distinguish Reaction Types
+The `$value` parameter has been added to all scopes and statistical functions, allowing filtering for the desired reaction type (e.g., `like`, `heart`, `wow`).
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano\Markable\Behaviors\ReactionableModel\ReactionScopesAndHelpers`
+
+#### 2.5 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment. The old functions (`scopeWhereHasReaction`, `scopeWhereHasReactions`, `scopeWhereHasUserReaction`, `scopeWhereHasUserReactions`) have also been improved to support the `$isForceUser` parameter for controlling query behavior when no user is present, with the default value read from settings.
+
+**List of Supported Old Functions:**
+- `scopeSortByCountReactionsOld` → `scopeSortByCountReactions`
+- `scopeWithSortByCountReactions` → `scopeWithCountReactions`
+- `scopeSortByCreatedAtReactions` → `scopeSortByLatestReaction`
+- `scopeAddSortByCreatedAtReactions` → `scopeAddLatestReaction`
+- `scopeWithSortByCreatedAtReactions` → `scopeWithLatestReaction`
+- `scopeWhereHasReaction` → `scopeReactedByUser` (with improvements)
+- `scopeWhereHasReactions` → `scopeReactedByUser`
+- `scopeWhereHasUserReaction` → `scopeReactedByUser`
+- `scopeWhereHasUserReactions` → `scopeReactedByUser`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Reaction Count
+```php
+// Most reacted products (all reactions)
+$topProducts = Product::sortByCountReactions('DESC')->get();
+
+// Add reaction count column with ordering
+$products = Product::withCountReactions('DESC', 'reactions_count')->get();
+```
+
+#### 3.2 Ordering by Reaction Count with Type Filtering
+```php
+// Most reacted products of type 'heart'
+$topHearts = Product::sortByCountReactions('DESC', 'hearts_count', 'heart')->get();
+
+// Most reacted products of type 'wow'
+$topWow = Product::sortByCountReactions('DESC', 'wow_count', 'wow')->get();
+```
+
+#### 3.3 Adding the `is_reacted_by_user` Column for the Current User
+```php
+$products = Product::withIsReactedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_reacted_by_user ? 'Reacted' : 'Not reacted';
+}
+```
+
+#### 3.4 Filtering Products that the Current User Has Reacted To
+```php
+$myReactedProducts = Product::reactedByUser()->get();
+
+// Filter products that the user has reacted to as type 'heart'
+$myHearts = Product::reactedByUser(null, 'heart')->get();
+```
+
+#### 3.5 Filtering by Reactions of a Specific Type
+```php
+$heartProducts = Product::hasReactions(1, 'heart')->get();
+```
+
+#### 3.6 Statistics
+```php
+$product = Product::find(1);
+echo "Total reactions of type 'heart': " . $product->getTotalReactions('heart');
+print_r($product->getReactionsCountByType('heart')->toArray());
+$users = $product->getReactorsUsers('heart');
+```
+
+#### 3.7 Combining Advanced Scopes
+```php
+// Products that have more than 5 reactions of type 'heart', ordered by latest reaction
+$products = Product::hasReactions(5, 'heart')
+    ->sortByLatestReaction('DESC', 'latest_heart_at')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. The unified interface makes learning and usage easy.
+- **For End Users**: The ability to present intelligently ordered lists (most reacted, latest reacted) improves the user experience.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: The ability to filter by `value` allows building multi-type systems (diverse reactions such as `like`, `heart`, `wow`).
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing reaction queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated reaction systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `ReactionableModel` behavior documentation file or review the examples provided above.
+
+See [docs/ReactionableModel/Docs-ReactionableModel-en.md](./docs/ReactionableModel/Docs-ReactionableModel-en.md)
+
+See [docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-en.md](./docs/ReactionableModel/Docs-ReactionableModel-Advenced-Examples-en.md)
 
