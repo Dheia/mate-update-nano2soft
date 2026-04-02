@@ -2803,3 +2803,413 @@ $expiration = Config::get('nano2.verifycode::frontend.mobile.expiration', 5);
 
 **ملاحظة**: لمزيد من التفاصيل حول كل إعداد وكيفية استخدامه، يمكن الرجوع إلى ملفات الترجمة ونموذج `Settings` وملف `fields.yaml` في الإضافة.
 
+## 2026-3-20 - 2026-3-31
+
+**توسيع نظام المتغيرات الديناميكية في شروط التقارير بخيارات متقدمة**  
+ضمن نظام `Nano2.QueryBuilder.Reporting`
+
+---
+
+### 1. مقدمة
+
+بناءً على التوسع المطلوب في مرونة التعامل مع القيم الديناميكية داخل شروط التقارير، تم تطوير **نظام المتغيرات الديناميكية المتقدم** (Advanced Context Variables) الذي يتيح للمستخدمين والمطورين التحكم الكامل في سلوك هذه المتغيرات. لم يعد الأمر مقتصرًا على استبدال بسيط للقيم، بل أصبح بإمكانك تحديد **أولوية البحث**، **تحويل النوع**، **قيم افتراضية**، **السماح بـ null**، والتحقق الصارم من وجود المصدر، وغيرها من الخيارات التي تجعل التقارير أكثر ذكاءً وقابلية للتكيف مع سيناريوهات الأعمال المعقدة.
+
+يهدف هذا التحديث إلى تمكين حالات استخدام متقدمة مثل:
+- تقرير يعطي الأولوية لمدخل المستخدم مع إمكانية الرجوع إلى قيمة افتراضية من الإعدادات.
+- شرط يتطلب وجود المستخدم بشكل صارم، ويفشل فورًا إذا لم يكن موجودًا.
+- متغير يقبل قيمة null بشكل صريح.
+- تحويل تلقائي للقيم إلى أنواع محددة (int, date, array) لضمان سلامة الاستعلام.
+- استخدام مصادر متعددة (مستخدم، كاش، إعدادات، دوال ثابتة) مع خيارات دقيقة للتحكم.
+
+---
+
+### 2. المكونات المطورة
+
+لتنفيذ هذا التوسع، تم إعادة هيكلة الكلاسات التالية وإضافة كلاسات جديدة:
+
+#### 2.1 `ResolvedValue` (كلاس جديد)
+- **المسار**: `Nano2\QueryBuilder\Classes\Reporting\ResolvedValue`
+- **الوظيفة**: كائن بسيط يحمل نتيجة حل المتغير، ويتضمن:
+  - `value`: القيمة المحلولة (أو null).
+  - `success`: boolean يشير إلى نجاح الحل.
+  - `error`: رسالة خطأ (إن وجدت).
+  - `usedFilter`: boolean يوضح ما إذا كانت القيمة جلبت من الفلاتر أم من المصدر.
+
+#### 2.2 `ValueResolver` (كلاس معاد هيكلته بالكامل)
+- **المسار**: `Nano2\QueryBuilder\Classes\Reporting\ValueResolver`
+- **الوظيفة**: مسؤول عن تحليل سلسلة المصدر مع خياراتها، وحل القيمة من المصدر المناسب (user, cache, config, static) مع تطبيق جميع الخيارات.
+- **الدوال الرئيسية**:
+  - `parseSourceOptions(string $sourceWithOptions): array`: تفكيك السلسلة إلى مصدر ومصفوفة خيارات.
+  - `resolve(string $sourceWithOptions, array $filterValues): ResolvedValue`: حل القيمة وفقًا للخيارات.
+  - `resolveSource(string $source): ResolvedValue` – حل المصدر حسب نوعه.
+  - `applyCast($value, string $cast, string $source): ResolvedValue` – تطبيق تحويل النوع.
+
+#### 2.3 تحديث `ReportsManager`
+- **إضافة دالة الباني** لدعم حقن `ReportUserManager` و `ValueResolver`:
+  ```php
+  public function __construct(
+      ?PluginManager $pluginManager = null,
+      ?Cache $cache = null,
+      ?TableDefinitionProcessor $definitionProcessor = null,
+      ?ReportLoader $reportLoader = null,
+      ?FilterValidator $filterValidator = null,
+      ?ReportUserManager $userManager = null,
+      ?ValueResolver $valueResolver = null
+  ) {
+      // ...
+      $this->userManager = $userManager ?? new ReportUserManager();
+      $this->valueResolver = $valueResolver ?? new ValueResolver($this->userManager);
+  }
+  ```
+- **إضافة دوال**:
+  - `getValueResolver(): ValueResolver`
+  - `setValueResolver(ValueResolver $valueResolver): self`
+  - `resolveDynamicVariables(array $conditions, array &$filterValues): array` – تقوم بحل جميع المتغيرات الديناميكية الموجودة في الشروط، وتجمع الأخطاء إن وجدت، وتضيف القيم المحلولة إلى `$filterValues`.
+- **تحديث دالة `runStoredReport`** لاستخدام `resolveDynamicVariables` قبل تنفيذ التقرير، والتحقق من الأخطاء:
+  ```php
+  $conditions = $report['query_config']['conditions'] ?? [];
+  $errors = $this->resolveDynamicVariables($conditions, $filterValues);
+  if (!empty($errors)) {
+      return $this->handleReportError(new \Exception(implode('; ', $errors)), [
+          'report_id' => $reportId
+      ]);
+  }
+  ```
+
+- تم تعديل دالة `resolveDynamicVariables` لاستخدام `ValueResolver` الجديد، وجمع الأخطاء بشكل منظم، وإضافة القيم المحلولة إلى `$filterValues` مع مراعاة المفتاح المخصص (`as`).
+
+
+#### 2.4 `ReportUserManager` (كلاس موجود، تم تحسينه)
+- يستخدم لإدارة المستخدم الحالي والتحقق من الصلاحيات، ويتم حقنه في `ValueResolver`.
+- يوفر دوال مثل `getId()`, `getCompanyId()`, `getUserType()`, `hasAnyAccess()`.
+
+---
+
+### 3.1. بنية المتغير الديناميكي الجديدة
+
+أصبح المتغير الديناميكي يُكتب بصيغة مركبة:
+
+```
+المصدر:المعامل|الخيار1:القيمة|الخيار2|الخيار3
+```
+
+- **المصدر**: يحدد مصدر القيمة (user, cache, config, static).
+- **المعامل**: معلومة إضافية للمصدر (مثل `id` للمستخدم، أو مفتاح في الكاش).
+- **الخيارات**: قائمة من الخيارات مفصولة بـ `|`، يمكن أن تكون:
+  - **بسيطة** (بدون قيمة): مثل `required`، `strict`، `nullable`.
+  - **ذات قيمة**: مثل `as:userId`، `default:100`، `cast:int`.
+
+#### مثال توضيحي:
+```php
+'variable' => 'user:id|required|cast:int|as:userId'
+```
+يعني: خذ معرف المستخدم الحالي، اجعله إلزاميًا، حوله إلى integer، وخزّن القيمة في مصفوفة الفلاتر بالمفتاح `userId`.
+
+---
+
+### 3.2. الخيارات المدعومة
+
+| الخيار | الوصف | مثال |
+|--------|--------|------|
+| `as:key` | يخزن القيمة في `$filterValues` بالمفتاح `key` | `as:userId` |
+| `override` | الأولوية للقيمة من الفلاتر، ثم المصدر | `override` |
+| `fallback` | الأولوية للمصدر، فإن فشل فالفلاتر | `fallback` |
+| `source` | (افتراضي) المصدر فقط | `source` |
+| `required` | يمنع التقرير إذا لم توجد قيمة | `required` |
+| `nullable` | يسمح بقيمة `null` | `nullable` |
+| `strict` | يمنع التقرير إذا فشل حل المصدر (حتى بدون `required`) | `strict` |
+| `default:v` | قيمة افتراضية إذا لم توجد | `default:100` |
+| `cast:t` | تحويل النوع (`int`, `float`, `bool`, `string`, `array`, `date`, `datetime`) | `cast:int` |
+| `multiple` | يتأكد أن القيمة مصفوفة | `multiple` |
+
+---
+
+### 3.3. آلية العمل في `runStoredReport`
+
+1. يتم استدعاء `runStoredReport` بمعرف التقرير وقيم الفلاتر.
+2. يتم التحقق من وجود التقرير وصلاحية المستخدم.
+3. يتم استخراج `conditions` من `query_config`.
+4. تستدعي الدالة `resolveDynamicVariables` التي:
+   - تمر على كل شرط، وإذا وجدت `variable`، تستدعي `ValueResolver::resolve`.
+   - تجمع الأخطاء إن حدثت.
+   - تضيف القيم المحلولة (التي لم تأت من الفلاتر) إلى `$filterValues`.
+5. إذا وُجدت أخطاء، يتم إرجاع استجابة خطأ عبر `handleReportError`.
+6. بعد ذلك، يتم تطبيق نطاق الشركة، صلاحيات الصف، التحقق من الفلاتر، والتصفح.
+7. يتم دمج الفلاتر في `query_config` عبر `applyFiltersToQueryConfig` (التي تستبدل القيم).
+8. يتم تنفيذ التقرير عبر `runReport`.
+
+---
+
+### 4. المصادر المدعومة بالتفصيل
+
+#### 4.1 `user` – بيانات المستخدم الحالي
+يتم جلبها من `ReportUserManager`. المعاملات المتاحة:
+- `id`: معرف المستخدم.
+- `company_id`: معرف الشركة (إذا كان متاحًا).
+- `user_type`: نوع المستخدم (مثل `Backend\Models\User`).
+- `name`: الاسم الكامل.
+- `mobile`: رقم الهاتف.
+- أي خاصية أخرى في كائن المستخدم (مثل `role_id`).
+
+**مثال**: `user:company_id|required`
+
+#### 4.2 `cache` – القيم المخزنة في الكاش
+يستخدم `Cache::get($key)`. المعامل هو مفتاح الكاش.
+
+**مثال**: `cache:reports.start_date|default:2025-01-01`
+
+#### 4.3 `config` – إعدادات التطبيق
+يستخدم `config($path)`. المعامل هو مسار الإعداد (مثل `app.timezone`).
+
+**مثال**: `config:app.default_company|required|cast:int`
+
+#### 4.4 `static` – استدعاء دوال ثابتة
+يدعم الصيغ:
+- `ClassName::method`
+- `ClassName@method`
+- `function_name` (دالة عادية)
+
+يتم تنفيذ الدالة بدون معاملات.
+
+**مثال**: `static:App\Helpers\DateHelper::getFirstDayOfMonth|override`
+
+---
+
+### 5. الخيارات المتقدمة – شرح تفصيلي مع الأمثلة
+
+#### 5.1 `as:key` – تحديد مفتاح التخزين
+بشكل افتراضي، تُخزن القيمة المحلولة في `$filterValues` بنفس السلسلة الأصلية. باستخدام `as` يمكنك تغيير المفتاح.
+
+**مثال**:
+```php
+'variable' => 'user:id|as:userId'
+```
+القيمة ستُحفظ في `$filterValues['userId']`.
+
+#### 5.2 `override` – الأولوية للفلاتر
+يعطي الأولوية للقيمة المرسلة من المستخدم (في `filters`). إذا وُجدت قيمة من المستخدم، تُستخدم مباشرة. إذا لم توجد، يتم حل المصدر.
+
+**مثال**:
+```php
+'variable' => 'user:email|override'
+```
+إذا أرسل المستخدم `email` في الفلاتر، نستخدمه. وإلا نستخدم بريد المستخدم الحالي.
+
+#### 5.3 `fallback` – الأولوية للمصدر ثم الفلاتر
+يحاول حل المصدر أولاً. إذا فشل، يبحث في الفلاتر.
+
+**مثال**:
+```php
+'variable' => 'user:email|fallback'
+```
+إذا لم نتمكن من حل بريد المستخدم (مثلاً لا يوجد مستخدم)، نبحث في الفلاتر.
+
+#### 5.4 `source` – المصدر فقط (السلوك الافتراضي)
+يحاول حل المصدر فقط. إذا فشل، لا يبحث في الفلاتر. هذا هو السلوك إذا لم يُستخدم `override` أو `fallback`. يمكن كتابته صراحة للتوضيح.
+
+**مثال**:
+```php
+'variable' => 'user:email|source' // أو 'user:email' فقط
+```
+
+#### 5.5 `required` – إجباري
+إذا لم يتم الحصول على قيمة (لا من المصدر ولا من الفلاتر وفقًا للأولوية)، يُمنع تنفيذ التقرير ويُعاد خطأ.
+
+**مثال**:
+```php
+'variable' => 'user:id|required'
+```
+
+#### 5.6 `nullable` – السماح بقيمة null
+يسمح بأن تكون القيمة `null`. إذا لم توجد قيمة، تُمرر `null` (بدلاً من تجاهل الشرط).
+
+**مثال**:
+```php
+'variable' => 'config:app.optional_setting|nullable'
+```
+
+#### 5.7 `strict` – فشل فوري إذا تعذر المصدر
+إذا فشل حل المصدر (حتى لو كانت القيمة اختيارية ولم تكن `required`)، يُمنع التقرير. مفيد عندما يكون وجود المصدر نفسه شرطًا أساسيًا.
+
+**مثال**:
+```php
+'variable' => 'user:company_id|strict'
+```
+إذا لم يكن للمستخدم `company_id`، يفشل التقرير فورًا.
+
+#### 5.8 `default:value` – قيمة افتراضية
+إذا لم توجد قيمة من أي مصدر، تُستخدم هذه القيمة.
+
+**مثال**:
+```php
+'variable' => 'cache:reports.limit|default:1000|cast:int'
+```
+
+#### 5.9 `cast:type` – تحويل النوع
+يدعم الأنواع: `int`, `integer`, `float`, `double`, `bool`, `boolean`, `string`, `array`, `date`, `datetime`.
+
+- `date`: يتحقق من صيغة `Y-m-d`.
+- `datetime`: يتحقق من صيغة `Y-m-d H:i:s`.
+
+**مثال**:
+```php
+'variable' => 'user:id|cast:int'
+```
+
+#### 5.10 `multiple` – التأكد من أن القيمة مصفوفة
+إذا كان المصدر يُرجع مصفوفة (أو تريد تحويل القيمة إلى مصفوفة)، استخدم `multiple`. إذا كانت القيمة ليست مصفوفة، سيتم تحويلها إلى مصفوفة من عنصر واحد.
+
+**مثال**:
+```php
+'variable' => 'static:App\StatusHelper::getAllowed|multiple|cast:array'
+```
+
+---
+
+### 6. أمثلة تطبيقية متقدمة
+
+#### 6.1 شرط بسيط مع مستخدم إجباري
+```php
+[
+    'field'    => ['name' => 'orders.user_id'],
+    'operator' => ['value' => '='],
+    'variable' => 'user:id|required'
+]
+```
+السلوك: يجب أن يكون هناك مستخدم مسجل، وإلا يمنع التقرير.
+
+#### 6.2 شرط مع `override` – يسمح بتجاوز القيمة
+```php
+[
+    'field'    => ['name' => 'created_at'],
+    'operator' => ['value' => '>='],
+    'variable' => 'static:DateHelper::getStartOfMonth|override|as:startDate'
+]
+```
+إذا مرر المستخدم `startDate` في الفلاتر، تُستخدم تلك القيمة. وإلا تُحسب من الدالة.
+
+#### 6.3 شرط مع `fallback` و `default` وتحويل نوع
+```php
+[
+    'field'    => ['name' => 'max_price'],
+    'operator' => ['value' => '<='],
+    'variable' => 'config:app.maxPrice|fallback|default:500|cast:float|as:maxPrice'
+]
+```
+1. يحاول جلب `config('app.maxPrice')`.
+2. إذا فشل، يبحث عن `maxPrice` في الفلاتر.
+3. إذا لم توجد، يستخدم `500`.
+4. يحول الناتج إلى float.
+
+#### 6.4 شرط مع `nullable` – السماح بـ null
+```php
+[
+    'field'    => ['name' => 'deleted_at'],
+    'operator' => ['value' => 'is_null'],
+    'variable' => 'user:deleted_at_filter|nullable|as:includeDeleted'
+]
+```
+إذا وُجدت قيمة (مثلاً `true` أو `false`) تُستخدم. إذا لم توجد، الشرط يتعامل مع null حسب نوعه (هنا `is_null`).
+
+#### 6.5 شرط مع `strict` – فشل فوري إذا تعذر المصدر
+```php
+[
+    'field'    => ['name' => 'company_id'],
+    'operator' => ['value' => '='],
+    'variable' => 'user:company_id|strict'
+]
+```
+إذا لم يكن المستخدم الحالي يملك `company_id`، يُمنع التقرير حتى لو كان الشرط غير إجباري.
+
+#### 6.6 شرط مع `multiple` و `cast` لمصفوفة
+```php
+[
+    'field'    => ['name' => 'status'],
+    'operator' => ['value' => 'in'],
+    'variable' => 'static:App\StatusHelper::getActiveStatuses|multiple|cast:array|as:allowedStatuses'
+]
+```
+الدالة ترجع مصفوفة من الحالات النشطة. نضمن أنها مصفوفة ونخزنها في `allowedStatuses`.
+
+#### 6.7 مثال متكامل لتقرير يستخدم عدة متغيرات
+```php
+'report_advanced' => [
+    'report_id'   => 'advanced_report',
+    'name'        => 'تقرير متقدم',
+    'query_config' => [
+        'table' => ['name' => 'orders'],
+        'columns' => [
+            ['name' => 'created_at', 'label' => 'التاريخ'],
+            ['name' => 'total', 'label' => 'الإجمالي'],
+        ],
+        'conditions' => [
+            // المستخدم الحالي إجباري
+            [
+                'field'    => ['name' => 'user_id'],
+                'operator' => ['value' => '='],
+                'variable' => 'user:id|required|as:userId'
+            ],
+            // تاريخ البدء: من الكاش مع override و default
+            [
+                'field'    => ['name' => 'created_at'],
+                'operator' => ['value' => '>='],
+                'variable' => 'cache:reports.start_date|override|default:2026-03-01|cast:date|as:startDate'
+            ],
+            // تاريخ النهاية: من دالة ثابتة إجبارية
+            [
+                'field'    => ['name' => 'created_at'],
+                'operator' => ['value' => '<='],
+                'variable' => 'static:App\Helpers\DateHelper::getLastDayOfMonth|required|cast:date|as:endDate'
+            ],
+            // شركة اختيارية من الإعدادات، مع إمكانية null
+            [
+                'field'    => ['name' => 'company_id'],
+                'operator' => ['value' => '='],
+                'variable' => 'config:app.default_company|nullable|cast:int|as:companyId'
+            ],
+        ],
+    ],
+    'filters' => [
+        'userId'    => ['type' => 'integer', 'required' => false],
+        'startDate' => ['type' => 'date',    'required' => false],
+        'endDate'   => ['type' => 'date',    'required' => false],
+        'companyId' => ['type' => 'integer', 'required' => false],
+    ],
+],
+```
+
+---
+
+### 7. ملخص الخيارات
+
+| الخيار | الوصف | مثال |
+|--------|--------|------|
+| `as:key` | يخزن القيمة في `$filterValues` بالمفتاح `key` | `as:userId` |
+| `override` | الأولوية للقيمة من الفلاتر، ثم المصدر | `override` |
+| `fallback` | الأولوية للمصدر، فإن فشل فالفلاتر | `fallback` |
+| `source` | (افتراضي) المصدر فقط | `source` |
+| `required` | يمنع التقرير إذا لم توجد قيمة | `required` |
+| `nullable` | يسمح بقيمة `null` | `nullable` |
+| `strict` | يمنع التقرير إذا فشل حل المصدر (حتى بدون `required`) | `strict` |
+| `default:v` | قيمة افتراضية إذا لم توجد | `default:100` |
+| `cast:t` | تحويل النوع (`int`, `float`, `bool`, `string`, `array`, `date`, `datetime`) | `cast:int` |
+| `multiple` | يتأكد أن القيمة مصفوفة | `multiple` |
+
+---
+
+### 8. القيمة المضافة
+
+- **للمطورين**: تحكم دقيق في سلوك المتغيرات دون الحاجة لكتابة منطق معقد في كل تقرير.
+- **للمستخدمين النهائيين**: تقارير أكثر ذكاءً تتكيف مع السياق وتقلل من الأخطاء الناتجة عن إدخال قيم غير مناسبة.
+- **للنظام**: تعزيز الأمان عبر التحويل الإجباري للأنواع والتحقق الصارم من المصادر.
+
+---
+
+### 9. الخاتمة
+
+يمثل هذا التوسع نقلة نوعية في مرونة نظام التقارير الديناميكية، حيث أصبح بإمكان المطورين والمستخدمين بناء تقارير معقدة بسلوكيات دقيقة دون الحاجة لتدخل برمجي مباشر. مع استمرار التطوير، سيظل النظام قادرًا على تلبية احتياجات الأعمال المتزايدة بفضل تصميمه النمطي القابل للتوسع.
+
+### 10. التوثيق
+
+See [docs/reporting/Docs-Dynamic-Variables-In-Report-Conditions-ar.md](./docs/reporting/Docs-Dynamic-Variables-In-Report-Conditions-ar.md)
+

@@ -2791,3 +2791,412 @@ This update marks a significant shift in managing the `VerifyCode` plugin from s
 
 **Note**: For more details on each setting and how to use it, refer to the translation files, the `Settings` model, and the `fields.yaml` file within the plugin.
 
+## 2026-3-20 - 2026-3-31
+
+**Expanding the Dynamic Variables System in Report Conditions with Advanced Options**  
+Within the `Nano2.QueryBuilder.Reporting` System
+
+---
+
+### 1. Introduction
+
+Based on the required expansion in the flexibility of handling dynamic values within report conditions, the **Advanced Context Variables System** has been developed. This system provides users and developers with complete control over the behavior of these variables. It is no longer limited to a simple replacement of values; you can now define **search priority**, **type casting**, **default values**, **allowing null**, and strict validation of the source's existence, along with other options that make reports more intelligent and adaptable to complex business scenarios.
+
+This update aims to enable advanced use cases such as:
+- A report that prioritizes user input with the ability to fall back to a default value from settings.
+- A condition that strictly requires the user's existence and fails immediately if not present.
+- A variable that explicitly accepts a null value.
+- Automatic conversion of values to specific types (int, date, array) to ensure query integrity.
+- Using multiple sources (user, cache, config, static methods) with precise control options.
+
+---
+
+### 2. Developed Components
+
+To implement this expansion, the following classes were restructured and new classes were added:
+
+#### 2.1 `ResolvedValue` (New Class)
+- **Path**: `Nano2\QueryBuilder\Classes\Reporting\ResolvedValue`
+- **Function**: A simple object that holds the result of resolving a variable, including:
+  - `value`: The resolved value (or null).
+  - `success`: A boolean indicating the success of the resolution.
+  - `error`: An error message (if any).
+  - `usedFilter`: A boolean indicating whether the value came from filters or the source.
+
+#### 2.2 `ValueResolver` (Completely Restructured Class)
+- **Path**: `Nano2\QueryBuilder\Classes\Reporting\ValueResolver`
+- **Function**: Responsible for parsing the source string with its options and resolving the value from the appropriate source (`user`, `cache`, `config`, `static`) while applying all options.
+- **Main Methods**:
+  - `parseSourceOptions(string $sourceWithOptions): array`: Splits the string into a source and an options array.
+  - `resolve(string $sourceWithOptions, array $filterValues): ResolvedValue`: Resolves the value according to the options.
+  - `resolveSource(string $source): ResolvedValue` – Resolves the source by its type.
+  - `applyCast($value, string $cast, string $source): ResolvedValue` – Applies type casting.
+
+#### 2.3 Updates to `ReportsManager`
+- **Adding the constructor** to support injecting `ReportUserManager` and `ValueResolver`:
+  ```php
+  public function __construct(
+      ?PluginManager $pluginManager = null,
+      ?Cache $cache = null,
+      ?TableDefinitionProcessor $definitionProcessor = null,
+      ?ReportLoader $reportLoader = null,
+      ?FilterValidator $filterValidator = null,
+      ?ReportUserManager $userManager = null,
+      ?ValueResolver $valueResolver = null
+  ) {
+      // ...
+      $this->userManager = $userManager ?? new ReportUserManager();
+      $this->valueResolver = $valueResolver ?? new ValueResolver($this->userManager);
+  }
+  ```
+- **Adding methods**:
+  - `getValueResolver(): ValueResolver`
+  - `setValueResolver(ValueResolver $valueResolver): self`
+  - `resolveDynamicVariables(array $conditions, array &$filterValues): array` – Resolves all dynamic variables found in the conditions, collects any errors, and adds the resolved values to `$filterValues`.
+- **Updating the `runStoredReport` method** to use `resolveDynamicVariables` before executing the report and check for errors:
+  ```php
+  $conditions = $report['query_config']['conditions'] ?? [];
+  $errors = $this->resolveDynamicVariables($conditions, $filterValues);
+  if (!empty($errors)) {
+      return $this->handleReportError(new \Exception(implode('; ', $errors)), [
+          'report_id' => $reportId
+      ]);
+  }
+  ```
+
+- The `resolveDynamicVariables` method was modified to use the new `ValueResolver`, collect errors systematically, and add resolved values to `$filterValues` taking into account the custom key (`as`).
+
+#### 2.4 `ReportUserManager` (Existing Class, Enhanced)
+- It is used to manage the current user and check permissions, and is injected into `ValueResolver`.
+- It provides methods like `getId()`, `getCompanyId()`, `getUserType()`, `hasAnyAccess()`.
+
+---
+
+### 3.1. New Dynamic Variable Structure
+
+The dynamic variable is now written in a compound format:
+
+```
+source:parameter|option1:value|option2|option3
+```
+
+- **Source**: Specifies the source of the value (`user`, `cache`, `config`, `static`).
+- **Parameter**: Additional information for the source (e.g., `id` for user, or a cache key).
+- **Options**: A list of options separated by `|`, which can be:
+  - **Simple** (without value): such as `required`, `strict`, `nullable`.
+  - **With value**: such as `as:userId`, `default:100`, `cast:int`.
+
+#### Illustrative Example:
+```php
+'variable' => 'user:id|required|cast:int|as:userId'
+```
+Meaning: Take the current user's ID, make it required, cast it to an integer, and store the value in the filters array under the key `userId`.
+
+---
+
+### 3.2. Supported Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `as:key` | Stores the value in `$filterValues` under the key `key` | `as:userId` |
+| `override` | Priority to the value from filters, then the source | `override` |
+| `fallback` | Priority to the source, if it fails then use filters | `fallback` |
+| `source` | (Default) Source only | `source` |
+| `required` | Prevents the report if no value is found | `required` |
+| `nullable` | Allows the value to be `null` | `nullable` |
+| `strict` | Prevents the report if source resolution fails (even without `required`) | `strict` |
+| `default:v` | Default value if none is found | `default:100` |
+| `cast:t` | Type casting (`int`, `float`, `bool`, `string`, `array`, `date`, `datetime`) | `cast:int` |
+| `multiple` | Ensures the value is an array | `multiple` |
+
+---
+
+### 3.3. Workflow in `runStoredReport`
+
+1. `runStoredReport` is called with the report ID and filter values.
+2. The report's existence and user permissions are checked.
+3. `conditions` are extracted from `query_config`.
+4. The `resolveDynamicVariables` method is called, which:
+   - Iterates over each condition, and if a `variable` is found, calls `ValueResolver::resolve`.
+   - Collects any errors that occur.
+   - Adds resolved values (that did not come from filters) to `$filterValues`.
+5. If errors exist, an error response is returned via `handleReportError`.
+6. Afterwards, company scope, row-level permissions, filter validation, and pagination are applied.
+7. Filters are merged into `query_config` via `applyFiltersToQueryConfig` (which replaces values).
+8. The report is executed via `runReport`.
+
+---
+
+### 4. Supported Sources in Detail
+
+#### 4.1 `user` – Current User Data
+Retrieved from `ReportUserManager`. Available parameters:
+- `id`: User ID.
+- `company_id`: Company ID (if available).
+- `user_type`: User type (e.g., `Backend\Models\User`).
+- `name`: Full name.
+- `mobile`: Phone number.
+- Any other property on the user object (e.g., `role_id`).
+
+**Example**: `user:company_id|required`
+
+#### 4.2 `cache` – Values Stored in Cache
+Uses `Cache::get($key)`. The parameter is the cache key.
+
+**Example**: `cache:reports.start_date|default:2025-01-01`
+
+#### 4.3 `config` – Application Configuration
+Uses `config($path)`. The parameter is the config path (e.g., `app.timezone`).
+
+**Example**: `config:app.default_company|required|cast:int`
+
+#### 4.4 `static` – Calling Static Methods
+Supports the formats:
+- `ClassName::method`
+- `ClassName@method`
+- `function_name` (regular function)
+
+The function is called without parameters.
+
+**Example**: `static:App\Helpers\DateHelper::getFirstDayOfMonth|override`
+
+---
+
+### 5. Advanced Options – Detailed Explanation with Examples
+
+#### 5.1 `as:key` – Specify Storage Key
+By default, the resolved value is stored in `$filterValues` with the same original string. Using `as` allows you to change the key.
+
+**Example**:
+```php
+'variable' => 'user:id|as:userId'
+```
+The value will be stored in `$filterValues['userId']`.
+
+#### 5.2 `override` – Priority to Filters
+Gives priority to the value sent by the user (in `filters`). If a user value exists, it is used directly. Otherwise, the source is resolved.
+
+**Example**:
+```php
+'variable' => 'user:email|override'
+```
+If the user sends `email` in filters, we use it. Otherwise, we use the current user's email.
+
+#### 5.3 `fallback` – Priority to Source then Filters
+Tries to resolve the source first. If it fails, it looks in filters.
+
+**Example**:
+```php
+'variable' => 'user:email|fallback'
+```
+If we cannot resolve the user's email (e.g., no user), we look in filters.
+
+#### 5.4 `source` – Source Only (Default Behavior)
+Tries to resolve the source only. If it fails, it does not look in filters. This is the behavior if neither `override` nor `fallback` is used. It can be written explicitly for clarity.
+
+**Example**:
+```php
+'variable' => 'user:email|source' // or 'user:email' only
+```
+
+#### 5.5 `required` – Mandatory
+If no value is obtained (neither from source nor from filters according to priority), the report execution is prevented and an error is returned.
+
+**Example**:
+```php
+'variable' => 'user:id|required'
+```
+
+#### 5.6 `nullable` – Allow Null Value
+Allows the value to be `null`. If no value is found, `null` is passed (instead of ignoring the condition).
+
+**Example**:
+```php
+'variable' => 'config:app.optional_setting|nullable'
+```
+
+#### 5.7 `strict` – Immediate Failure if Source Unavailable
+If source resolution fails (even if the value is optional and not `required`), the report is prevented. Useful when the existence of the source itself is a prerequisite.
+
+**Example**:
+```php
+'variable' => 'user:company_id|strict'
+```
+If the user does not have a `company_id`, the report fails immediately.
+
+#### 5.8 `default:value` – Default Value
+If no value is obtained from any source, this value is used.
+
+**Example**:
+```php
+'variable' => 'cache:reports.limit|default:1000|cast:int'
+```
+
+#### 5.9 `cast:type` – Type Casting
+Supports types: `int`, `integer`, `float`, `double`, `bool`, `boolean`, `string`, `array`, `date`, `datetime`.
+
+- `date`: Validates format `Y-m-d`.
+- `datetime`: Validates format `Y-m-d H:i:s`.
+
+**Example**:
+```php
+'variable' => 'user:id|cast:int'
+```
+
+#### 5.10 `multiple` – Ensure Value is an Array
+If the source returns an array (or you want to convert the value to an array), use `multiple`. If the value is not an array, it will be converted to an array with a single element.
+
+**Example**:
+```php
+'variable' => 'static:App\StatusHelper::getAllowed|multiple|cast:array'
+```
+
+---
+
+### 6. Advanced Practical Examples
+
+#### 6.1 Simple Condition with Required User
+```php
+[
+    'field'    => ['name' => 'orders.user_id'],
+    'operator' => ['value' => '='],
+    'variable' => 'user:id|required'
+]
+```
+Behavior: A logged-in user must exist, otherwise the report is prevented.
+
+#### 6.2 Condition with `override` – Allows Value Override
+```php
+[
+    'field'    => ['name' => 'created_at'],
+    'operator' => ['value' => '>='],
+    'variable' => 'static:DateHelper::getStartOfMonth|override|as:startDate'
+]
+```
+If the user passes `startDate` in filters, that value is used. Otherwise, it is calculated from the function.
+
+#### 6.3 Condition with `fallback`, `default`, and Type Casting
+```php
+[
+    'field'    => ['name' => 'max_price'],
+    'operator' => ['value' => '<='],
+    'variable' => 'config:app.maxPrice|fallback|default:500|cast:float|as:maxPrice'
+]
+```
+1. Tries to fetch `config('app.maxPrice')`.
+2. If it fails, looks for `maxPrice` in filters.
+3. If not found, uses `500`.
+4. Casts the result to float.
+
+#### 6.4 Condition with `nullable` – Allowing Null
+```php
+[
+    'field'    => ['name' => 'deleted_at'],
+    'operator' => ['value' => 'is_null'],
+    'variable' => 'user:deleted_at_filter|nullable|as:includeDeleted'
+]
+```
+If a value exists (e.g., `true` or `false`), it is used. If not, the condition handles null according to its type (here `is_null`).
+
+#### 6.5 Condition with `strict` – Immediate Failure if Source Unavailable
+```php
+[
+    'field'    => ['name' => 'company_id'],
+    'operator' => ['value' => '='],
+    'variable' => 'user:company_id|strict'
+]
+```
+If the current user does not have a `company_id`, the report is prevented even if the condition is not mandatory.
+
+#### 6.6 Condition with `multiple` and `cast` for an Array
+```php
+[
+    'field'    => ['name' => 'status'],
+    'operator' => ['value' => 'in'],
+    'variable' => 'static:App\StatusHelper::getActiveStatuses|multiple|cast:array|as:allowedStatuses'
+]
+```
+The function returns an array of active statuses. We ensure it is an array and store it in `allowedStatuses`.
+
+#### 6.7 Complete Example of a Report Using Multiple Variables
+```php
+'report_advanced' => [
+    'report_id'   => 'advanced_report',
+    'name'        => 'Advanced Report',
+    'query_config' => [
+        'table' => ['name' => 'orders'],
+        'columns' => [
+            ['name' => 'created_at', 'label' => 'Date'],
+            ['name' => 'total', 'label' => 'Total'],
+        ],
+        'conditions' => [
+            // Current user is required
+            [
+                'field'    => ['name' => 'user_id'],
+                'operator' => ['value' => '='],
+                'variable' => 'user:id|required|as:userId'
+            ],
+            // Start date: from cache with override and default
+            [
+                'field'    => ['name' => 'created_at'],
+                'operator' => ['value' => '>='],
+                'variable' => 'cache:reports.start_date|override|default:2026-03-01|cast:date|as:startDate'
+            ],
+            // End date: from a static function, required
+            [
+                'field'    => ['name' => 'created_at'],
+                'operator' => ['value' => '<='],
+                'variable' => 'static:App\Helpers\DateHelper::getLastDayOfMonth|required|cast:date|as:endDate'
+            ],
+            // Optional company from config, allowing null
+            [
+                'field'    => ['name' => 'company_id'],
+                'operator' => ['value' => '='],
+                'variable' => 'config:app.default_company|nullable|cast:int|as:companyId'
+            ],
+        ],
+    ],
+    'filters' => [
+        'userId'    => ['type' => 'integer', 'required' => false],
+        'startDate' => ['type' => 'date',    'required' => false],
+        'endDate'   => ['type' => 'date',    'required' => false],
+        'companyId' => ['type' => 'integer', 'required' => false],
+    ],
+],
+```
+
+---
+
+### 7. Options Summary
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `as:key` | Stores the value in `$filterValues` under the key `key` | `as:userId` |
+| `override` | Priority to the value from filters, then the source | `override` |
+| `fallback` | Priority to the source, if it fails then use filters | `fallback` |
+| `source` | (Default) Source only | `source` |
+| `required` | Prevents the report if no value is found | `required` |
+| `nullable` | Allows the value to be `null` | `nullable` |
+| `strict` | Prevents the report if source resolution fails (even without `required`) | `strict` |
+| `default:v` | Default value if none is found | `default:100` |
+| `cast:t` | Type casting (`int`, `float`, `bool`, `string`, `array`, `date`, `datetime`) | `cast:int` |
+| `multiple` | Ensures the value is an array | `multiple` |
+
+---
+
+### 8. Added Value
+
+- **For Developers**: Precise control over variable behavior without needing to write complex logic in every report.
+- **For End Users**: More intelligent reports that adapt to context and reduce errors caused by entering inappropriate values.
+- **For the System**: Enhanced security through mandatory type casting and strict source validation.
+
+---
+
+### 9. Conclusion
+
+This expansion represents a qualitative leap in the flexibility of the dynamic reporting system, enabling developers and users to build complex reports with precise behaviors without direct programming intervention. With continued development, the system will remain capable of meeting growing business needs thanks to its modular and extensible design.
+
+### 10. Documentation
+
+See [docs/reporting/Docs-Dynamic-Variables-In-Report-Conditions-ar.md](./docs/reporting/Docs-Dynamic-Variables-In-Report-Conditions-ar.md)
+
