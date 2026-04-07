@@ -1,7 +1,6 @@
-# توثيق واجهة برمجة التطبيقات (API) لرفع الملفات
+# توثيق واجهة برمجة التطبيقات (API) لرفع الملفات 
 
-**المنتج:** نانوسوفت (NanoSoft)  
-**الإصدار:** 1.0  
+**الإصدار:** 1.0.7  
 **المسار الأساسي:** `/api/v1/fileupload`  
 **المصادقة:** OAuth 2.0 (توكن الوصول في الهيدر `Authorization: Bearer <token>`)
 
@@ -9,9 +8,15 @@
 
 ## نظرة عامة
 
-توفر هذه الواجهة مجموعة من نقاط النهاية (Endpoints) لإدارة رفع الملفات في تطبيقات نانوسوفت، بالاعتماد على نظام `Nano.FileUpload`. تتيح هذه الخدمات للمطورين رفع ملف واحد أو عدة ملفات، حذف ملفات محددة، واسترجاع الملفات المرتبطة بنماذج معينة، مع التحقق التلقائي من الصلاحيات وأنواع المستخدمين والقيود المسجلة مسبقًا.
+هذه الوثيقة موجهة للمطورين الخارجيين (متاجر ويب، تطبيقات التجارة الإلكترونية، تطبيقات توصيل الطلبات، والأنظمة المتكاملة) الذين يرغبون في دمج خدمة رفع الملفات في تطبيقاتهم. توفر واجهة برمجة التطبيقات (API) نقاط نهاية آمنة وسهلة الاستخدام لرفع ملف واحد أو متعدد، وحذف الملفات، واسترجاع الملفات المرتبطة بنماذج محددة (مثل المنتجات، الطلبات، المستخدمين).
 
-جميع الاستجابات تتبع الهيكل الموحد الموصوف أدناه، مما يسهل التعامل معها في تطبيقات العميل.
+**الميزات الرئيسية:**
+- دعم رفع الملفات بصيغ متعددة (multipart/form-data أو base64).
+- رفع مؤقت للملفات قبل حفظ النموذج (باستخدام مفاتيح جلسة مؤقتة).
+- تحويل تلقائي للصور (تحجيم، علامة مائية) حسب إعدادات النظام.
+- تخزين الملفات على أقراص متعددة (محلي، S3، FTP).
+- استجابات موحدة مع أكواد خطأ فريدة لتسهيل المعالجة البرمجية.
+- أمان كامل عبر OAuth 2.0 والتحقق من صلاحيات المستخدم.
 
 ---
 
@@ -23,31 +28,35 @@
 {
     "code": 200,
     "status": true,
-    "message": "نص الرسالة",
+    "message": "تمت العملية بنجاح",
     "error": null,
     "errors": [],
     "data": {},
     "meta": {},
     "input_data": {},
     "process_data": {},
-    "debug": {}
+    "debug": null,
+    "error_code": null
 }
 ```
 
-- `code`: كود HTTP (200 للنجاح، 400/403/404/500 للفشل).
-- `status`: `true` للنجاح، `false` للفشل.
-- `message`: رسالة توضيحية باللغة العربية.
-- `error`: تفاصيل الخطأ (في حال الفشل).
-- `errors`: مصفوفة من أخطاء التحقق (إذا وجدت).
-- `data`: البيانات الأساسية للاستجابة (مثل معلومات الملف المرفوع).
-- `meta`: بيانات إضافية (مثل معلومات التصفح) – حاليًا غير مستخدم.
-- `input_data`: نسخة من البيانات التي أرسلها المستخدم (للتتبع).
-- `process_data`: بيانات داخلية عن المعالجة (مثل مفتاح الجلسة المؤقت).
-- `debug`: معلومات التصحيح (تظهر فقط عند تفعيل `app.debug`).
+| الحقل | النوع | الوصف |
+|-------|-------|-------|
+| `code` | `int` | كود HTTP (200، 400، 401، 403، 404، 500). |
+| `status` | `bool` | `true` للنجاح، `false` للفشل. |
+| `message` | `string` | رسالة واضحة للمستخدم (قابلة للترجمة). |
+| `error` | `string\|null` | تفاصيل الخطأ التقنية (في حالة الفشل). |
+| `errors` | `array\|null` | مصفوفة بأخطاء التحقق (مثل صحة المدخلات). |
+| `data` | `mixed` | البيانات الأساسية (مثل معلومات الملف المرفوع). |
+| `meta` | `mixed` | بيانات إضافية (غير مستخدم حالياً). |
+| `input_data` | `array` | نسخة من البيانات التي أرسلها المستخدم (للتتبع). |
+| `process_data` | `array` | معلومات داخلية عن المعالجة (مثل مفتاح الجلسة المؤقت). |
+| `debug` | `array\|null` | معلومات التصحيح (تظهر فقط عند تفعيل `app.debug`). |
+| `error_code` | `string\|null` | كود خطأ فريد (مثل `FILE_UPLOAD_PERMISSION_DENIED`). |
 
 ---
 
-## المصادقة
+## المصادقة والأمان
 
 جميع نقاط النهاية محمية بـ **OAuth 2.0**. يجب تضمين توكن الوصول في هيدر الطلب:
 
@@ -55,31 +64,37 @@
 Authorization: Bearer <your_access_token>
 ```
 
-إذا لم يتم توفير التوكن أو كان غير صالح، ستتلقى استجابة بالكود `401` مع رسالة "فشل المصادقة".
+- إذا لم يتم توفير التوكن: استجابة `401 Unauthorized`.
+- إذا كان التوكن غير صالح أو منتهي: استجابة `401 Unauthorized`.
+
+**ملاحظة:** تعتمد صلاحيات العمليات (رفع، حذف، جلب) على نوع المستخدم (`backend` / `frontend`) والإعدادات المسجلة لكل نموذج وحقل. لذا تأكد من أن المستخدم لديه الصلاحيات المناسبة قبل استدعاء الـ API.
 
 ---
 
-## نقاط النهاية
+## نقاط النهاية (Endpoints)
 
 ### 1. رفع ملف واحد
 
 **الطريقة:** `POST`  
-**المسار:** `/upload`
+**المسار:** `/upload`  
+**نوع المحتوى:** `multipart/form-data` أو `application/json` (عند استخدام base64).
 
-**معاملات الطلب (Body):**
+#### معاملات الطلب
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج (مثال: `Nano\Shop\Models\Product`). |
-| `field` | `string` | نعم | اسم الحقل كما هو مسجل في `FileUploadRegistry`. |
+| `field` | `string` | نعم | اسم الحقل كما هو مسجل في النظام (مثال: `image`, `gallery`). |
 | `file` | `file` | شرطي* | الملف المرفوع (بصيغة multipart). |
 | `file_base64` | `string` | شرطي* | بيانات الملف بصيغة base64 (بديل عن `file`). |
-| `temp_session_key` | `string` | لا | مفتاح جلسة مؤقت لربط الملف لاحقًا (يُستخدم مع النماذج غير المحفوظة). |
-| `model_id` | `int` | لا | معرف النموذج المحفوظ (إذا كان موجودًا). |
+| `temp_session_key` | `string` | لا | مفتاح جلسة مؤقت لربط الملف لاحقاً (للنماذج غير المحفوظة). |
+| `model_id` | `int` | لا | معرف النموذج المحفوظ (إذا كان موجوداً). |
 
 > * يجب توفير إما `file` أو `file_base64`.
 
-**مثال طلب (multipart/form-data):**
+#### أمثلة على الطلبات
+
+**طلب باستخدام multipart/form-data (رفع ملف مباشر):**
 
 ```http
 POST /api/v1/fileupload/upload HTTP/1.1
@@ -98,11 +113,11 @@ image
 Content-Disposition: form-data; name="file"; filename="product.jpg"
 Content-Type: image/jpeg
 
-(بيانات الملف)
+(بيانات الملف الثنائية)
 ------WebKitFormBoundary--
 ```
 
-**مثال طلب (JSON مع base64):**
+**طلب باستخدام JSON و base64 (للواجهات التي لا تدعم multipart):**
 
 ```json
 POST /api/v1/fileupload/upload HTTP/1.1
@@ -117,29 +132,75 @@ Content-Type: application/json
 }
 ```
 
-**استجابة نجاح (200):**
+**طلب لرفع ملف مؤقت (قبل حفظ النموذج):**
+
+```json
+POST /api/v1/fileupload/upload HTTP/1.1
+Authorization: Bearer ...
+Content-Type: application/json
+
+{
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "field": "image",
+    "file_base64": "data:image/jpeg;base64,..."
+}
+```
+
+#### الاستجابات
+
+**✅ استجابة نجاح (رفع وربط مباشر بنموذج موجود):**
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "تم الرفع بنجاح",
+    "message": "تم رفع الملف بنجاح",
+    "error": null,
+    "errors": [],
     "data": {
         "id": 123,
-        "path": "/storage/app/uploads/public/.../original.jpg",
-        "thumb": "/storage/app/uploads/public/.../thumb.jpg"
+        "path": "https://yourdomain.com/storage/app/uploads/public/.../original.jpg",
+        "thumb": "https://yourdomain.com/storage/app/uploads/public/.../thumb.jpg"
     },
-    "input_data": { ... },
+    "input_data": {
+        "model_class": "Nano\\Shop\\Models\\Product",
+        "field": "image",
+        "model_id": 10
+    },
     "process_data": {
         "model_class": "Nano\\Shop\\Models\\Product",
         "field": "image",
         "temp_session_key": null,
-        "user_type": "backend"
-    }
+        "user_type": "backend",
+        "storage_disk": null
+    },
+    "debug": null,
+    "error_code": null
 }
 ```
 
-**استجابة خطأ (صلاحية ممنوعة - 403):**
+**✅ استجابة نجاح (رفع مؤقت – سيتم ربطه لاحقاً):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم رفع الملف بنجاح",
+    "data": {
+        "id": 124,
+        "path": "https://yourdomain.com/storage/app/uploads/public/.../original.jpg",
+        "thumb": "https://yourdomain.com/storage/app/uploads/public/.../thumb.jpg"
+    },
+    "process_data": {
+        "temp_session_key": "tmp_YWJjMTIzOnNvbWVoYXNo"
+    },
+    ...
+}
+```
+
+> **هام:** يجب حفظ `temp_session_key` في جلسة المستخدم أو قاعدة بيانات لاستخدامه لاحقاً عند ربط الملف بالنموذج المحفوظ.
+
+**❌ استجابة خطأ (صلاحية ممنوعة):**
 
 ```json
 {
@@ -147,28 +208,65 @@ Content-Type: application/json
     "status": false,
     "message": "لا تملك صلاحية رفع الملفات لهذا الحقل",
     "error": "لا تملك صلاحية رفع الملفات لهذا الحقل",
+    "error_code": "FILE_UPLOAD_PERMISSION_DENIED",
     "data": null
+}
+```
+
+**❌ استجابة خطأ (نوع ملف غير مسموح به):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "نوع الملف غير مسموح به. الأنواع المسموحة: jpg,jpeg,png. الامتداد المرفوع: exe.",
+    "error": "نوع الملف غير مسموح به. الأنواع المسموحة: jpg,jpeg,png. الامتداد المرفوع: exe.",
+    "error_code": "FILE_UPLOAD_FILE_TYPE_NOT_ALLOWED"
+}
+```
+
+**❌ استجابة خطأ (حجم ملف كبير جداً):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "حجم الملف يتجاوز الحد المسموح به (2048 KB). الحجم الفعلي: 5120 KB.",
+    "error": "حجم الملف يتجاوز الحد المسموح به (2048 KB). الحجم الفعلي: 5120 KB.",
+    "error_code": "FILE_UPLOAD_FILE_SIZE_EXCEEDED"
+}
+```
+
+**❌ استجابة خطأ (ملف خطير – قائمة سوداء):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "نوع الملف php غير مسموح به لأسباب أمنية.",
+    "error": "نوع الملف php غير مسموح به لأسباب أمنية.",
+    "error_code": "FILE_UPLOAD_FILE_TYPE_BLACKLISTED"
 }
 ```
 
 ---
 
-### 2. رفع عدة ملفات لحقل متعدد
+### 2. رفع عدة ملفات (لحقل متعدد)
 
 **الطريقة:** `POST`  
 **المسار:** `/upload-multiple`
 
-**معاملات الطلب (Body):**
+#### معاملات الطلب
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
-| `field` | `string` | نعم | اسم الحقل المتعدد (يجب أن يكون من نوع `multiple` في التسجيل). |
-| `files` | `array` | نعم | مصفوفة من الملفات (كل عنصر يمكن أن يكون كائن ملف مرفوع أو سلسلة base64). |
+| `field` | `string` | نعم | اسم الحقل المتعدد (مثل `gallery`). |
+| `files` | `array` | نعم | مصفوفة من الملفات (كل عنصر إما كائن `UploadedFile` أو سلسلة base64). |
 | `temp_session_key` | `string` | لا | مفتاح جلسة مؤقت (للنماذج غير المحفوظة). |
 | `model_id` | `int` | لا | معرف النموذج المحفوظ. |
 
-**مثال طلب (multipart):**
+#### مثال طلب (multipart)
 
 ```http
 POST /api/v1/fileupload/upload-multiple HTTP/1.1
@@ -193,16 +291,23 @@ Content-Disposition: form-data; name="files[]"; filename="img2.png"
 Content-Type: image/png
 
 ...
+------WebKitFormBoundary
+Content-Disposition: form-data; name="files[]"; filename="img3.pdf"
+Content-Type: application/pdf
+
+...
 ------WebKitFormBoundary--
 ```
 
-**استجابة نجاح (200):**
+#### الاستجابات
+
+**✅ استجابة نجاح (جميع الملفات رفعت بنجاح):**
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "تم رفع 2 من 2 ملف بنجاح",
+    "message": "تم رفع 3 من 3 ملف بنجاح",
     "data": [
         {
             "status": true,
@@ -211,10 +316,70 @@ Content-Type: image/png
         {
             "status": true,
             "data": { "id": 102, "path": "...", "thumb": "..." }
+        },
+        {
+            "status": true,
+            "data": { "id": 103, "path": "...", "thumb": "..." }
+        }
+    ],
+    "process_data": {
+        "success_count": 3,
+        "total": 3
+    }
+}
+```
+
+**⚠️ استجابة نجاح جزئي (بعض الملفات فشلت):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم رفع 2 من 3 ملف بنجاح",
+    "data": [
+        {
+            "status": true,
+            "data": { "id": 101, "path": "..." }
+        },
+        {
+            "status": true,
+            "data": { "id": 102, "path": "..." }
+        },
+        {
+            "status": false,
+            "error": "نوع الملف غير مسموح به",
+            "error_code": "FILE_UPLOAD_FILE_TYPE_NOT_ALLOWED"
         }
     ],
     "process_data": {
         "success_count": 2,
+        "total": 3
+    }
+}
+```
+
+**❌ استجابة فشل كامل (جميع الملفات فشلت):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "فشل رفع جميع الملفات",
+    "error": "نوع الملف غير مسموح به, حجم الملف كبير جداً",
+    "data": [
+        {
+            "status": false,
+            "error": "نوع الملف غير مسموح به",
+            "error_code": "FILE_UPLOAD_FILE_TYPE_NOT_ALLOWED"
+        },
+        {
+            "status": false,
+            "error": "حجم الملف يتجاوز الحد المسموح به",
+            "error_code": "FILE_UPLOAD_FILE_SIZE_EXCEEDED"
+        }
+    ],
+    "process_data": {
+        "success_count": 0,
         "total": 2
     }
 }
@@ -227,27 +392,29 @@ Content-Type: image/png
 **الطريقة:** `DELETE`  
 **المسار:** `/delete/{id}`
 
-**معاملات المسار (URL):**
+#### معاملات المسار
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `id` | `int` | نعم | معرف الملف المراد حذفه. |
 
-**معاملات الاستعلام (Query Parameters):**
+#### معاملات الاستعلام (Query Parameters)
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `model_class` | `string` | لا | اسم النموذج (للتحقق من صلاحية الحذف). |
 | `field` | `string` | لا | اسم الحقل (للتحقق من صلاحية الحذف). |
 
-**مثال طلب:**
+#### مثال طلب
 
 ```http
 DELETE /api/v1/fileupload/delete/123?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
 Authorization: Bearer ...
 ```
 
-**استجابة نجاح (200):**
+#### الاستجابات
+
+**✅ استجابة نجاح:**
 
 ```json
 {
@@ -258,14 +425,39 @@ Authorization: Bearer ...
 }
 ```
 
-**استجابة خطأ (الملف غير موجود - 404):**
+**❌ استجابة خطأ (الملف غير موجود):**
 
 ```json
 {
     "code": 404,
     "status": false,
     "message": "الملف غير موجود",
-    "error": "الملف غير موجود"
+    "error": "الملف غير موجود",
+    "error_code": "FILE_UPLOAD_FILE_NOT_FOUND"
+}
+```
+
+**❌ استجابة خطأ (صلاحية ممنوعة – لا يملك المستخدم صلاحية الحذف):**
+
+```json
+{
+    "code": 403,
+    "status": false,
+    "message": "لا تملك صلاحية حذف هذا الملف",
+    "error": "لا تملك صلاحية حذف هذا الملف",
+    "error_code": "FILE_UPLOAD_PERMISSION_DENIED"
+}
+```
+
+**❌ استجابة خطأ (عمليات الحذف معطلة عالمياً):**
+
+```json
+{
+    "code": 403,
+    "status": false,
+    "message": "عمليات حذف الملفات معطلة حالياً",
+    "error": "عمليات حذف الملفات معطلة حالياً",
+    "error_code": "FILE_UPLOAD_DELETE_DISABLED_GLOBALLY"
 }
 ```
 
@@ -276,25 +468,43 @@ Authorization: Bearer ...
 **الطريقة:** `GET`  
 **المسار:** `/files`
 
-**معاملات الاستعلام (Query Parameters):**
+#### معاملات الاستعلام
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
 | `field` | `string` | نعم | اسم الحقل. |
-| `model_id` | `int` | لا | معرف النموذج المحفوظ (إذا كان موجودًا). |
+| `model_id` | `int` | لا | معرف النموذج المحفوظ (لجلب الملفات المرتبطة). |
 | `temp_session_key` | `string` | لا | مفتاح الجلسة المؤقت (لجلب الملفات المؤقتة غير المرتبطة). |
 | `with_thumbs` | `bool` | لا | إضافة صور مصغرة (`true` / `false`، افتراضي `false`). |
 | `thumb_sizes` | `object` | لا | أحجام الصور المصغرة (مصفوفة بأسماء الأحجام وأبعادها). |
 
-**مثال طلب (جلب صور معرض منتج بصور مصغرة):**
+#### أمثلة الطلبات
+
+**جلب صور معرض منتج (مرتبطة بنموذج محفوظ):**
 
 ```http
-GET /api/v1/fileupload/files?model_class=Nano\Shop\Models\Product&field=gallery&model_id=10&with_thumbs=true&thumb_sizes[small][0]=150&thumb_sizes[small][1]=150&thumb_sizes[small][2]=crop HTTP/1.1
+GET /api/v1/fileupload/files?model_class=Nano\Shop\Models\Product&field=gallery&model_id=10 HTTP/1.1
 Authorization: Bearer ...
 ```
 
-**استجابة نجاح (200):**
+**جلب ملفات مؤقتة (غير مرتبطة) باستخدام مفتاح جلسة:**
+
+```http
+GET /api/v1/fileupload/files?model_class=Nano\Shop\Models\Product&field=image&temp_session_key=tmp_YWJjMTIzOnNvbWVoYXNo HTTP/1.1
+Authorization: Bearer ...
+```
+
+**جلب صور معرض مع صور مصغرة بأحجام مخصصة:**
+
+```http
+GET /api/v1/fileupload/files?model_class=Nano\Shop\Models\Product&field=gallery&model_id=10&with_thumbs=true&thumb_sizes[small][0]=150&thumb_sizes[small][1]=150&thumb_sizes[small][2]=crop&thumb_sizes[medium][0]=300&thumb_sizes[medium][1]=300 HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابات
+
+**✅ استجابة نجاح (ملفات مرتبطة):**
 
 ```json
 {
@@ -306,149 +516,153 @@ Authorization: Bearer ...
             "id": 101,
             "title": null,
             "description": null,
-            "path": "/storage/app/uploads/public/.../original.jpg",
+            "path": "https://yourdomain.com/storage/app/uploads/public/.../original.jpg",
             "size": 102400,
-            "content_type": "image/jpeg",
-            "small": "/storage/app/uploads/public/.../small.jpg"
+            "content_type": "image/jpeg"
         },
         {
             "id": 102,
             "title": null,
             "description": null,
-            "path": "/storage/app/uploads/public/.../original.png",
+            "path": "https://yourdomain.com/storage/app/uploads/public/.../original.png",
             "size": 204800,
-            "content_type": "image/png",
-            "small": "/storage/app/uploads/public/.../small.png"
+            "content_type": "image/png"
         }
     ]
 }
 ```
 
----
-
-## رموز الأخطاء الشائعة
-
-| الكود | المعنى | الحل |
-|-------|--------|------|
-| 400 | بيانات غير صالحة (نقص معاملات، تحقق فاشل) | تحقق من صحة المدخلات. |
-| 401 | غير مصرح (توكن غير صالح أو منتهي) | أعد تسجيل الدخول واحصل على توكن جديد. |
-| 403 | صلاحية ممنوعة (المستخدم لا يملك صلاحية للعملية) | تأكد من صلاحيات المستخدم أو الحقل. |
-| 404 | العنصر غير موجود (نموذج، حقل، ملف) | تأكد من صحة المعرف. |
-| 500 | خطأ داخلي في الخادم | راجع سجلات الخادم مع تفعيل `app.debug`. |
-
----
-
-## أمثلة عملية متكاملة
-
-### مثال 1: رفع صورة لمنتج جديد (باستخدام مفتاح جلسة مؤقت)
-
-**الخطوة 1:** رفع الصورة والحصول على `temp_session_key`
-
-```http
-POST /api/v1/fileupload/upload
-{
-    "model_class": "Nano\\Shop\\Models\\Product",
-    "field": "image",
-    "file_base64": "data:image/jpeg;base64,..."
-}
-```
-
-**الاستجابة:**
+**✅ استجابة نجاح (مع صور مصغرة):**
 
 ```json
 {
+    "code": 200,
     "status": true,
-    "data": { "id": 101, "path": "..." },
-    "temp_session_key": "tmp_abc123"
-}
-```
-
-**الخطوة 2:** إنشاء المنتج (في تطبيقك) وحفظه
-
-```php
-$product = new Product();
-$product->name = 'منتج جديد';
-$product->save();
-```
-
-**الخطوة 3:** ربط الصورة بالمنتج عبر `attachTempFiles` (يتم من الخادم، وليس عبر API مباشرة).  
-يمكن إضافة نقطة نهاية مخصصة لهذا الغرض أو تنفيذها في كود الخادم.
-
----
-
-### مثال 2: رفع عدة صور لمعرض منتج موجود
-
-```http
-POST /api/v1/fileupload/upload-multiple
-Content-Type: multipart/form-data
-
-model_class: Nano\Shop\Models\Product
-field: gallery
-model_id: 10
-files[]: (ملف1)
-files[]: (ملف2)
-```
-
-**الاستجابة:**
-
-```json
-{
-    "status": true,
-    "message": "تم رفع 2 من 2 ملف بنجاح",
-    "data": [ { "data": { "id": 102 } }, { "data": { "id": 103 } } ]
-}
-```
-
----
-
-### مثال 3: حذف صورة رئيسية من منتج
-
-```http
-DELETE /api/v1/fileupload/delete/101?model_class=Nano\Shop\Models\Product&field=image
-```
-
-**الاستجابة:**
-
-```json
-{
-    "status": true,
-    "message": "تم حذف الملف"
-}
-```
-
----
-
-### مثال 4: جلب صور معرض منتج مع صور مصغرة
-
-```http
-GET /api/v1/fileupload/files?model_class=Nano\Shop\Models\Product&field=gallery&model_id=10&with_thumbs=true&thumb_sizes[medium][0]=300&thumb_sizes[medium][1]=300&thumb_sizes[medium][2]=crop
-```
-
-**الاستجابة:**
-
-```json
-{
-    "status": true,
+    "message": "تم جلب الملفات",
     "data": [
         {
-            "id": 102,
-            "path": "...",
-            "medium": "/storage/.../medium.jpg"
+            "id": 101,
+            "path": "https://yourdomain.com/storage/app/uploads/public/.../original.jpg",
+            "small": "https://yourdomain.com/storage/app/uploads/public/.../small.jpg",
+            "medium": "https://yourdomain.com/storage/app/uploads/public/.../medium.jpg"
         }
     ]
 }
 ```
 
+**✅ استجابة نجاح (ملفات مؤقتة – بعد التحقق الأمني):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": [
+        {
+            "id": 200,
+            "path": "https://yourdomain.com/storage/app/uploads/public/.../temp.jpg"
+        }
+    ]
+}
+```
+
+**❌ استجابة خطأ (مفتاح مؤقت غير صالح أو منتهي):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "مفتاح جلسة مؤقت غير صالح أو منتهي الصلاحية",
+    "error": "مفتاح جلسة مؤقت غير صالح أو منتهي الصلاحية",
+    "error_code": "FILE_UPLOAD_TEMP_KEY_INVALID"
+}
+```
+
+**❌ استجابة خطأ (مفتاح مؤقت لا يخص المستخدم الحالي):**
+
+```json
+{
+    "code": 403,
+    "status": false,
+    "message": "المفتاح المؤقت غير مخصص لهذا النموذج/الحقل",
+    "error": "المفتاح المؤقت غير مخصص لهذا النموذج/الحقل",
+    "error_code": "FILE_UPLOAD_TEMP_KEY_MISMATCH"
+}
+```
+
 ---
 
-## أفضل الممارسات
+## أكواد الأخطاء (error_code) – قائمة كاملة
 
-1. **استخدم مفتاح جلسة مؤقت للنماذج الجديدة**: لتجنب فقدان الملفات إذا لم يتم حفظ النموذج بعد.
-2. **تحقق من صحة الإدخال قبل إرسال الطلب**: خاصة `model_class` و `field` لضمان وجودهما في التسجيل.
-3. **تعامل مع الأخطاء حسب الكود**: قدم للمستخدم رسائل مناسبة لكل حالة (401: سجل دخول، 403: لا صلاحية، 404: غير موجود).
-4. **استخدم `with_thumbs` فقط عند الحاجة**: لتقليل حجم الاستجابة وزيادة الأداء.
-5. **فعّل `app.debug` في بيئة التطوير**: للحصول على تفاصيل الأخطاء الكاملة.
-6. **احتفظ بمفاتيح الجلسة المؤقتة في الجلسة أو قاعدة البيانات**: لاستخدامها لاحقًا في ربط الملفات.
+| error_code | كود HTTP | المعنى |
+|------------|----------|--------|
+| `FILE_UPLOAD_GENERAL` | 500 | خطأ عام غير متوقع. |
+| `FILE_UPLOAD_PERMISSION_DENIED` | 403 | المستخدم لا يملك صلاحية للعملية. |
+| `FILE_UPLOAD_MODEL_NOT_REGISTERED` | 400 | النموذج غير مسجل في النظام. |
+| `FILE_UPLOAD_FIELD_NOT_REGISTERED` | 400 | الحقل غير مسجل للنموذج. |
+| `FILE_UPLOAD_MODEL_NOT_FOUND` | 404 | النموذج غير موجود (في حالة `model_id`). |
+| `FILE_UPLOAD_FILE_NOT_FOUND` | 404 | الملف غير موجود. |
+| `FILE_UPLOAD_INVALID_FILE_DATA` | 400 | بيانات الملف غير صالحة (لا ملف ولا base64). |
+| `FILE_UPLOAD_FILE_SIZE_EXCEEDED` | 400 | حجم الملف يتجاوز الحد المسموح. |
+| `FILE_UPLOAD_FILE_TYPE_NOT_ALLOWED` | 400 | امتداد الملف غير مسموح به. |
+| `FILE_UPLOAD_FILE_TYPE_BLACKLISTED` | 400 | امتداد الملف خطير (PHP, JS, HTML, إلخ). |
+| `FILE_UPLOAD_FILE_UPLOAD_FAILED` | 500 | فشل رفع الملف (خطأ داخلي). |
+| `FILE_UPLOAD_MAX_FILES_EXCEEDED` | 400 | عدد الملفات يتجاوز الحد المسموح (للحقول المتعددة). |
+| `FILE_UPLOAD_UPLOAD_DISABLED_GLOBALLY` | 403 | عمليات الرفع معطلة عالمياً. |
+| `FILE_UPLOAD_DELETE_DISABLED_GLOBALLY` | 403 | عمليات الحذف معطلة عالمياً. |
+| `FILE_UPLOAD_GET_DISABLED_GLOBALLY` | 403 | عمليات الجلب معطلة عالمياً. |
+| `FILE_UPLOAD_USER_TYPE_NOT_ALLOWED` | 403 | نوع المستخدم غير مسموح لهذه العملية. |
+| `FILE_UPLOAD_TEMP_KEY_INVALID` | 400 | مفتاح مؤقت غير صالح (تنسيق أو توقيع). |
+| `FILE_UPLOAD_TEMP_KEY_EXPIRED` | 400 | مفتاح مؤقت منتهي الصلاحية. |
+| `FILE_UPLOAD_TEMP_KEY_MISMATCH` | 403 | مفتاح مؤقت لا يخص المستخدم أو النموذج الحالي. |
+
+---
+
+## أفضل الممارسات للتكامل
+
+1. **استخدم `temp_session_key` للنماذج غير المحفوظة**  
+   عند إنشاء كيان جديد (مثل منتج، طلب)، قم برفع الملفات أولاً باستخدام `temp_session_key`، ثم احفظ الكيان، وأخيراً اربط الملفات باستدعاء دالة `attachTempFiles` من جانب الخادم (أو عبر نقطة نهاية مخصصة).
+
+2. **تعامل مع `error_code` برمجياً**  
+   بدلاً من الاعتماد على رسائل نصية، استخدم `error_code` لتحديد نوع الخطأ وعرض رسائل مناسبة للمستخدم (مثال: `FILE_UPLOAD_PERMISSION_DENIED` → "غير مصرح").
+
+3. **استخدم `with_thumbs` فقط عند الحاجة**  
+   طلب الصور المصغرة يستهلك وقتاً إضافياً لإنشاءها (إذا لم تكن موجودة). استخدمها فقط في شاشات العرض التي تحتاجها.
+
+4. **فعّل `app.debug` في بيئة التطوير**  
+   عند مواجهة أخطاء 500، قم بتفعيل وضع التصحيح للحصول على تفاصيل كاملة في حقل `debug` تساعدك في تشخيص المشكلة.
+
+5. **حافظ على مفاتيح الجلسة المؤقتة بشكل آمن**  
+   خزّن `temp_session_key` في جلسة المستخدم أو قاعدة بيانات مؤقتة، ولا تعرضه في الواجهة الأمامية إلا للضرورة القصوى (لأنه يحمل معلومات حساسة).
+
+6. **راجع إعدادات النظام**  
+   تأكد من أن حقول الرفع مسجلة بشكل صحيح في `FileUploadRegistry`، وأن الإعدادات العامة (مثل `disable_upload`, `disable_auto_resize`) مضبوطة حسب احتياجاتك.
+
+7. **راقب سجل `fileupload.log`**  
+   ملف السجل المخصص (`storage/logs/fileupload.log`) يحتوي على تفاصيل محاولات الرفع الفاشلة، بما في ذلك محاولات رفع ملفات خطيرة، مما يساعد في مراقبة الأمان.
+
+---
+
+## الأسئلة الشائعة
+
+**س: كيف أربط الملفات المؤقتة بنموذج بعد حفظه؟**  
+ج: بعد حفظ النموذج (مثل `$product->save()`)، استدعِ دالة `attachTempFiles` من كود الخادم:
+```php
+\Nano\FileUpload\Classes\FileUploadService::instance()->attachTempFiles($product, 'image', $tempSessionKey);
+```
+يمكنك إنشاء نقطة نهاية مخصصة لهذا الغرض إذا كنت تريد ربطها عبر API.
+
+**س: ما هي أحجام الصور المصغرة التي يمكن طلبها؟**  
+ج: يمكنك طلب أي أبعاد تريدها عبر `thumb_sizes`، وسيتم إنشاء الصورة المصغرة تلقائياً (إذا لم تكن موجودة). الأحجام الشائعة: `[150,150,'crop']`, `[300,300,'crop']`, `[800,600,'auto']`.
+
+**س: كيف أعرف أن الملف قد تم تحجيمه أو إضافة علامة مائية؟**  
+ج: هذه العمليات تتم تلقائياً وفق إعدادات الحقل في `FileUploadRegistry`. إذا كنت مطوراً، راجع إعدادات الحقل (`auto_resize`, `auto_watermark`). إذا كنت مستخدم API، لا تحتاج إلى القيام بأي شيء إضافي.
+
+**س: ماذا لو أردت رفع ملف بنفس الاسم مرتين؟**  
+ج: النظام يقوم بتوليد اسم فريد (`disk_name`) تلقائياً، لذا لن يحدث تعارض. يمكنك الاعتماد على `id` و `path` للتمييز.
+
+**س: هل يمكنني رفع ملفات بصيغة PDF أو DOCX؟**  
+ج: نعم، إذا كان الحقل مسجلاً بنوع `file` أو تم تحديد `allowed_types` المناسب. أنواع الملفات المدعومة افتراضياً تشمل `pdf,doc,docx,xls,xlsx,zip,rar,txt` (لنوع `file`).
 
 ---
 

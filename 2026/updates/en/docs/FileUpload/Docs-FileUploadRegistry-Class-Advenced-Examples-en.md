@@ -1,34 +1,37 @@
-# Advanced and Practical Examples for the `FileUploadRegistry` Class
+# Documentation of Advanced and Practical Examples for `FileUploadRegistry` Class
 
 **Namespace:** `Nano\FileUpload\Classes`  
-**Purpose:** To provide comprehensive application examples for using `FileUploadRegistry` in various scenarios, from basic model registration to advanced permission checks, event handling, constraint queries, and integration with `FileUploadService`, including expected inputs/outputs and best practices.
+**Objective:** To provide comprehensive practical examples for using `FileUploadRegistry` in various scenarios, ranging from basic model and upload field registration to advanced permission checking, event management, constraint querying, and integration with `FileUploadService`, illustrating expected inputs and outputs as well as best practices.
+
+> **Note:** This document covers features up to version 1.0.7, including global settings for controlling automatic conversions, multi-storage, event hooks, and security and caching improvements.
 
 ---
 
 ## Introduction
 
-This document presents a set of practical examples covering various use cases of the `FileUploadRegistry` class, which acts as the **central registry** for managing model definitions and file upload fields in NanoSoft applications. Through these examples, you will learn how to:
+This document provides a set of practical examples covering various use cases of the `FileUploadRegistry` class, which serves as the **central registry** for managing model definitions and file upload fields in NanoSoft applications. Through these examples, you will learn how to:
 
-- Register models and their fields with advanced settings.
-- Specify allowed user types (backend/frontend).
-- Set granular permissions per operation (add, edit, delete, view) at the model or field level.
-- Use verification methods (`can`, `isUserTypeAllowed`, `getFieldConstraints`) to ensure security.
+- Register models and their fields with advanced settings (multi-storage, automatic resizing, watermarking).
+- Specify allowed user types (`backend`/`frontend`).
+- Set fine-grained permissions for each operation (`add`, `edit`, `delete`, `view`) at the model or field level.
+- Use verification functions (`can`, `isUserTypeAllowed`, `getFieldConstraints`, `getProcessingOptions`) to ensure security.
 - Listen to events (`nano.api.fileupload.registerModels`, `nano.api.fileupload.modelRegistered`) to extend the system.
+- Use caching to improve performance.
 - Integrate `FileUploadRegistry` with `FileUploadService` for file uploads.
 - Handle errors and apply best practices.
 
-> **Note:** The examples here interact directly with `FileUploadRegistry`. In real applications, it is often used through `FileUploadService`, but understanding the underlying settings helps in customizing the system accurately.
+> **Note:** The examples here interact directly with the `FileUploadRegistry` class. In real applications, it is often used via `FileUploadService`, but understanding the underlying settings helps in customizing the system accurately.
 
 ---
 
 ## Prerequisites
 
-- The `Nano.FileUpload` plugin installed in your application.
-- The plugin depends on `Nano.Api` which provides `Base64` and `ApiController`.
-- Basic knowledge of models and relationships in Laravel / NanoSoft applications.
-- (Optional) Use of `FileUploadUserManager` to verify user permissions.
+- `Nano.FileUpload` add-on installed and configured in your application (version 1.0.7 or later).
+- The add-on depends on `Nano.Api` which provides `Base64` and `ApiController`.
+- Basic knowledge of Models and relationships in Laravel / NanoSoft applications.
+- (Optional) Use of `FileUploadUserManager` for verifying user permissions.
 
-### Setting Up the Class in the Application
+### Setting up the class in the application
 
 ```php
 use Nano\FileUpload\Classes\FileUploadRegistry;
@@ -36,20 +39,20 @@ use Nano\FileUpload\Classes\FileUploadRegistry;
 $registry = FileUploadRegistry::instance();
 ```
 
-Because the class follows the Singleton pattern, it is accessed via `instance()`.
+Since the class follows the `Singleton` pattern, it is called via `instance()`.
 
 ---
 
 ## 1. Registering a Model with Simple Settings
 
-**Scenario:** Register a `Product` model with a single `image` field (main image) with default settings.
+**Scenario:** Register the `Product` model with a single `image` field (main image) with default settings.
 
 ```php
 $registry->registerModel(\Nano\Shop\Models\Product::class, [
     'fields' => [
         'image' => [
             'type' => 'image',
-            'label' => 'Main image',
+            'label' => 'Main Image',
             'max_filesize' => 1024, // KB
             'allowed_types' => 'jpg,jpeg,png',
             'required' => false,
@@ -58,7 +61,7 @@ $registry->registerModel(\Nano\Shop\Models\Product::class, [
 ]);
 ```
 
-**Output:** The model is added to `$registeredModels`. You can verify with:
+**Outputs:** The model is added to `$rawDefinitions`. You can verify with:
 
 ```php
 if ($registry->isModelRegistered(\Nano\Shop\Models\Product::class)) {
@@ -67,22 +70,67 @@ if ($registry->isModelRegistered(\Nano\Shop\Models\Product::class)) {
 ```
 
 **Notes:**  
-- `type` can be `image`, `file`, or `multiple` (for multiple fields).  
+- `type` can be `image`, `file`, `audio`, `video`, or `multiple` (for multiple fields).  
 - `max_filesize` is in kilobytes (KB).  
 - `allowed_types` is a comma-separated list of extensions or `*` to allow all types.  
-- If `label` is not specified, the field name will be used.
+- If `label` is not specified, the field name is used.
 
 ---
 
-## 2. Registering a Model with Advanced Settings (User Types and Permissions)
+## 2. Registering a Model with Advanced Settings (Multi-storage and Automatic Image Conversion)
 
-**Scenario:** Register a `User` model with an `avatar` field, allowing only `frontend` users, and specific permissions for each operation.
+**Scenario:** Register the `Product` model with an `image` field that has:
+- A custom storage disk (e.g., `s3`).
+- Automatic resizing of the image to width 800 and height 600 (crop mode).
+- Automatic watermarking in the bottom-right corner at 15% size.
+
+```php
+$registry->registerModel(\Nano\Shop\Models\Product::class, [
+    'fields' => [
+        'image' => [
+            'type' => 'image',
+            'storage_disk' => 's3',                   // custom storage disk
+            'auto_resize' => true,
+            'resize_options' => [
+                'width' => 800,
+                'height' => 600,
+                'mode' => 'crop',
+            ],
+            'auto_watermark' => true,
+            'watermark_options' => [
+                'position' => 'bottom-right',
+                'resize_percentage' => 15,
+            ],
+        ],
+    ],
+]);
+```
+
+**Check processing options:**
+
+```php
+$procOptions = $registry->getProcessingOptions(\Nano\Shop\Models\Product::class, 'image');
+// $procOptions['storage_disk'] => 's3'
+// $procOptions['auto_resize'] => true
+// $procOptions['resize_options']['width'] => 800
+```
+
+**Notes:**  
+- The disk `s3` must be pre-configured in `config/filesystems.php`.  
+- `auto_resize` and `auto_watermark` work only if the field type is `image`.  
+- Automatic conversions can be disabled globally via global settings (see Example 4).
+
+---
+
+## 3. Registering a Model with Advanced Settings (User Types and Permissions)
+
+**Scenario:** Register the `User` model with an `avatar` field, specifying that only `frontend` users are allowed, and each operation requires a specific permission.
 
 ```php
 $registry->registerModel(\RainLab\User\Models\User::class, [
     'allowed_user_types' => ['frontend'], // only frontend users
     'permissions' => [
-        'add'    => null, // no extra permission needed (everyone allowed)
+        'add'    => null, // no additional permission needed (allowed for everyone)
         'delete' => 'user.delete_avatar',
         'view'   => null,
     ],
@@ -92,14 +140,14 @@ $registry->registerModel(\RainLab\User\Models\User::class, [
             'max_filesize' => 2048,
             'allowed_types' => 'jpg,jpeg,png',
             'permissions' => [
-                'add' => 'user.upload_avatar', // override the general add permission
+                'add' => 'user.upload_avatar', // override global add permission
             ],
         ],
     ],
 ]);
 ```
 
-**Checking Permission:**
+**Check permission:**
 
 ```php
 $user = \Auth::getUser(); // frontend user
@@ -112,24 +160,46 @@ if ($registry->can(\RainLab\User\Models\User::class, 'add', $userType, $user, 'a
 }
 ```
 
-**Output:** If the user has the `user.upload_avatar` permission (in the frontend permission system), returns `true`. Otherwise `false`.
+**Outputs:** If the user has the `user.upload_avatar` permission (in the frontend permission system), it returns `true`. If not, it returns `false`.
 
 **Notes:**  
 - Field permissions override model permissions.  
-- If a permission is `null`, access is automatically granted after checking the user type.
+- If the permission is `null`, access is automatically granted after user type verification.
 
 ---
 
-## 3. Registering a Multiple Field with Additional Constraints
+## 4. Using Global Settings to Control Automatic Conversions
 
-**Scenario:** Add a `gallery` field allowing up to 10 images, each up to 1 MB, only jpg/png formats.
+**Scenario:** Disable all automatic resizing operations at the entire API level without modifying field definitions.
+
+In `.env` file:
+```ini
+NANO_FILE_UPLOAD_DISABLE_AUTO_RESIZE=true
+```
+
+In code:
+```php
+if ($registry->isAutoResizeEnabledGlobally()) {
+    echo "Auto resize is enabled";
+} else {
+    echo "Auto resize is globally disabled";
+}
+```
+
+**Note:** The same applies to `disable_auto_watermark`, `disable_upload`, `disable_delete`, `disable_get`.
+
+---
+
+## 5. Registering a Multiple Field with Additional Constraints
+
+**Scenario:** Add a `gallery` image gallery that allows up to 10 images, each with a maximum size of 1 MB, only jpg/png formats.
 
 ```php
 $registry->registerModel(\Nano\Shop\Models\Product::class, [
     'fields' => [
         'gallery' => [
             'type' => 'multiple',
-            'label' => 'Image gallery',
+            'label' => 'Image Gallery',
             'max_filesize' => 1024,
             'allowed_types' => 'jpg,jpeg,png',
             'max_files' => 10,
@@ -140,7 +210,7 @@ $registry->registerModel(\Nano\Shop\Models\Product::class, [
 ]);
 ```
 
-**Querying Constraints:**
+**Query constraints:**
 
 ```php
 $constraints = $registry->getFieldConstraints(\Nano\Shop\Models\Product::class, 'gallery');
@@ -150,9 +220,9 @@ $constraints = $registry->getFieldConstraints(\Nano\Shop\Models\Product::class, 
 
 ---
 
-## 4. Using the `nano.api.fileupload.registerModels` Event to Register Models from Different Plugins
+## 6. Using the `nano.api.fileupload.registerModels` Event to Register Models from Different Plugins
 
-**Scenario:** Register multiple models through an event listener, allowing registrations to be centralized.
+**Scenario:** Register multiple models through an event listener, allowing aggregation of registrations in one place.
 
 ```php
 Event::listen('nano.api.fileupload.registerModels', function ($registry) {
@@ -175,17 +245,17 @@ Event::listen('nano.api.fileupload.registerModels', function ($registry) {
 
 **Notes:**  
 - This event is automatically fired by `FileUploadRegistry` when `getRegisteredModels()` is called.  
-- It can be placed in the main plugin's `boot()` method.
+- It can be placed in the `boot()` method of the main plugin.
 
 ---
 
-## 5. Listening to the `nano.api.fileupload.modelRegistered` Event to Perform Additional Actions After Registration
+## 7. Listening to the `nano.api.fileupload.modelRegistered` Event to Perform Additional Actions After Registration
 
-**Scenario:** After registering a model, dynamically register an API route based on its fields.
+**Scenario:** Register a model and then dynamically register an API route based on its fields.
 
 ```php
 Event::listen('nano.api.fileupload.modelRegistered', function ($modelClass, $config) {
-    // Could add a custom route to retrieve files for this model
+    // Can add a custom route to get files for this model
     \Route::get('/api/custom/' . class_basename($modelClass) . '/files', function () use ($modelClass) {
         return $registry->getFiles($modelClass, 'image');
     });
@@ -194,30 +264,30 @@ Event::listen('nano.api.fileupload.modelRegistered', function ($modelClass, $con
 
 ---
 
-## 6. Checking User Type (`isUserTypeAllowed`)
+## 8. Checking User Type (`isUserTypeAllowed`) and Global Settings
 
-**Scenario:** Display a list of fields only if the user is of an allowed type.
+**Scenario:** Display a list of fields only if the user is of the allowed type and upload is globally enabled.
 
 ```php
 $userType = $userManager->getUserType(); // backend, frontend, guest
 $modelClass = \Nano\Shop\Models\Product::class;
 
-if ($registry->isUserTypeAllowed($modelClass, $userType)) {
-    // Show file upload interface
+if ($registry->isUserTypeAllowed($modelClass, $userType) && $registry->isUploadEnabledGlobally()) {
+    // Display file upload interface
     $fields = $registry->getModelConfig($modelClass)['fields'];
     foreach ($fields as $field => $config) {
         echo "Field: {$field} - Type: {$config['type']}\n";
     }
 } else {
-    echo "Access not allowed";
+    echo "Access not allowed or upload is disabled";
 }
 ```
 
 ---
 
-## 7. Using `can` to Check Delete Permission
+## 9. Using `can` to Check Delete Permission with Global Settings
 
-**Scenario:** Check if the current user has permission to delete a file from a specific field.
+**Scenario:** Check whether the current user has permission to delete a file from a specific field, considering global settings.
 
 ```php
 $user = \BackendAuth::getUser(); // backend user
@@ -232,18 +302,18 @@ if ($registry->can($modelClass, 'delete', $userType, $user, $field)) {
 }
 ```
 
-**Output:** If the user has the `delete` permission (at model or field level), returns `true`.
+**Outputs:** If the user has `delete` permission (at model or field level) and delete is globally enabled (`disable_delete = false`), it returns `true`.
 
 ---
 
-## 8. Getting Field Constraints and Validating Before Upload
+## 10. Getting Field Constraints and Validating Them Before Upload
 
-**Scenario:** In the upload interface, display maximum size and allowed types to the user, and validate before sending the request.
+**Scenario:** In the upload interface, show the user the maximum size and allowed types, and validate them before sending the request.
 
 ```php
 $constraints = $registry->getFieldConstraints(\Nano\Shop\Models\Product::class, 'image');
 if ($constraints['max_filesize']) {
-    echo "Maximum file size: {$constraints['max_filesize']} KB\n";
+    echo "Maximum size: {$constraints['max_filesize']} KB\n";
 }
 if ($constraints['allowed_types'] != '*') {
     echo "Allowed types: {$constraints['allowed_types']}\n";
@@ -255,9 +325,29 @@ if ($constraints['required']) {
 
 ---
 
-## 9. Integrating `FileUploadRegistry` with `FileUploadService` in a Complete Upload Process
+## 11. Using Cache to Improve Performance
 
-**Scenario:** Create a new `Product` model and upload a main image using a temporary session key.
+**Scenario:** Manually enable caching (although default settings are enabled) and set a longer TTL.
+
+```php
+$registry->setCacheEnabled(true);
+$registry->setCacheTtl(7200); // two hours
+
+// After updating a model definition, you can clear its cache
+$registry->clearModelCache(\Nano\Shop\Models\Product::class);
+```
+
+**Note:** Cache can be controlled globally via environment variables:
+```ini
+NANO_FILE_UPLOAD_REGISTRY_CACHE_ENABLED=true
+NANO_FILE_UPLOAD_REGISTRY_CACHE_TTL=3600
+```
+
+---
+
+## 12. Integrating `FileUploadRegistry` with `FileUploadService` in a Complete Upload Process Using Advanced Features
+
+**Scenario:** Create a new `Product` model, upload a main image for it with automatic resizing and watermarking as defined in the registry.
 
 ```php
 use Nano\FileUpload\Classes\FileUploadService;
@@ -269,7 +359,7 @@ $service = FileUploadService::instance();
 $modelClass = \Nano\Shop\Models\Product::class;
 $field = 'image';
 
-// Check if the model exists and permission is granted
+// Check if model exists and permissions
 if (!$registry->isModelRegistered($modelClass)) {
     die('Model not registered');
 }
@@ -283,17 +373,17 @@ $uploadResult = $service->upload($modelClass, $field, $uploadedFile, [
 ]);
 
 if ($uploadResult['status']) {
-    // Now create the model (e.g., $product = new Product(); $product->save();)
+    // Create and save the product
     $product = new \Nano\Shop\Models\Product();
-    $product->name = 'New product';
+    $product->name = 'New Product';
     $product->save();
 
-    // Link the temporary files to the saved model
+    // Link temporary files to the saved model
     $service->attachTempFiles($product, $field, $tempKey);
 
     echo "Image uploaded and linked to product";
 } else {
-    echo "Upload failed: " . $uploadResult['error'];
+    echo "Upload failed: " . $uploadResult['error'] . " (code: " . $uploadResult['error_code'] . ")";
 }
 ```
 
@@ -303,9 +393,9 @@ if ($uploadResult['status']) {
 
 ---
 
-## 10. Handling Registration Errors (Model Not Found)
+## 13. Handling Registration Errors (Model Not Found)
 
-**Scenario:** Attempt to register a non‑existent model.
+**Scenario:** Attempt to register a non-existent model.
 
 ```php
 try {
@@ -317,9 +407,9 @@ try {
 
 ---
 
-## 11. Updating a Registered Model's Configuration
+## 14. Updating Settings of a Registered Model (e.g., Changing Add Permission)
 
-**Scenario:** After registering the model, change the add permission for the `image` field from `null` to a specific permission.
+**Scenario:** After registering the model, we want to change the add permission for the `image` field from `null` to a specific permission.
 
 ```php
 $registry->updateModelConfig(\Nano\Shop\Models\Product::class, [
@@ -337,9 +427,9 @@ Now when calling `can` for the `image` field, the new permission will be used.
 
 ---
 
-## 12. Using Defaults to Reduce Repetition
+## 15. Using Defaults to Reduce Repetition
 
-**Scenario:** Several fields share the same settings (size 2 MB, image types, public). You can define `defaults` and then override individual fields.
+**Scenario:** Many fields share the same settings (2 MB size, image types, public). You can define `defaults` and then override individual fields.
 
 ```php
 $registry->registerModel(\Nano\Shop\Models\Product::class, [
@@ -363,26 +453,26 @@ $registry->registerModel(\Nano\Shop\Models\Product::class, [
 ```
 
 In `image`, `max_filesize=2048` and `allowed_types=...` will be used, but `required` is set to `true`.  
-In `gallery`, the same defaults apply plus `max_files` and `multiple`.
+In `gallery`, the same defaults will be used with `max_files` and `multiple` added.
 
 ---
 
-## 13. Getting Full Model or Field Configuration
+## 16. Getting Full Model Configuration or Field Configuration
 
-**Scenario:** Print all settings for a specific model for debugging.
+**Scenario:** Print all settings of a specific model for debugging purposes.
 
 ```php
 $config = $registry->getModelConfig(\Nano\Shop\Models\Product::class);
 print_r($config);
 ```
 
-**Output:** An array containing `enabled`, `allowed_user_types`, `permissions`, `fields`, `defaults`.
+**Result:** An array containing `enabled`, `allowed_user_types`, `permissions`, `fields`, `defaults`.
 
 ---
 
-## 14. Checking `view` Permission Before Displaying File List
+## 17. Checking `view` Permission Before Displaying File List (Considering Global Settings)
 
-**Scenario:** In an API controller, check if the user has permission to view files for a given model.
+**Scenario:** In an API controller, we check whether the user has permission to view files of a specific model, and if fetching is globally enabled.
 
 ```php
 public function getFiles(Request $request)
@@ -397,15 +487,15 @@ public function getFiles(Request $request)
         return response()->json(['error' => 'Not allowed'], 403);
     }
 
-    // Retrieve files...
+    // Fetch files...
 }
 ```
 
 ---
 
-## 15. Testing Field Permission with a Custom Approach – Not directly applicable, but can add an example of checking `view` permission for a field.
+## 18. Testing Field Permission Using Column Path (for Reports) – Not directly applicable to FileUploadRegistry, but an example can be added for checking `view` permission on the field itself.
 
-**Scenario:** Check if the user has permission to view a specific field before displaying it in the UI.
+**Scenario:** Check that the user has permission to view a specific field before displaying it in the user interface.
 
 ```php
 $user = \Auth::getUser();
@@ -416,47 +506,55 @@ $field = 'avatar';
 if ($registry->can($modelClass, 'view', $userType, $user, $field)) {
     echo '<img src="' . $user->avatar->getPath() . '">';
 } else {
-    echo 'Do not show image';
+    echo 'Image not shown';
 }
 ```
 
 ---
 
-## 16. Best Practices
+## 19. Best Practices for Recent Versions (1.0.7)
 
-1. **Register models early**: Use the `nano.api.fileupload.registerModels` event in the main plugin's `boot()`.
-2. **Use `allowed_user_types` wisely**: Do not allow all types unless necessary.
-3. **Define precise permissions per operation**: At least `add` and `delete` to prevent unauthorized uploads or deletions.
-4. **Use `getFieldConstraints` for pre‑validation**: Check size and types before uploading to avoid server errors.
-5. **Document field settings**: Use `label` and `description` to help other developers understand.
-6. **Use defaults (`defaults`)**: To reduce repetition and ease maintenance.
-7. **Don't rely solely on general permissions**: Customize permissions per field when needed.
-8. **Monitor events**: `modelRegistered` can be used to register API routes or perform additional setup.
-9. **Test permissions thoroughly**: Ensure unauthorized users cannot upload files via the API.
-10. **Use `FileUploadService` instead of directly interacting with `FileUploadRegistry`** for upload operations: to ensure all checks pass through the correct layer.
+1. **Register models early**: Use the `nano.api.fileupload.registerModels` event in the `boot()` method of the main plugin.
+2. **Use `allowed_user_types` wisely**: Do not allow all types if not necessary.
+3. **Set fine-grained permissions for each operation**: At least `add` and `delete`, to avoid unauthorized upload or deletion.
+4. **Use `getFieldConstraints` for pre-validation**: Before uploading a file, check size and types to avoid server errors.
+5. **Document field settings**: Using `label` and `description` to make it easier for other developers to understand.
+6. **Use `defaults`** to reduce repetition and ease maintenance.
+7. **Do not rely only on global permissions**: Customize permissions per field when needed.
+8. **Monitor events**: `modelRegistered` can be used to register API routes or additional initialization.
+9. **Test permissions**: Ensure that unauthorized users cannot upload files via API.
+10. **Use `FileUploadService` instead of directly handling `FileUploadRegistry` in upload operations**: To ensure all verification passes through the correct layer.
+11. **Use global settings (`disable_upload`, `disable_auto_resize`) as an emergency measure** to temporarily disable operations without code changes.
+12. **Enable caching in production environment** (`cache.enabled = true`) to improve performance, with an appropriate TTL.
+13. **Use `storage_disk` only when necessary**, and prefer using the default disk to simplify management.
+14. **Set `auto_resize` and `auto_watermark` at the field level** to avoid unnecessary processing of non-image files.
 
 ---
 
-## 17. Common Errors and Solutions
+## 20. Common Errors and Solutions
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `ApplicationException: Model ... does not exist` | Attempting to register a non‑existent model. | Ensure the class name is correct and imported. |
-| Field not appearing in the interface | `allowed_user_types` does not include the current user type. | Check `$userType` or add the appropriate type. |
-| `add` permission not working | Permission not set in `permissions` or `permissions[add]` missing. | Define the required permission or set it to `null` to allow everyone. |
-| `isModelRegistered` returns `false` | Was `getRegisteredModels()` called after registration? | Ensure registration occurs before the query. |
-| Temporary files not linked | The correct `temp_session_key` was not passed to `attachTempFiles`. | Use the same key returned by `upload`. |
+| `ApplicationException: Model ... does not exist` | Attempting to register a non-existent model. | Ensure the class name is correct and imported. |
+| Field does not appear in the interface | `allowed_user_types` does not include the current user type. | Check `$userType` or add the appropriate type. |
+| `add` permission does not work | Permission not set in `permissions` or `permissions[add]` missing. | Specify the required permission or set to `null` to allow everyone. |
+| `isModelRegistered` returns `false` | Was `getRegisteredModels()` called after registering the model? | Ensure registration happened before querying (the function now loads definitions automatically). |
+| Temporary files are not linked | The correct `temp_session_key` not passed to `attachTempFiles`. | Use the same key returned by `upload`. |
+| `Auto-resize failed` | Missing GD or Imagick library, or invalid file path. | Ensure GD or Imagick is installed and check file permissions. |
+| `Auto-watermark failed` | `Nano2.Watermark` add-on not installed or logo path incorrect. | Install the add-on and ensure the logo file exists at the specified path. |
+| `Storage disk 's3' not found` | Disk `s3` not configured in `config/filesystems.php`. | Add appropriate disk configuration. |
+| `Auto resize does not work even though enabled` | `disable_auto_resize` is set to `true` in global settings. | Check the environment variable or disable it. |
 
 ---
 
-## 18. Integration with NanoSoft Permission System
+## 21. Integration with NanoSoft Permission System
 
-In NanoSoft applications, `FileUploadUserManager` is used to check permissions. You can set a custom checker for frontend users:
+In NanoSoft applications, `FileUploadUserManager` is used for permission checking. You can set a custom check function for `frontend` users:
 
 ```php
 FileUploadUserManager::instance()->setPermissionChecker(function ($user, $operation, $permissions) {
-    // Custom logic for frontend user permissions
-    // e.g., check a custom permissions table
+    // Custom logic for checking frontend user permissions
+    // Example: check custom permissions table
     return $user->hasCustomPermission($operation, $permissions);
 });
 ```
@@ -465,16 +563,14 @@ FileUploadUserManager::instance()->setPermissionChecker(function ($user, $operat
 
 ## Conclusion
 
-The `FileUploadRegistry` class is the backbone of file upload management in NanoSoft applications. Through the examples above, developers can register any model with flexible settings, precisely control user types and permissions, and integrate with `FileUploadService` to securely upload files. We recommend using default settings and leveraging events to extend the system, and always checking permissions at every entry point to ensure the highest security levels.
+The `FileUploadRegistry` class represents the backbone for managing file uploads in NanoSoft applications. Through the examples mentioned above, developers can register any model with flexible settings (including multi-storage and automatic conversion), have fine-grained control over user types and permissions, leverage caching and events, and integrate the system with `FileUploadService` for secure file uploads. We recommend using defaults and leveraging events to extend the system, and checking permissions at every entry point to ensure the highest levels of security.
 
-For details on the response structure when using the `FileUploadController`, refer to [API Documentation](./Docs-API-Documentation-en.md).
-
+For details on the response structure when using the `FileUploadController`, refer to the [API Documentation](./Docs-API-Documentation-en.md).
 
 ## Additional Documentation
 
-- [General Plugin Documentation](./Docs-FileUpload-en.md)
-- [`FileUploadRegistry` Class Documentation](./Docs-FileUploadRegistry-Class-en.md)
-- [`FileUploadService` Class Documentation](./Docs-FileUploadService-Class-en.md)
-- [`FileUploadUserManager` Class Documentation](./Docs-FileUploadUserManager-Class-en.md)
+- [General Add-on Documentation](./Docs-FileUpload-en.md)
+- [FileUploadRegistry Class Documentation](./Docs-FileUploadRegistry-Class-en.md)
+- [FileUploadService Class Documentation](./Docs-FileUploadService-Class-en.md)
+- [FileUploadUserManager Class Documentation](./Docs-FileUploadUserManager-Class-en.md)
 - [API Documentation](./Docs-API-Documentation-en.md)
-

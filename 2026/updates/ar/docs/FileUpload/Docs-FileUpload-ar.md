@@ -39,6 +39,9 @@ Nano\FileUpload\Classes
   - تعيين صلاحيات لكل عملية (`add`, `edit`, `delete`, `view`) على مستوى النموذج أو الحقل.
   - دعم الإعدادات الافتراضية (`defaults`) لتقليل التكرار.
   - إطلاق أحداث (`nano.api.fileupload.registerModels`, `nano.api.fileupload.modelRegistered`) لتوسيع النظام.
+  - دعم التخزين المؤقت (Cache) لنتائج الاستعلامات.
+  - إعدادات عامة للتحكم في عمليات API (`disable_upload`, `disable_delete`, `disable_get`).
+  - إعدادات عامة للتحكم في التحويلات التلقائية (`disable_auto_resize`, `disable_auto_watermark`).
 
 ### ب. طبقة الخدمة (Service Layer)
 - **`FileUploadService`**: المسؤول عن تنفيذ عمليات رفع الملفات وحذفها واسترجاعها. يعتمد على `FileUploadRegistry` للوصول إلى الإعدادات والتحقق من الصلاحيات، وعلى `FileUploadUserManager` لإدارة المستخدم الحالي.
@@ -46,9 +49,14 @@ Nano\FileUpload\Classes
   - رفع ملف واحد أو عدة ملفات (`upload`, `uploadMultiple`).
   - حذف ملف مع التحقق من الصلاحية (`deleteFile`).
   - جلب الملفات المرتبطة بنموذج أو مؤقتة (`getFiles`).
-  - توليد مفاتيح جلسة مؤقتة (`generateTempSessionKey`).
+  - توليد مفاتيح جلسة مؤقتة (`generateTempSessionKey`) مع توقيع HMAC-SHA256.
   - ربط الملفات المؤقتة بنموذج محفوظ (`attachTempFiles`).
-  - التحقق من صحة الملف (حجم، نوع) قبل الرفع (`validateFile`).
+  - التحقق من صحة الملف (حجم، نوع، قائمة سوداء) قبل الرفع (`validateFile`).
+  - تطبيق التحويلات التلقائية (تحجيم، علامة مائية) على الصور (`applyAutoProcessing`).
+  - تعيين قرص التخزين المخصص (`getStorageDiskForField`).
+  - حساب SHA256 للمحتوى وتخزينه في `hash`.
+  - تخزين أبعاد الصورة في `meta`.
+  - تعيين تاريخ انتهاء الصلاحية للملفات المؤقتة (`expires_at`).
 
 ### ج. طبقة إدارة المستخدمين والصلاحيات (User & Permission Layer)
 - **`FileUploadUserManager`**: مدير المستخدمين والصلاحيات. يوفر واجهة موحدة للحصول على المستخدم الحالي ونوعه (`backend`/`frontend`/`guest`) والتحقق من صلاحياته.
@@ -66,7 +74,10 @@ Nano\FileUpload\Classes
   - `DELETE /delete/{id}` – حذف ملف.
   - `GET /files` – جلب الملفات المرتبطة.
 - **المصادقة**: OAuth 2.0 عبر middleware `oauth-users`.
-- **الاستجابات**: موحدة وفق الهيكل `{code, status, message, data, ...}`.
+- **الاستجابات**: موحدة وفق الهيكل `{code, status, message, data, input_data, process_data, debug, error_code}`.
+
+### هـ. طبقة معالجة الأخطاء والاستثناءات
+- **`FileUploadException`**: كلاس استثناء مخصص يوفر أكواد خطأ فريدة (مثل `FILE_UPLOAD_FILE_SIZE_EXCEEDED`) وسياق إضافي للخطأ. يتم استخدامه في جميع أنحاء الخدمة لتوحيد التعامل مع الأخطاء.
 
 ---
 
@@ -76,31 +87,35 @@ Nano\FileUpload\Classes
 
 1. **تسجيل النموذج (مرة واحدة)**:
    - في `Plugin.php` للإضافة، يتم تعريف دالة `registerFileUploadFields` التي تعيد مصفوفة تعريفات النماذج.
-   - يقوم `FileUploadRegistry` تلقائيًا بجمع هذه التعريفات عبر `PluginManager` وتسجيلها.
+   - يقوم `FileUploadRegistry` تلقائيًا بجمع هذه التعريفات عبر `PluginManager` وتسجيلها، مع تطبيق الإعدادات الافتراضية (حسب نوع الملف) والتخزين المؤقت.
 
 2. **رفع الملف (من خلال API)**:
-   - يرسل العميل طلب `POST /upload` مع `model_class` و `field` والملف.
+   - يرسل العميل طلب `POST /upload` مع `model_class` و `field` والملف (أو base64).
    - يتحقق `FileUploadController` من وجود النموذج والحقل في `FileUploadRegistry`.
    - يستدعي `FileUploadService::upload` مع البيانات.
    - يستخدم `FileUploadService`:
      - `FileUploadRegistry::getFieldConfig` للحصول على إعدادات الحقل.
      - `FileUploadUserManager::getUser` للحصول على المستخدم الحالي.
-     - `FileUploadRegistry::can` للتحقق من صلاحية `add`.
+     - `FileUploadRegistry::can` للتحقق من صلاحية `add` (مع مراعاة الإعدادات العامة).
+     - `validateFile` للتحقق من القائمة السوداء، الحجم، والأنواع المسموحة.
      - `Base64::onUpload` (من `Nano.Api`) لرفع الملف الفعلي.
-   - إذا تم تمرير `temp_session_key` أو لم يتم تمرير نموذج محفوظ، يتم استخدام مفتاح جلسة مؤقت.
-   - يعيد الـ Controller استجابة موحدة تحتوي على `data` (معرف الملف، المسار) و `temp_session_key` إذا وُجد.
+     - `applyAutoProcessing` لتطبيق التحجيم التلقائي والعلامة المائية (إذا كانت مفعلة).
+     - حساب `hash` و `meta` و `expires_at` (للملفات المؤقتة).
+     - تعيين `disk` إذا تم تحديد قرص تخزين مخصص.
+   - يعيد الـ Controller استجابة موحدة تحتوي على `data` (معرف الملف، المسار) و `temp_session_key` إذا وُجد، وأكواد الخطأ إن لزم.
 
 3. **ربط الملف بالنموذج (بعد حفظ النموذج)**:
    - بعد إنشاء المنتج وحفظه، يستخدم التطبيق `FileUploadService::attachTempFiles` لنقل الملفات المؤقتة إلى النموذج.
+   - يتم التحقق من صحة المفتاح المؤقت (التوقيع، الانتهاء، مطابقة المستخدم والنموذج).
 
 4. **جلب الملفات**:
-   - يمكن استدعاء `GET /files` مع `model_class` و `field` و `model_id` لجلب الملفات المرتبطة.
+   - يمكن استدعاء `GET /files` مع `model_class` و `field` و `model_id` لجلب الملفات المرتبطة، أو مع `temp_session_key` لجلب الملفات المؤقتة (مع التحقق الأمني).
 
 ---
 
 ## 4. حالات الاستخدام النموذجية
 
-### أ. تسجيل نموذج منتج مع صورة رئيسية ومعرض صور
+### أ. تسجيل نموذج منتج مع صورة رئيسية ومعرض صور (باستخدام الإعدادات المتقدمة)
 ```php
 // في Plugin.php
 public function registerFileUploadFields()
@@ -113,6 +128,11 @@ public function registerFileUploadFields()
                     'type' => 'image',
                     'max_filesize' => 1024,
                     'allowed_types' => 'jpg,jpeg,png',
+                    'auto_resize' => true,
+                    'resize_options' => ['width' => 800, 'height' => 600, 'mode' => 'crop'],
+                    'auto_watermark' => true,
+                    'watermark_options' => ['position' => 'bottom-right', 'resize_percentage' => 15],
+                    'storage_disk' => 's3',
                 ],
                 'gallery' => [
                     'type' => 'multiple',
@@ -170,6 +190,13 @@ $files = $api->get('/files', [
 ]);
 ```
 
+### هـ. الاستماع للأحداث (مثل إرسال إشعار WebSocket)
+```php
+Event::listen('nano.fileupload.afterUpload', function ($file, $modelClass, $field, $options) {
+    broadcast(new FileUploadedEvent($file));
+});
+```
+
 ---
 
 ## 5. الفوائد والمزايا
@@ -178,8 +205,9 @@ $files = $api->get('/files', [
   - التحقق من صلاحيات المستخدم (backend/frontend) قبل كل عملية.
   - دعم أنواع المستخدمين المختلفة، مع إمكانية تخصيص التحقق.
   - استخدام `FileUploadUserManager` الموحد للحصول على المستخدم الحالي.
-  - التحقق من حجم ونوع الملف قبل الرفع عبر `validateFile`.
-  - استخدام `Base64::onUpload` الآمن (من `Nano.Api`).
+  - التحقق من حجم ونوع الملف قبل الرفع عبر `validateFile` (بما في ذلك القائمة السوداء للملفات الخطيرة).
+  - مفاتيح جلسة مؤقتة موقعة بـ HMAC-SHA256 تحتوي على `userType` و `timestamp` لمنع التلاعب.
+  - إمكانية تعطيل عمليات API بالكامل (`disable_upload`, `disable_delete`, `disable_get`).
 
 - **المرونة**:
   - تسجيل أي نموذج مع إعدادات مخصصة لكل حقل.
@@ -188,26 +216,32 @@ $files = $api->get('/files', [
   - إمكانية تخصيص محلل المستخدم ودالة التحقق من الصلاحيات.
   - دعم رفع الملفات بصيغ متعددة (multipart, base64).
   - دعم الرفع المؤقت للنماذج غير المحفوظة.
+  - دعم التخزين المتعدد (أقراص S3, FTP, Local) عبر `storage_disk`.
+  - دعم التحويل التلقائي للصور (تحجيم، علامة مائية).
+  - دعم WebSocket عبر الأحداث.
 
 - **الأداء**:
   - استخدام مفاتيح جلسة مؤقتة لتجنب حفظ الملفات بشكل غير مرتبط.
   - إمكانية جلب الملفات مع صور مصغرة مخصصة.
   - تخزين إعدادات النماذج في الذاكرة بعد التحميل.
+  - تخزين مؤقت لنتائج `getFieldConfig` و `getFieldConstraints` لتقليل استعلامات قاعدة البيانات.
 
 - **قابلية التوسع**:
   - يمكن تسجيل نماذج من أي إضافة عبر دالة `registerFileUploadFields` أو حدث `nano.api.fileupload.registerModels`.
-  - إمكانية توسيع المنطق عبر الأحداث (`modelRegistered`).
+  - إمكانية توسيع المنطق عبر الأحداث (`modelRegistered`, `beforeUpload`, `afterUpload`, إلخ).
   - فصل واضح بين طبقات التسجيل، الخدمة، المستخدمين، وواجهة API.
+  - دعم الحقول الجديدة في جدول `system_files` (`disk`, `hash`, `meta`, `expires_at`) لتمكين ميزات متقدمة.
 
 - **تجربة المطور**:
   - واجهة برمجية بسيطة وموحدة.
   - توثيق شامل باللغة العربية.
   - دعم عمليات الرفع الفردية والمتعددة.
   - إدارة الملفات المؤقتة تلقائيًا.
+  - أكواد خطأ فريدة ورسائل مترجمة.
 
 ---
 
-## 6. مثال عملي متكامل (كود كامل)
+## 6. مثال عملي متكامل (كود كامل مع ميزات متقدمة)
 
 ```php
 <?php
@@ -227,6 +261,10 @@ public function registerFileUploadFields()
                     'type' => 'image',
                     'max_filesize' => 1024,
                     'allowed_types' => 'jpg,jpeg,png',
+                    'auto_resize' => true,
+                    'resize_options' => ['width' => 800, 'height' => 600],
+                    'auto_watermark' => true,
+                    'storage_disk' => 's3',
                 ],
             ],
         ],
@@ -247,7 +285,7 @@ public function createProduct(Request $request)
     ]);
 
     if (!$uploadResult['status']) {
-        return response()->json(['error' => $uploadResult['error']], 400);
+        return response()->json(['error' => $uploadResult['error'], 'error_code' => $uploadResult['error_code']], $uploadResult['code']);
     }
 
     // إنشاء المنتج
@@ -257,6 +295,9 @@ public function createProduct(Request $request)
 
     // ربط الصورة بالمنتج
     $service->attachTempFiles($product, 'image', $tempKey);
+
+    // إطلاق حدث مخصص (اختياري)
+    Event::fire('product.created', [$product]);
 
     return response()->json(['product_id' => $product->id]);
 }
@@ -270,6 +311,8 @@ public function createProduct(Request $request)
 - **Laravel / OctoberCMS** (أي إطار عمل متوافق مع `System\Models\File`).
 - **إضافة `Nano.Api`** (لتوفير `Base64` و `ApiController`).
 - **Composer** لتثبيت الحزمة.
+- (اختياري) **إضافة `Nano2.Watermark`** للعلامة المائية التلقائية.
+- (اختياري) **مكتبة WebSocket** للإشعارات الفورية.
 
 ---
 

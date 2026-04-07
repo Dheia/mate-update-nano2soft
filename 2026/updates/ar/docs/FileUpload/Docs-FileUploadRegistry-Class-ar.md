@@ -26,7 +26,11 @@ Nano\FileUpload\Classes
 
 | الخاصية | النوع | الوصف |
 |---------|------|-------|
-| `$registeredModels` | `array` | مصفوفة تخزن إعدادات النماذج المسجلة، حيث المفتاح هو اسم الفئة الكامل للنموذج. |
+| `$rawDefinitions` | `array` | التعريفات الخام للنماذج (من الإضافات والـ callbacks). |
+| `$builtModels` | `array` | الكائنات الجاهزة للنماذج بعد البناء (تستخدم للتخزين المؤقت). |
+| `$loaded` | `bool` | هل تم تحميل التعريفات من الإضافات؟ |
+| `$cacheEnabled` | `bool` | تفعيل/تعطيل التخزين المؤقت لنتائج الاستعلامات. |
+| `$cacheTtl` | `int` | مدة بقاء الذاكرة المؤقتة بالثواني. |
 
 ---
 
@@ -35,32 +39,39 @@ Nano\FileUpload\Classes
 #### 1. تسجيل النماذج
 
 ##### `public function registerModel(string $modelClass, array $config = []): self`
-- **الهدف**: تسجيل نموذج واحد مع إعداداته المخصصة.
+- **الهدف**: تسجيل نموذج واحد مع إعداداته المخصصة (واجهة مبسطة، تستدعي `registerDefinition`).
 - **المعاملات**:
   - `$modelClass`: اسم الفئة الكامل للنموذج (مثال: `Nano\Shop\Models\Product`).
   - `$config`: مصفوفة إعدادات النموذج (انظر بنية الإعدادات أدناه).
-- **السلوك**:
-  - يتحقق من وجود الفئة (`class_exists`) وإلا يلقي استثناء `ApplicationException`.
-  - يدمج الإعدادات الممررة مع الإعدادات الافتراضية (`defaultConfig`).
-  - لكل حقل في `fields`، يدمج إعدادات الحقل مع إعدادات النموذج الافتراضية.
-  - يخزن الإعدادات النهائية في `$registeredModels` باستخدام `$modelClass` كمفتاح.
-  - يطلق حدث `nano.api.fileupload.modelRegistered` بعد التسجيل.
 - **الإرجاع**: الكائن الحالي لتسلسل الاستدعاءات.
+
+##### `public function registerDefinition(string $modelClass, array $definition): void`
+- **الهدف**: تسجيل تعريف نموذج خام (يُستخدم داخلياً ويمكن استخدامه مباشرة).
+- **المعاملات**:
+  - `$modelClass`: اسم الفئة الكامل للنموذج.
+  - `$definition`: تعريف النموذج (نفس بنية `$config` في `registerModel`).
+- **السلوك**: يطبق التطبيع (`normalizeModelDefinition`) ويخزن في `$rawDefinitions`، ويمسح الكاش.
+
+##### `public function registerDefinitions(array $definitions): void`
+- **الهدف**: تسجيل مجموعة تعريفات دفعة واحدة.
+
+##### `public static function registerCallback(callable $callback): void`
+- **الهدف**: تسجيل دالة رد تُنفذ عند تحميل التعريفات (مفيد للإضافات التي لا تستخدم `registerFileUploadFields`).
 
 **بنية الإعدادات (`$config`):**
 ```php
 [
-    'enabled' => true, // تفعيل/تعطيل النموذج
-    'allowed_user_types' => ['backend', 'frontend'], // أنواع المستخدمين المسموح لهم
-    'permissions' => [ // صلاحيات عامة للنموذج (تطبق على جميع الحقول ما لم يتم تخصيصها)
-        'add'    => null, // يمكن أن تكون صلاحية واحدة (string) أو مصفوفة صلاحيات (array)
+    'enabled' => true,
+    'allowed_user_types' => ['backend', 'frontend'],
+    'permissions' => [
+        'add'    => null,
         'edit'   => null,
         'delete' => null,
         'view'   => null,
     ],
-    'fields' => [ // حقول الرفع
+    'fields' => [
         'image' => [
-            'type' => 'image', // file, image, multiple
+            'type' => 'image', // image, audio, video, file, multiple
             'label' => 'الصورة الرئيسية',
             'max_filesize' => 2048, // KB
             'allowed_types' => 'jpg,jpeg,png',
@@ -70,11 +81,17 @@ Nano\FileUpload\Classes
             'is_public' => true,
             'use_caption' => true,
             'thumb_options' => ['mode' => 'crop', 'extension' => 'auto'],
-            'allowed_user_types' => ['backend'], // يرث من النموذج إلا إذا تم تخصيصه
+            'allowed_user_types' => ['backend'],
             'permissions' => [ // صلاحيات خاصة بالحقل (تتجاوز صلاحيات النموذج)
                 'add'    => 'nano.shop.upload_image',
                 'delete' => 'nano.shop.delete_image',
             ],
+            // ⬇⬇⬇ الإعدادات المتقدمة (الإصدارات 1.0.6+) ⬇⬇⬇
+            'storage_disk'      => null,      // قرص التخزين المخصص (مثل 's3')
+            'auto_resize'       => false,     // تفعيل التحجيم التلقائي
+            'resize_options'    => [],        // خيارات التحجيم (width, height, mode)
+            'auto_watermark'    => false,     // تفعيل العلامة المائية التلقائية
+            'watermark_options' => [],        // خيارات العلامة المائية
         ],
     ],
     'defaults' => [ // إعدادات افتراضية للحقول (يمكن تجاوزها لكل حقل)
@@ -87,82 +104,69 @@ Nano\FileUpload\Classes
 ]
 ```
 
-##### `public function registerTables(array $tables): void` – (غير موجود في الكلاس الحالي، لكن يمكن إضافته حسب الحاجة)
-
 #### 2. الحصول على النماذج المسجلة
 
 ##### `public function getRegisteredModels(): array`
-- **الهدف**: إرجاع جميع النماذج المسجلة مع إعداداتها.
-- **السلوك**:
-  - إذا كانت `$registeredModels` فارغة، يقوم بتحميل النماذج عبر:
-    - حدث `nano.api.fileupload.registerModels` (يمكن للإضافات الاستماع له).
-    - استدعاء دوال `registerFileUploadFields()` من جميع الإضافات المسجلة.
-  - يعيد المصفوفة الكاملة.
-- **الإرجاع**: مصفوفة من إعدادات النماذج.
+- **الهدف**: إرجاع جميع النماذج المسجلة (مع تحميل التعريفات أولاً).
 
 ##### `public function isModelRegistered(string $modelClass): bool`
-- **الهدف**: التحقق مما إذا كان نموذج معين مسجلاً.
-- **الإرجاع**: `true` إذا كان موجوداً، وإلا `false`.
+- **الهدف**: التحقق مما إذا كان نموذج معين مسجلاً (يحمّل التعريفات تلقائياً).
 
 ##### `public function getModelConfig(string $modelClass): ?array`
-- **الهدف**: الحصول على إعدادات نموذج معين.
-- **الإرجاع**: مصفوفة الإعدادات أو `null` إذا لم يكن مسجلاً.
+- **الهدف**: الحصول على إعدادات نموذج كامل.
 
 ##### `public function getFieldConfig(string $modelClass, string $field): ?array`
-- **الهدف**: الحصول على إعدادات حقل معين تابع لنموذج مسجل.
-- **الإرجاع**: مصفوفة إعدادات الحقل أو `null` إذا لم يكن موجوداً.
+- **الهدف**: الحصول على إعدادات حقل معين (يدعم التخزين المؤقت).
 
-#### 3. التحقق من الصلاحيات
+#### 3. التحقق من الصلاحيات والإعدادات العامة
+
+##### `public function isUploadEnabledGlobally(): bool`
+- **الهدف**: التحقق مما إذا كان الرفع مفعلاً عالمياً (من إعدادات `general.disable_upload`).
+
+##### `public function isDeleteEnabledGlobally(): bool`
+- **الهدف**: التحقق مما إذا كان الحذف مفعلاً عالمياً.
+
+##### `public function isGetEnabledGlobally(): bool`
+- **الهدف**: التحقق مما إذا كان الجلب مفعلاً عالمياً.
+
+##### `public function isAutoResizeEnabledGlobally(): bool`
+- **الهدف**: التحقق مما إذا كان التحجيم التلقائي مفعلاً عالمياً (من إعدادات `general.disable_auto_resize`).
+
+##### `public function isAutoWatermarkEnabledGlobally(): bool`
+- **الهدف**: التحقق مما إذا كانت العلامة المائية التلقائية مفعلة عالمياً.
 
 ##### `public function isUserTypeAllowed(string $modelClass, string $userType): bool`
 - **الهدف**: التحقق مما إذا كان نوع المستخدم المحدد مسموحاً له بالوصول إلى النموذج.
-- **المعاملات**:
-  - `$modelClass`: اسم الفئة الكامل للنموذج.
-  - `$userType`: نوع المستخدم (`backend`, `frontend`, `guest`).
-- **الإرجاع**: `true` إذا كان النوع مسموحاً، وإلا `false`.
 
 ##### `public function can(string $modelClass, string $operation, string $userType, $user, ?string $field = null): bool`
 - **الهدف**: التحقق مما إذا كان المستخدم يمتلك الصلاحية المطلوبة لعملية معينة (add, edit, delete, view) على النموذج أو حقل معين.
-- **المعاملات**:
-  - `$modelClass`: اسم الفئة الكامل للنموذج.
-  - `$operation`: العملية (`add`, `edit`, `delete`, `view`).
-  - `$userType`: نوع المستخدم (من `FileUploadUserManager`).
-  - `$user`: كائن المستخدم الكامل (يُمرر إلى `FileUploadUserManager::checkPermission`).
-  - `$field`: (اختياري) اسم الحقل – إذا تم تمريره، يتم التحقق من صلاحيات الحقل أولاً، ثم صلاحيات النموذج.
-- **السلوك**:
-  - يتحقق أولاً من `isUserTypeAllowed()`.
-  - يبحث عن الصلاحيات المطلوبة من الحقل (إن وجد) ثم من النموذج.
-  - إذا لم توجد صلاحيات محددة، يُسمح تلقائياً.
-  - يستخدم `FileUploadUserManager::checkPermission()` للتحقق الفعلي من الصلاحيات.
-- **الإرجاع**: `true` إذا كانت الصلاحية متاحة، وإلا `false`.
+- **السلوك**: يتحقق أولاً من الإعدادات العامة (مثل `disable_upload`)، ثم من وجود النموذج، ثم من نوع المستخدم، ثم من الصلاحيات المحددة في النموذج أو الحقل، ثم يستدعي `FileUploadUserManager::checkPermission`.
 
-#### 4. الحصول على قيود الحقل
+#### 4. الحصول على قيود الحقل وخيارات المعالجة المتقدمة
 
 ##### `public function getFieldConstraints(string $modelClass, string $field): ?array`
 - **الهدف**: استخراج قيود الحقل (الحجم الأقصى، الأنواع المسموحة، إلخ) بصيغة مناسبة للتحقق.
-- **الإرجاع**: مصفوفة تحتوي على:
-```php
-[
-    'max_filesize' => 2048,
-    'allowed_types' => 'jpg,jpeg,png',
-    'multiple' => false,
-    'max_files' => null,
-    'required' => false,
-    'is_public' => true,
-    'use_caption' => true,
-    'thumb_options' => ['mode' => 'crop', 'extension' => 'auto'],
-    'type' => 'image',
-]
-```
+- **الإرجاع**: مصفوفة تحتوي على `max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`.
 
-#### 5. تحديث إعدادات نموذج مسجل
+##### `public function getProcessingOptions(string $modelClass, string $field): ?array`
+- **الهدف**: الحصول على خيارات المعالجة المتقدمة لحقل معين (التخزين، التحجيم، العلامة المائية).
+- **الإرجاع**: مصفوفة تحتوي على `storage_disk`, `auto_resize`, `resize_options`, `auto_watermark`, `watermark_options`.
+
+#### 5. إدارة التخزين المؤقت
+
+##### `public function clearModelCache(string $modelClass): void`
+- **الهدف**: مسح جميع مفاتيح التخزين المؤقت الخاصة بنموذج معين (مثل `field_config` و `constraints`).
+
+##### `public function setCacheEnabled(bool $enabled): void`
+- **الهدف**: تفعيل/تعطيل التخزين المؤقت.
+
+##### `public function setCacheTtl(int $ttl): void`
+- **الهدف**: تعيين مدة البقاء للذاكرة المؤقتة.
+
+#### 6. تحديث إعدادات نموذج مسجل
 
 ##### `public function updateModelConfig(string $modelClass, array $config): self`
-- **الهدف**: تحديث إعدادات نموذج مسجل مسبقاً.
-- **المعاملات**:
-  - `$modelClass`: اسم الفئة الكامل للنموذج.
-  - `$config`: مصفوفة الإعدادات الجديدة (يتم دمجها مع الإعدادات الحالية باستخدام `array_replace_recursive`).
-- **الإرجاع**: الكائن الحالي لتسلسل الاستدعاءات.
+- **الهدف**: تحديث إعدادات نموذج مسجل مسبقاً (دمج مع الإعدادات الحالية).
 
 ---
 
@@ -177,15 +181,15 @@ Nano\FileUpload\Classes
 
 ### أمثلة عملية شاملة
 
-#### مثال 1: تسجيل نموذج من داخل إضافة (Extension)
+#### مثال 1: تسجيل نموذج من داخل إضافة (مع الإعدادات المتقدمة)
 
 ```php
-// في Plugin.php (أو أي كلاس يسجل الإضافة)
+// في Plugin.php
 public function registerFileUploadFields()
 {
     return [
         \Nano\Shop\Models\Product::class => [
-            'allowed_user_types' => ['backend'], // فقط مستخدمي الباك إند
+            'allowed_user_types' => ['backend'],
             'permissions' => [
                 'add'    => 'nano.shop.product.upload',
                 'delete' => 'nano.shop.product.delete',
@@ -195,11 +199,10 @@ public function registerFileUploadFields()
                     'type' => 'image',
                     'max_filesize' => 1024,
                     'allowed_types' => 'jpg,jpeg,png',
-                    'required' => false,
-                    'permissions' => [
-                        'add'    => 'nano.shop.product.upload_image',
-                        'delete' => 'nano.shop.product.delete_image',
-                    ],
+                    'auto_resize' => true,
+                    'resize_options' => ['width' => 800, 'height' => 600, 'mode' => 'crop'],
+                    'auto_watermark' => true,
+                    'storage_disk' => 's3',
                 ],
                 'gallery' => [
                     'type' => 'multiple',
@@ -231,24 +234,20 @@ Event::listen('nano.api.fileupload.registerModels', function ($registry) {
 });
 ```
 
-#### مثال 3: التحقق من صلاحية قبل رفع ملف
+#### مثال 3: التحقق من صلاحية قبل رفع ملف (مع مراعاة الإعدادات العامة)
 
 ```php
-use Nano\FileUpload\Classes\FileUploadRegistry;
-use Nano\FileUpload\Classes\FileUploadUserManager;
-
 $registry = FileUploadRegistry::instance();
 $userManager = FileUploadUserManager::instance();
 $user = $userManager->getUser();
 $userType = $userManager->getUserType();
-
 $modelClass = 'Nano\Shop\Models\Product';
 $field = 'image';
 
 if ($registry->can($modelClass, 'add', $userType, $user, $field)) {
     // مسموح برفع الصورة
 } else {
-    // غير مسموح
+    // غير مسموح (قد يكون بسبب الإعدادات العامة أو الصلاحيات)
 }
 ```
 
@@ -260,24 +259,25 @@ $constraints = $registry->getFieldConstraints('Nano\Shop\Models\Product', 'image
 // $constraints['allowed_types'] => 'jpg,jpeg,png'
 ```
 
-#### مثال 5: تحديث إعدادات نموذج مسجل
+#### مثال 5: الحصول على خيارات المعالجة المتقدمة
+
+```php
+$procOptions = $registry->getProcessingOptions('Nano\Shop\Models\Product', 'image');
+// $procOptions['auto_resize'] => true
+// $procOptions['storage_disk'] => 's3'
+```
+
+#### مثال 6: تحديث إعدادات نموذج مسجل (مثل تغيير صلاحية الإضافة)
 
 ```php
 $registry->updateModelConfig('Nano\Shop\Models\Product', [
     'permissions' => [
-        'add' => 'nano.shop.product.upload_v2', // تغيير صلاحية الإضافة
+        'add' => 'nano.shop.product.upload_v2',
     ],
 ]);
 ```
 
-#### مثال 6: الحصول على جميع أسماء النماذج المسجلة
-
-```php
-$modelClasses = array_keys($registry->getRegisteredModels());
-// ['Nano\Shop\Models\Product', 'RainLab\User\Models\User', ...]
-```
-
-#### مثال 7: التحقق من نوع المستخدم قبل عرض واجهة الرفع
+#### مثال 7: التحقق من نوع المستخدم قبل عرض واجهة الرفع (مع الإعدادات العامة)
 
 ```php
 $userType = $userManager->getUserType();
@@ -288,11 +288,26 @@ if ($registry->isUserTypeAllowed('Nano\Shop\Models\Product', $userType)) {
 }
 ```
 
+#### مثال 8: تعطيل التحجيم التلقائي عالمياً عبر متغير البيئة
+
+```ini
+NANO_FILE_UPLOAD_DISABLE_AUTO_RESIZE=true
+```
+
+ثم في الكود:
+```php
+if ($registry->isAutoResizeEnabledGlobally()) {
+    // التحجيم التلقائي مفعل
+} else {
+    // معطل
+}
+```
+
 ---
 
 ### التفاعل مع الكلاسات الأخرى
 
-- **مع `FileUploadService`**: `FileUploadService` يعتمد على `FileUploadRegistry` للحصول على إعدادات النماذج والتحقق من الصلاحيات قبل تنفيذ عمليات الرفع والحذف.
+- **مع `FileUploadService`**: `FileUploadService` يعتمد على `FileUploadRegistry` للحصول على إعدادات النماذج (`getFieldConfig`, `getProcessingOptions`) والتحقق من الصلاحيات (`can`).
 - **مع `FileUploadUserManager`**: يستخدم `FileUploadRegistry` كائن `FileUploadUserManager::instance()` للتحقق الفعلي من الصلاحيات عبر `checkPermission()`.
 - **مع `Base64` (من `Nano.Api`)**: ليس تفاعل مباشر، لكن `FileUploadService` يستخدم `Base64` للرفع.
 
@@ -305,13 +320,15 @@ if ($registry->isUserTypeAllowed('Nano\Shop\Models\Product', $userType)) {
 3. **حدد أنواع المستخدمين المسموح لهم بدقة**: لا تسمح لجميع الأنواع إذا لم تكن هناك حاجة.
 4. **حدد صلاحيات لكل عملية**: استخدم الصلاحيات المناسبة (مثل `add`, `delete`) لتقييد الوصول.
 5. **استخدم قيود الحقل (`getFieldConstraints`)**: للتحقق المسبق من حجم الملف ونوعه قبل الرفع.
-6. **لا تعتمد على الإعدادات الافتراضية فقط**: قم بتخصيص `max_filesize` و `allowed_types` حسب متطلبات كل حقل.
+6. **استخدم خيارات المعالجة المتقدمة (`getProcessingOptions`)** لتطبيق التحجيم التلقائي والعلامة المائية.
+7. **فعّل التخزين المؤقت في بيئة الإنتاج**: لتحسين الأداء (الإعدادات الافتراضية مفعّلة).
+8. **استخدم الإعدادات العامة (`disable_upload`, `disable_auto_resize`)** كإجراء طارئ لتعطيل العمليات مؤقتاً.
 
 ---
 
 ### الخلاصة
 
-`FileUploadRegistry` هو قلب نظام رفع الملفات في تطبيقات نانوسوفت. يقوم بتجميع كل معرفة النظام عن النماذج التي تحتوي على حقول رفع الملفات، ويوفر واجهة برمجية نظيفة وفعالة للوصول إلى هذه المعلومات والتحقق من الصلاحيات. بفضل دعمه لأنواع المستخدمين المختلفة (`backend`، `frontend`) والصلاحيات الدقيقة لكل عملية، يمكن للمطورين بناء أنظمة رفع ملفات قوية وآمنة دون القلق بشأن الأمان أو الأداء. يتكامل هذا الكلاس بشكل وثيق مع `FileUploadService` و `FileUploadUserManager` ليشكل معاً طبقة متكاملة تدير جميع جوانب رفع الملفات في التطبيق.
+`FileUploadRegistry` هو قلب نظام رفع الملفات في تطبيقات نانوسوفت. يقوم بتجميع كل معرفة النظام عن النماذج التي تحتوي على حقول رفع الملفات، ويوفر واجهة برمجية نظيفة وفعالة للوصول إلى هذه المعلومات والتحقق من الصلاحيات. بفضل دعمه لأنواع المستخدمين المختلفة (`backend`، `frontend`) والصلاحيات الدقيقة لكل عملية، والإعدادات العامة للتحكم في API والتحويلات التلقائية، والتخزين المؤقت، يمكن للمطورين بناء أنظمة رفع ملفات قوية وآمنة دون القلق بشأن الأمان أو الأداء. يتكامل هذا الكلاس بشكل وثيق مع `FileUploadService` و `FileUploadUserManager` ليشكل معاً طبقة متكاملة تدير جميع جوانب رفع الملفات في التطبيق.
 
 ## التوثيق الإضافي
 
@@ -320,5 +337,3 @@ if ($registry->isUserTypeAllowed('Nano\Shop\Models\Product', $userType)) {
 - [توثيق كلاس `FileUploadService`](./Docs-FileUploadService-Class-ar.md)
 - [توثيق كلاس `FileUploadUserManager`](./Docs-FileUploadUserManager-Class-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API)](./Docs-API-Documentation-ar.md)
-
-
