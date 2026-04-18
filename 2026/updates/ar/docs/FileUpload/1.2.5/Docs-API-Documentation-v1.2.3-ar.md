@@ -1,6 +1,6 @@
-## توثيق واجهة برمجة التطبيقات (API) لرفع الملفات – الإصدار 1.2.5
+## توثيق واجهة برمجة التطبيقات (API) لرفع الملفات – الإصدار 1.2.3
 
-**الإصدار:** 1.2.5  
+**الإصدار:** 1.2.3  
 **المسار الأساسي:** `/api/v1/fileupload`  
 **المصادقة:** OAuth 2.0 (توكن الوصول في الهيدر `Authorization: Bearer <token>`)
 
@@ -19,11 +19,9 @@
 - استجابات موحدة مع أكواد خطأ فريدة لتسهيل المعالجة البرمجية.
 - أمان كامل عبر OAuth 2.0 والتحقق من صلاحيات المستخدم.
 - **نقطة نهاية لتشغيل الاختبارات** (متاحة فقط في بيئة التطوير).
-- **نقاط نهاية للاستعلام عن الموديولات المسجلة وإعداداتها وقيودها** (جديد في الإصدار 1.2.3، تم تحسينها في 1.2.5).
-- **نقاط نهاية للتحقق من الصلاحيات** على المستويات العالمية، مستوى الموديول، ومستوى الحقل (جديد في الإصدار 1.2.3، تم تحسينها في 1.2.5).
+- **نقاط نهاية للاستعلام عن الموديولات المسجلة وإعداداتها وقيودها** (جديد في الإصدار 1.2.3).
+- **نقاط نهاية للتحقق من الصلاحيات** على المستويات العالمية، مستوى الموديول، ومستوى الحقل (جديد في الإصدار 1.2.3).
 - **نقطة نهاية للتحقق من صحة المفاتيح المؤقتة** (جديد في الإصدار 1.2.3).
-
-> **ملاحظة حول الإصدار 1.2.5**: تم إعادة هيكلة نقاط نهاية الاستعلام والصلاحيات لاستخدام معاملات الاستعلام (query parameters) بدلاً من معاملات المسار (route parameters) لتجنب مشاكل ترميز أسماء الموديولات التي تحتوي على خطوط مائلة عكسية (`\`). المسارات الجديدة موثقة أدناه. تم إهمال المسارات القديمة (التي تحتوي على `{modelClass}` في المسار) وستتم إزالتها في إصدار مستقبلي.
 
 ---
 
@@ -682,7 +680,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 6. جلب جميع الموديولات المسجلة (بدون تغيير)
+### 6. جلب جميع الموديولات المسجلة (جديد في 1.2.3)
 
 **الطريقة:** `GET`  
 **المسار:** `/models`
@@ -700,27 +698,75 @@ GET /api/v1/fileupload/models HTTP/1.1
 Authorization: Bearer ...
 ```
 
-#### الاستجابة (نفس السابق)
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "Nano\\Shop\\Models\\Product": {
+            "class": "Nano\\Shop\\Models\\Product",
+            "label": "Product",
+            "enabled": true,
+            "allowed_user_types": ["backend", "frontend"],
+            "fields": {
+                "image": {
+                    "type": "image",
+                    "label": "image",
+                    "multiple": false
+                },
+                "gallery": {
+                    "type": "multiple",
+                    "label": "gallery",
+                    "multiple": true
+                }
+            }
+        },
+        "Nano\\User\\Models\\User": {
+            "class": "Nano\\User\\Models\\User",
+            "label": "User",
+            "enabled": true,
+            "allowed_user_types": ["backend"],
+            "fields": {
+                "avatar": {
+                    "type": "image",
+                    "label": "avatar",
+                    "multiple": false
+                }
+            }
+        }
+    },
+    "meta": {
+        "total": 2
+    }
+}
+```
+
+> **ملاحظة:** يتم تصفية الموديولات التي لا يملك المستخدم صلاحية `view` عليها تلقائياً، لذلك قد تختلف القائمة حسب المستخدم.
 
 ---
 
-### 7. جلب إعدادات موديول معين (تم التحديث في 1.2.5)
+### 7. جلب إعدادات موديول معين (جديد في 1.2.3)
 
 **الطريقة:** `GET`  
-**المسار:** `/model/config`
+**المسار:** `/models/{modelClass}`
 
 **الوصف:** يعيد الإعدادات الكاملة لموديول معين (بعد التحقق من وجوده وصلاحية `view`). تشمل الإعدادات الحقول المسجلة مع بعض التفاصيل (النوع، الحجم الأقصى، الأنواع المسموحة، إلخ).
 
-#### معاملات الاستعلام (Query Parameters)
+#### معاملات المسار
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج (مثال: `Nano\Shop\Models\Product`). **لا حاجة لترميزه**، يمرر كقيمة عادية. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (مثال: `Nano\Shop\Models\Product`). يجب ترميزه في الرابط (URL-encoded). |
 
 #### مثال طلب
 
 ```http
-GET /api/v1/fileupload/model/config?model_class=Nano\Shop\Models\Product HTTP/1.1
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -732,7 +778,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "enabled": true,
         "label": "Product",
@@ -788,24 +834,24 @@ Authorization: Bearer ...
 
 ---
 
-### 8. جلب إعدادات حقل معين (تم التحديث في 1.2.5)
+### 8. جلب إعدادات حقل معين (جديد في 1.2.3)
 
 **الطريقة:** `GET`  
-**المسار:** `/field/config`
+**المسار:** `/models/{modelClass}/fields/{field}`
 
 **الوصف:** يعيد إعدادات حقل معين (مثل النوع، الحجم الأقصى، الأنواع المسموحة). يستخدم هذا للتحقق من إعدادات الحقل قبل محاولة الرفع.
 
-#### معاملات الاستعلام
+#### معاملات المسار
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
 | `field` | `string` | نعم | اسم الحقل. |
 
 #### مثال طلب
 
 ```http
-GET /api/v1/fileupload/field/config?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -817,7 +863,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "type": "image",
         "label": "image",
@@ -844,24 +890,24 @@ Authorization: Bearer ...
 
 ---
 
-### 9. جلب قيود الحقل (تم التحديث في 1.2.5)
+### 9. جلب قيود الحقل (جديد في 1.2.3)
 
 **الطريقة:** `GET`  
-**المسار:** `/field/constraints`
+**المسار:** `/models/{modelClass}/fields/{field}/constraints`
 
 **الوصف:** يعيد قيود الحقل المستخدمة في عملية التحقق من صحة الملف (`max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`). يمكن للواجهات الأمامية تطبيق نفس القيود قبل رفع الملف لتجنب أخطاء الخادم.
 
-#### معاملات الاستعلام
+#### معاملات المسار
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
 | `field` | `string` | نعم | اسم الحقل. |
 
 #### مثال طلب
 
 ```http
-GET /api/v1/fileupload/field/constraints?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image/constraints HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -873,7 +919,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "max_filesize": 2048,
         "allowed_types": "jpg,jpeg,png",
@@ -893,24 +939,24 @@ Authorization: Bearer ...
 
 ---
 
-### 10. جلب خيارات المعالجة المتقدمة لحقل معين (تم التحديث في 1.2.5)
+### 10. جلب خيارات المعالجة المتقدمة لحقل معين (جديد في 1.2.3)
 
 **الطريقة:** `GET`  
-**المسار:** `/processing-options`
+**المسار:** `/processing-options/{modelClass}/{field}`
 
 **الوصف:** يعيد خيارات المعالجة المتقدمة الخاصة بالحقل: قرص التخزين (`storage_disk`)، التحجيم التلقائي (`auto_resize` مع `resize_options`)، والعلامة المائية (`auto_watermark` مع `watermark_options`). هذه المعلومات مفيدة للواجهات المتقدمة التي تحتاج إلى معرفة كيفية معالجة الملفات بعد الرفع.
 
-#### معاملات الاستعلام
+#### معاملات المسار
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
 | `field` | `string` | نعم | اسم الحقل. |
 
 #### مثال طلب
 
 ```http
-GET /api/v1/fileupload/processing-options?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
+GET /api/v1/fileupload/processing-options/Nano%5CShop%5CModels%5CProduct/image HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -922,7 +968,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "storage_disk": "s3",
         "auto_resize": true,
@@ -944,9 +990,9 @@ Authorization: Bearer ...
 
 ---
 
-### 11. التحقق من الصلاحيات
+### 11. التحقق من الصلاحيات (عالمي، موديول، حقل) – جديد في 1.2.3
 
-#### 11.1 التحقق من تفعيل عملية معينة عالمياً (بدون تغيير)
+#### 11.1 التحقق من تفعيل عملية معينة عالمياً
 
 **الطريقة:** `GET`  
 **المسار:** `/permissions/global/{operation}`
@@ -970,7 +1016,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "operation": "edit",
         "allowed": true,
@@ -979,36 +1025,32 @@ Authorization: Bearer ...
 }
 ```
 
----
-
-#### 11.2 التحقق من صلاحية عملية على مستوى موديول معين (تم التحديث في 1.2.5)
+#### 11.2 التحقق من صلاحية عملية على مستوى موديول معين
 
 **الطريقة:** `GET`  
-**المسار:** `/permissions/model`
+**المسار:** `/permissions/model/{modelClass}/{operation}`
 
-**الوصف:** يتحقق مما إذا كانت عملية معينة مفعلة على مستوى موديول معين (مع مراعاة `disabled_operations` على مستوى النموذج).
-
-#### معاملات الاستعلام
+**معاملات المسار:**
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
 | `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
 
-#### مثال طلب
+**مثال طلب:**
 
 ```http
-GET /api/v1/fileupload/permissions/model?model_class=Nano\Shop\Models\Product&operation=edit HTTP/1.1
+GET /api/v1/fileupload/permissions/model/Nano%5CShop%5CModels%5CProduct/edit HTTP/1.1
 Authorization: Bearer ...
 ```
 
-#### الاستجابة
+**✅ استجابة نجاح:**
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "model_class": "Nano\\Shop\\Models\\Product",
         "operation": "edit",
@@ -1019,37 +1061,33 @@ Authorization: Bearer ...
 }
 ```
 
----
-
-#### 11.3 التحقق من صلاحية عملية على مستوى حقل معين (تم التحديث في 1.2.5)
+#### 11.3 التحقق من صلاحية عملية على مستوى حقل معين
 
 **الطريقة:** `GET`  
-**المسار:** `/permissions/field`
+**المسار:** `/permissions/field/{modelClass}/{field}/{operation}`
 
-**الوصف:** يتحقق مما إذا كانت عملية معينة مفعلة على مستوى حقل معين (مع مراعاة `disabled_operations` على مستوى الحقل وصلاحيات المستخدم).
-
-#### معاملات الاستعلام
+**معاملات المسار:**
 
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
-| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
 | `field` | `string` | نعم | اسم الحقل. |
 | `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
 
-#### مثال طلب
+**مثال طلب:**
 
 ```http
-GET /api/v1/fileupload/permissions/field?model_class=Nano\Shop\Models\Product&field=image&operation=edit HTTP/1.1
+GET /api/v1/fileupload/permissions/field/Nano%5CShop%5CModels%5CProduct/image/edit HTTP/1.1
 Authorization: Bearer ...
 ```
 
-#### الاستجابة
+**✅ استجابة نجاح:**
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "model_class": "Nano\\Shop\\Models\\Product",
         "field": "image",
@@ -1065,7 +1103,7 @@ Authorization: Bearer ...
 
 ---
 
-#### 11.4 التحقق المتكامل من الصلاحية (باستخدام validate) – بدون تغيير
+### 12. التحقق المتكامل من الصلاحية (باستخدام validate) – جديد في 1.2.3
 
 **الطريقة:** `POST`  
 **المسار:** `/permissions/check`
@@ -1102,7 +1140,7 @@ Content-Type: application/json
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "allowed": true,
         "model_class": "Nano\\Shop\\Models\\Product",
@@ -1119,7 +1157,7 @@ Content-Type: application/json
 {
     "code": 200,
     "status": true,
-    "message": "تمت العملية بنجاح",
+    "message": "تم جلب الملفات",
     "data": {
         "allowed": false,
         "model_class": "Nano\\Shop\\Models\\Product",
@@ -1134,7 +1172,7 @@ Content-Type: application/json
 
 ---
 
-### 12. التحقق من صحة مفتاح مؤقت ومطابقته (بدون تغيير)
+### 13. التحقق من صحة مفتاح مؤقت ومطابقته (جديد في 1.2.3)
 
 **الطريقة:** `POST`  
 **المسار:** `/temp-key/validate`
@@ -1264,7 +1302,7 @@ Content-Type: application/json
 3. **تعامل مع `error_code` برمجياً**  
    بدلاً من الاعتماد على رسائل نصية، استخدم `error_code` لتحديد نوع الخطأ وعرض رسائل مناسبة للمستخدم.
 
-4. **استخدم نقاط نهاية الاستعلام (`/models`, `/field/config`, `/field/constraints`) لبناء واجهات ديناميكية**  
+4. **استخدم نقاط نهاية الاستعلام (`/models`, `/fields`, `/constraints`) لبناء واجهات ديناميكية**  
    يمكنك جلب قيود الحقول وعرضها للمستخدم (مثال: عرض الحد الأقصى للحجم، الأنواع المسموحة) قبل أن يختار الملف.
 
 5. **تحقق من الصلاحيات مسبقاً باستخدام `/permissions/check`**  
@@ -1325,9 +1363,6 @@ Content-Type: application/json
 
 **س: المفتاح المؤقت الذي أحصل عليه من عملية الرفع، ما هي صلاحيته؟**  
 ج: المفتاح صالح لمدة ساعة واحدة (قابلة للتغيير في إعدادات النظام). يمكنك التحقق من صلاحيته باستخدام نقطة `/temp-key/validate`.
-
-**س: لماذا تم تغيير المسارات في الإصدار 1.2.5؟**  
-ج: لتجنب مشاكل ترميز أسماء الموديولات التي تحتوي على خطوط مائلة عكسية (`\`) عند تمريرها في المسار. المسارات الجديدة باستخدام query parameters أبسط وأكثر أماناً. المسارات القديمة ما زالت تعمل حالياً ولكنها مهملة وستتم إزالتها في الإصدار 1.3.0. نوصي بالانتقال إلى المسارات الجديدة فوراً.
 
 ---
 
