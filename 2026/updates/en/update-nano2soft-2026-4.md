@@ -2702,3 +2702,72 @@ We recommend that all projects using `Nano.TagsApi` upgrade to this version to b
 
 ---
 
+## 2026-04-18 
+
+**Adding Support for New SMS Providers to the Nano.SmsNotify Plugin**
+
+### Introduction
+The **Nano.SmsNotify** plugin has been developed to manage and send short text messages (SMS) through multiple providers. The plugin currently supports many service providers such as Twilio, Nexmo, Alawaeltec, SmsSaudi, and others. In this latest update (version 1.0.13), we have added five new SMS providers that cover additional regional needs and provide more options for users.
+
+### New Providers
+1. **BdBulkSms** – Specializes in Bangladesh service (GreenWeb).  
+2. **ReveSms** – A provider that supports sending via API with authentication using API Key and Secret Key.  
+3. **SmsToday** – Provides easy SMS sending through a simple endpoint.  
+4. **TonkraSms** – Supports sending using Bearer token and covers multiple regions.  
+5. **ReleansSms** – A global provider that requires Bearer token and Sender ID.  
+
+### Objective
+To expand the customer base that needs to use specific local or global providers, thereby increasing system flexibility and enabling customers to choose the most suitable option in terms of cost and geographic coverage.
+
+### Update Details
+
+#### 1. Adding Provider Classes
+Five new classes have been created within the `Nano\SmsNotify\SmsChannels` namespace:
+
+- `BdBulkSms.php`  
+- `ReveSms.php`  
+- `SmsToday.php`  
+- `TonkraSms.php`  
+- `ReleansSms.php`
+
+Each class inherits from `BaseChannel` and implements the `send()` method, which uses cURL to communicate with the provider's API, in addition to defining the required configuration fields via `defineFormConfig()`.
+
+#### 2. File Structure
+The classes have been placed in the path:
+```
+plugins/nano/smsnotify/smschannels/
+```
+Additionally, partial instruction files (`_info.htm`) have been added for each provider, explaining how to obtain the required data (API keys, sender numbers, etc.).
+
+#### 3. Registering Providers in the Plugin
+The `registerSmsChannels()` method in `Plugin.php` has been updated by adding the following lines:
+```php
+'bdbulksms'    => \Nano\SmsNotify\SmsChannels\BdBulkSms::class,
+'revesms'      => \Nano\SmsNotify\SmsChannels\ReveSms::class,
+'smstoday'     => \Nano\SmsNotify\SmsChannels\SmsToday::class,
+'tonkrasms'    => \Nano\SmsNotify\SmsChannels\TonkraSms::class,
+'releanssms'   => \Nano\SmsNotify\SmsChannels\ReleansSms::class,
+```
+Thus, these providers appear in the channels management interface within the plugin.
+
+#### 4. Updating the Version File (version.yaml)
+A new version `1.0.13` has been added with the update description:
+```yaml
+1.0.13:
+    - Add new SMS channels: BdBulkSms, ReveSms, SmsToday, TonkraSms, ReleansSms
+    - Extend SMS gateway support for additional regions
+```
+
+#### 5. Testing the Providers
+Initial tests have been conducted for each provider to ensure connectivity and the ability to send test messages. Error handling and result return have been verified to be compatible with the `BaseChannel` structure (success/failure status, message ID, error message, etc.).
+
+### Expected Benefits
+- **Expanding the customer base**: Supporting providers that cover new markets (Bangladesh, multiple regions).  
+- **Increased flexibility**: Offering multiple options to customers based on sending cost and coverage.  
+- **Improved user experience**: Providing clear instructions within the plugin to easily configure each provider.
+
+### Future Steps
+- Monitor the performance of the new providers after launch.  
+- Update documentation to include the new providers.  
+- Add more providers based on customer requests.
+
