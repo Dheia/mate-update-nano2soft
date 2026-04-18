@@ -2242,3 +2242,463 @@ Version 1.2.2 is an important step toward unifying and simplifying temporary key
 - [API Documentation](./docs/FileUpload/Docs-API-Documentation-en.md)
 
 
+## 2026-04-15 – 2026-04-16
+
+**`Nano.FileUpload` Plugin Update – Version 1.2.3**
+
+### Adding New API Endpoints for Querying Modules, Permissions, and Validating Temporary Keys
+
+---
+
+### Summary of Updates
+
+In version **1.2.3**, the add-on's API was enriched with several new endpoints that allow developers and external systems to:
+
+- **Query registered modules** and their fields while respecting user permissions.
+- **Fetch detailed settings** for a specific module or field.
+- **Fetch field constraints** (e.g., max size, allowed types).
+- **Fetch advanced processing options** (storage disk, automatic resizing, watermark).
+- **Check permissions** at global, module, and field levels.
+- **Integrated permission check** using the `validate()` method.
+- **Validate and match a temporary key** via API (using the `validateAndMatchTempKey` function from the trait).
+
+All new endpoints are protected by `oauth-users` and follow the unified response structure (`code`, `status`, `message`, `data`, ...).
+
+---
+
+### Version Goals
+
+- **Enable developers to explore registered settings** in `FileUploadRegistry` without needing direct access to code or database.
+- **Facilitate front-end integration** (e.g., React or Vue applications) by providing dynamic information about allowed fields and constraints.
+- **Check permissions before attempting upload** to avoid rejection errors and improve user experience.
+- **Provide an endpoint to validate temporary keys**, allowing front-ends to ensure key validity before using it.
+- **Standardize the way of querying system information** via API instead of relying on internal tools.
+
+---
+
+### New Endpoints
+
+#### 1. Get All Registered Modules (Filtered by Permission)
+
+- **Path:** `GET /api/v1/fileupload/models`
+- **Description:** Returns a list of registered modules that the current user has `view` permission on, with brief information about their fields (name, type, whether multiple).
+- **Response:** Array of objects containing `class`, `label`, `enabled`, `allowed_user_types`, `fields`.
+
+#### 2. Get Settings for a Specific Module
+
+- **Path:** `GET /api/v1/fileupload/models/{modelClass}`
+- **Description:** Returns the full settings of a specific module (after checking existence and `view` permission).
+- **Response:** Contains `enabled`, `label`, `allowed_user_types`, `disabled_operations`, and `fields` (with brief information per field).
+
+#### 3. Get Settings for a Specific Field
+
+- **Path:** `GET /api/v1/fileupload/models/{modelClass}/fields/{field}`
+- **Description:** Returns settings for a specific field (e.g., type, max size, allowed types).
+- **Response:** Includes `type`, `label`, `multiple`, `required`, `max_filesize`, `allowed_types`, `use_caption`, `disabled_operations`.
+
+#### 4. Get Field Constraints
+
+- **Path:** `GET /api/v1/fileupload/models/{modelClass}/fields/{field}/constraints`
+- **Description:** Returns the field constraints used in file validation (`max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`).
+- **Benefit:** Front-ends can apply the same constraints before uploading.
+
+#### 5. Get Advanced Processing Options for a Specific Field
+
+- **Path:** `GET /api/v1/fileupload/processing-options/{modelClass}/{field}`
+- **Description:** Returns the field's processing options: `storage_disk`, `auto_resize`, `resize_options`, `auto_watermark`, `watermark_options`.
+- **Benefit:** Used primarily by advanced front-ends that need to know automatic transformation settings.
+
+#### 6. Check if an Operation is Globally Enabled
+
+- **Path:** `GET /api/v1/fileupload/permissions/global/{operation}`
+- **Parameters:** `operation` can be `add`, `edit`, `delete`, `view`.
+- **Response:** Returns `allowed` (true/false) and `disabled_globally` (opposite of `allowed`).
+
+#### 7. Check Operation Permission at a Specific Module Level
+
+- **Path:** `GET /api/v1/fileupload/permissions/model/{modelClass}/{operation}`
+- **Response:** Returns `model_operation_enabled`, `user_type_allowed`, `can_proceed` (combination of both conditions).
+
+#### 8. Check Operation Permission at a Specific Field Level
+
+- **Path:** `GET /api/v1/fileupload/permissions/field/{modelClass}/{field}/{operation}`
+- **Response:** Returns `field_operation_enabled`, `user_has_full_permission`, `can_proceed`.
+
+#### 9. Integrated Permission Check (using `validate`)
+
+- **Path:** `POST /api/v1/fileupload/permissions/check`
+- **Data (JSON):**
+  ```json
+  {
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "operation": "edit",
+    "field": "image"
+  }
+  ```
+- **Response:** Returns `allowed` (true/false) and an explanatory message.
+- **Behavior:** Uses `$this->registry->validate()` which checks global, module, field, user type, and specific permissions, and returns the result without throwing an exception (the exception is caught and converted to a response).
+
+#### 10. Validate and Match a Temporary Key
+
+- **Path:** `POST /api/v1/fileupload/temp-key/validate`
+- **Data (JSON):**
+  ```json
+  {
+    "temp_key": "tmp_xxxx:yyyy",
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "field": "image",
+    "strict_mode": true,
+    "allow_expired_key": false,
+    "expiry_grace_period": 300
+  }
+  ```
+- **Description:** Calls the `validateAndMatchTempKey` function from the `HasFileUploadsMatchTempKey` trait and returns the result as JSON.
+- **Response:** On success returns `valid: true`, `key_data`, and `matched_data`; on failure returns an error message with `error_code`.
+
+---
+
+### Usage Examples
+
+#### Get modules available to the current user
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/fileupload/models" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Get settings for the `image` field in the `Product` module
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Check `edit` permission on a specific field
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/fileupload/permissions/field/Nano%5CShop%5CModels%5CProduct/image/edit" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Validate a temporary key
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/fileupload/temp-key/validate" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "temp_key": "tmp_eyJtb2RlbENsYXNzIjoiTmFub1xTaG9wXE1vZGVsc1xQcm9kdWN0Iiw...",
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "field": "image",
+    "strict_mode": true
+  }'
+```
+
+---
+
+### Benefits and Added Value
+
+- **Empower front-ends**: Front-end applications (e.g., Single Page Applications) can now dynamically discover available fields, constraints, and permissions, allowing them to build adaptive file upload forms.
+- **Reduce server dependency**: Clients can check their permissions before attempting upload, reducing rejection requests and improving user experience.
+- **Live settings documentation**: Developers can explore add-on settings via API instead of searching through code.
+- **Additional security**: Permission endpoints do not expose sensitive information (e.g., storage keys) and are subject to the same user permissions.
+- **Easy integration with external tools**: These endpoints can be used in CI/CD systems or content management tools.
+
+---
+
+### Upgrade Requirements
+
+1. **Update code**:
+   - Replace `FileUploadController.php` with the version containing the new methods.
+   - Update `routes.php` to add the new routes.
+
+2. **No new migrations**:
+   - This version does not require database changes.
+
+3. **No configuration changes**:
+   - `config.php` remains the same.
+
+4. **API permissions**:
+   - All new endpoints are protected by `oauth-users`, so the user must have a valid token to access them.
+
+5. **Compatibility testing**:
+   - It is recommended to run the `FileUploadPlusTest` tests to ensure the new version does not affect existing functionality.
+   - The new endpoints can be tested using tools like Postman or cURL.
+
+---
+
+### Conclusion
+
+Version **1.2.3** represents a significant leap in the accessibility of file upload system information via API. By adding endpoints to query modules, fields, permissions, and validate temporary keys, the add-on has become more open and integrable with external systems and modern front-ends. These features make it easy to build rich applications that rely on `Nano.FileUpload` as a back-end for file management, while maintaining the highest levels of security and control.
+
+---
+
+**Reference Documentation**:
+- [General Plugin Documentation](./docs/FileUpload/Docs-FileUpload-en.md)
+- [`FileUploadRegistry` Class Documentation](./docs/FileUpload/Docs-FileUploadRegistry-Class-en.md)
+- [`FileUploadService` Class Documentation](./docs/FileUpload/Docs-FileUploadService-Class-en.md)
+- [`FileUploadUserManager` Class Documentation](./docs/FileUpload/Docs-FileUploadUserManager-Class-en.md)
+- [API Documentation](./docs/FileUpload/Docs-API-Documentation-en.md)
+
+## 2026-04-16 - 2026-04-18
+
+**`Nano.TagsApi` Add-on Updates – Version 1.0.10**
+
+### Summary of Updates
+
+In this version, comprehensive improvements have been made to `TagsApi` management to make it more flexible and integrated with system-wide settings, with support for new options in `config.php`, and improvements to the `Categories`, `Tags`, `Types`, and `Menus` controllers. New events have also been added to extend queries, pagination and ordering mechanisms have been improved, and advanced filters such as `is_has_products`, `is_has_shops`, and `is_has_cateables` are now supported in `Categories`.
+
+Key updates include:
+
+- **Addition of new configuration options** in `config.php` (e.g., `include`, `exclude`, `per_page`, `is_public`) for all sections.
+- **Improvement of the `Categories` controller** to support `mainCategoriesId`, `is_has_*` with complex `leftJoin`, and `is_to_sql` for debugging.
+- **Addition of `extendQueryBefore` and `extendQuery` events** in all controllers.
+- **Support for reading `is_public`, `per_page`, `page` from settings** with the ability to override via `Input::get()`.
+- **Addition of `is_departments` option** in `Types` to control department filtering.
+- **Addition of `is_stop_order_type` and `is_stop_order_type_departments` options** to control `OrderHelper` integration.
+- **Improvement of `availablefilters` and `formfields` functions** by adding `input_data` and `process_data` in responses.
+
+---
+
+### Version 1.0.10 – Comprehensive Improvement of Settings and Controllers
+
+#### Version Goals
+
+- Make all controllers rely on settings stored in `config.php` rather than hardcoded values or `Input::get()` only.
+- Add greater flexibility in filtering categories, types, and tags based on relationships (e.g., products, shops, associated objects).
+- Improve performance of complex queries in `Categories` by using `leftJoin` with `nano_tags_cateables`.
+- Provide debugging tools (`is_to_sql`) to facilitate query development.
+- Standardize the handling of `page` and `per_page` across all controllers.
+
+#### New Features
+
+##### 1. Expanded `config.php` Settings File
+
+New keys have been added for all sections (`types`, `tags`, `categories`, `menus`):
+
+| Key | Description | Example Value |
+|-----|-------------|---------------|
+| `include` | Default relationships to include | `'children,products'` |
+| `exclude` | Columns to exclude | `'password,remember_token'` |
+| `per_page` | Number of results per page | `50` |
+| `is_public` | Filter public records | `true` |
+| `is_has_cateables` (for categories) | Filter categories associated with any object | `true` |
+| `is_has_shops` (for categories) | Filter categories associated with shops | `true` |
+| `is_has_products` (for categories) | Filter categories associated with products | `true` |
+| `is_departments` (for types) | Filter types that represent departments | `true` |
+
+**Example from the new `config.php`:**
+```php
+'categories' => [
+    'include' => env('NANO_TAGSAPI_CATEGORIES_INCLUDE', ''),
+    'exclude' => env('NANO_TAGSAPI_CATEGORIES_EXCLUDE', ''),
+    'is_display_empty' => env('NANO_TAGSAPI_CATEGORIES_IS_DISPLAY_EMPTY', true),
+    'is_has_cateables' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_CATEABLES', false),
+    'is_has_shops' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP', false),
+    'is_has_products' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS', false),
+    'is_public' => env('NANO_TAGSAPI_CATEGORIES_IS_PUBLIC', true),
+    'per_page' => env('NANO_TAGSAPI_CATEGORIES_PER_PAGE', 50),
+],
+```
+
+##### 2. Improvement of the `Categories` Controller (`Categories.php`)
+
+- **Read `isPublic` from settings** if not passed in the request.
+- **Support `mainCategoriesId`** to merge with `parent_id` (useful for displaying specific main categories along with certain subcategories).
+- **Add `is_has_products`, `is_has_shops`, `is_has_cateables` options**:
+  - When any of these options are enabled, a complex query is built using `leftJoin` with the `nano_tags_categories as child` and `nano_tags_cateables` tables.
+  - The count of associated objects (`cateables_count`, `sub_cateables_count`) is calculated and results are filtered based on `cateables_count`.
+- **Add `is_to_sql` option** to print the final SQL query in `trace_log` for easier debugging.
+- **Improve handling of `orderBy` and `orderDirection`**:
+  ```php
+  if ($orderBy && $orderDirection) {
+      $posts->orderBy(\Db::raw($orderBy), \Db::raw($orderDirection));
+  } else {
+      $posts->orderBy(\Db::raw(\Config::get('nano.tagsapi::categories.order_by','sort_order')), 
+                     \Db::raw(\Config::get('nano.tagsapi::categories.order_dir','asc')));
+  }
+  ```
+- **Add `$CategorieTransformer->defaultIncludes`** based on the `$include` value.
+
+##### 3. Addition of `api.list.extendQueryBefore` and `api.list.extendQuery` Events
+
+These two events have been added to all controllers (`Categories`, `Tags`, `Types`, `Menus`) to allow developers to modify the query before and after applying basic filters.
+
+**Usage example:**
+```php
+Event::listen('api.list.extendQuery', function ($query, $controller, $model, $options) {
+    $query->where('is_featured', true);
+});
+```
+
+##### 4. Improvement of the `Types` Controller
+
+- **Add `is_departments` support**:
+  ```php
+  $is_departments = Input::get('isDepartments', \Config::get('nano.tagsapi::types.is_departments','*'));
+  if($is_departments !== null && $is_departments !== '*' && $is_departments !== 'all' && is_bool($is_departments)){
+      if($is_departments) $posts = $posts->where('is_departments',true);
+      else $posts = $posts->where('is_departments',false);
+  }
+  ```
+- **Add two options to control `OrderHelper` integration**:
+  - `is_stop_order_type`: to stop applying `OrderHelper` at the `types` level.
+  - `is_stop_order_type_departments`: to stop applying it at the level of associated departments.
+- **Improve `availablefilters` and `formfields` functions**:
+  - Add `input_data` and `process_data` in responses to facilitate tracking of input and processed data.
+  - Improve exception handling and add `debug` details in the development environment.
+
+##### 5. Improvement of the `Tags` and `Menus` Controllers
+
+- **Read `per_page` and `page` from settings** with the ability to override via `Input::get()`.
+- **Add `$src_options` and event calls** in the same manner as `Categories`.
+- **Support `isPublic` from settings**:
+  ```php
+  if(Input::get('isPublic', \Config::get('nano.tagsapi::tags.is_public', true))){
+      $posts = $posts->where('is_public', true);
+  }
+  ```
+
+##### 6. Standardized Pagination Handling
+
+Across all controllers, the following code is now the standard:
+```php
+$per_page = Input::get('per_page', null);
+if(is_null($per_page))
+    $per_page = \Config::get('nano.tagsapi::categories.per_page', 15);
+$per_page = intval($per_page);
+if(!$per_page) $per_page = 15;
+
+$page = intval(Input::get('page', 1));
+if(!$page) $page = 1;
+
+$paginator = $posts->paginate($per_page, $page);
+```
+
+---
+
+### Benefits and Added Value
+
+- **Greater flexibility**: The API's behavior can now be fully controlled via environment variables or the `config.php` file without modifying code.
+- **Improved performance**: Complex queries in `Categories` are now more efficient thanks to optimized `leftJoin` and appropriate `groupBy`.
+- **Ease of debugging**: The addition of `is_to_sql` allows developers to review final queries directly.
+- **Compatibility with other add-ons**: The new `extendQueryBefore/After` events allow other add-ons to easily modify queries.
+- **Better relationship support**: The ability to filter categories based on the existence of products, shops, or any associated object via `cateables`.
+
+---
+
+### Upgrade Requirements to Version 1.0.10
+
+1. **Update the `config.php` file**:
+   - Add the new variables to your settings file or in `.env` as needed.
+   - Example new environment variables:
+     ```ini
+     NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS=true
+     NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP=true
+     NANO_TAGSAPI_TYPES_IS_DEPARTMENTS=true
+     NANO_TAGSAPI_TYPES_PER_PAGE=50
+     NANO_TAGSAPI_CATEGORIES_PER_PAGE=30
+     ```
+
+2. **Update any custom code that relies on the API**:
+   - If you directly use `Input::get('per_page')` in your application, it will still work, but the default value now comes from settings.
+   - If you rely on the default value of `15` for pagination, ensure that the `per_page` settings in `config.php` are appropriate.
+
+3. **Take advantage of the new events**:
+   - You can now add listeners for the `api.list.extendQueryBefore` and `api.list.extendQuery` events in the `boot()` method of any add-on.
+
+4. **Test complex queries**:
+   - If you enable `is_has_products` or `is_has_shops`, ensure that the `nano_tags_cateables` tables contain correct data.
+   - Use `is_to_sql=true` in the development environment to review the final query.
+
+---
+
+### Environment Variables Supported in `Nano.TagsApi`
+
+You can fully customize the add-on's behavior via environment variables in the `.env` file, without needing to modify the `config.php` file directly. Below are all available variables with their descriptions and default values:
+
+#### 1. `types` Settings
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `NANO_TAGSAPI_TYPES_INCLUDE` | Default relationships to include (comma-separated) | `''` |
+| `NANO_TAGSAPI_TYPES_EXCLUDE` | Columns to exclude from the query | `''` |
+| `NANO_TAGSAPI_TYPES_IS_DEPARTMENTS` | Filter types that represent departments (`true`/`false`) | `true` |
+| `NANO_TAGSAPI_TYPES_IS_PUBLIC` | Show only public types | `true` |
+| `NANO_TAGSAPI_TYPES_PER_PAGE` | Number of results per page | `15` |
+| `NANO_TAGSAPI_TYPES_ORDER_BY` | Default ordering column | `sort_order` |
+| `NANO_TAGSAPI_TYPES_ORDER_DIR` | Default ordering direction (`asc`/`desc`) | `asc` |
+| `NANO_TAGSAPI_TYPES_IS_STOP_ORDER_TYPE` | Stop integrating `OrderHelper` at the `types` level | `false` |
+| `NANO_TAGSAPI_TYPES_IS_STOP_ORDER_TYPE_DEPARTMENTS` | Stop integrating `OrderHelper` at the level of associated departments | `false` |
+
+#### 2. `tags` Settings
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `NANO_TAGSAPI_TAGS_INCLUDE` | Default relationships to include | `''` |
+| `NANO_TAGSAPI_TAGS_EXCLUDE` | Columns to exclude | `''` |
+| `NANO_TAGSAPI_TAGS_IS_PUBLIC` | Show only public tags | `true` |
+| `NANO_TAGSAPI_TAGS_PER_PAGE` | Number of results per page | `15` |
+| `NANO_TAGSAPI_TAGS_ORDER_BY` | Default ordering column | `sort_order` |
+| `NANO_TAGSAPI_TAGS_ORDER_DIR` | Default ordering direction | `asc` |
+
+#### 3. `categories` Settings
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `NANO_TAGSAPI_CATEGORIES_INCLUDE` | Default relationships to include | `''` |
+| `NANO_TAGSAPI_CATEGORIES_EXCLUDE` | Columns to exclude | `''` |
+| `NANO_TAGSAPI_CATEGORIES_IS_DISPLAY_EMPTY` | Show empty categories (without associated content) | `true` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_CATEABLES` | Filter categories associated with any object via `cateables` | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP` | Filter categories associated with shops | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS` | Filter categories associated with products | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_PUBLIC` | Show only public categories | `true` |
+| `NANO_TAGSAPI_CATEGORIES_PER_PAGE` | Number of results per page | `15` |
+| `NANO_TAGSAPI_CATEGORIES_ORDER_BY` | Default ordering column | `sort_order` |
+| `NANO_TAGSAPI_CATEGORIES_ORDER_DIR` | Default ordering direction | `asc` |
+
+#### 4. `menus` Settings
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `NANO_TAGSAPI_MENUS_INCLUDE` | Default relationships to include | `''` |
+| `NANO_TAGSAPI_MENUS_EXCLUDE` | Columns to exclude | `''` |
+| `NANO_TAGSAPI_MENUS_IS_PUBLIC` | Show only public menus | `true` |
+| `NANO_TAGSAPI_MENUS_PER_PAGE` | Number of results per page | `15` |
+| `NANO_TAGSAPI_MENUS_ORDER_BY` | Default ordering column | `sort_order` |
+| `NANO_TAGSAPI_MENUS_ORDER_DIR` | Default ordering direction | `asc` |
+
+---
+
+#### Example `.env` file:
+
+```ini
+# Nano.TagsApi Settings
+NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS=true
+NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP=true
+NANO_TAGSAPI_CATEGORIES_PER_PAGE=30
+NANO_TAGSAPI_TYPES_IS_DEPARTMENTS=true
+NANO_TAGSAPI_TYPES_PER_PAGE=50
+NANO_TAGSAPI_TAGS_PER_PAGE=20
+NANO_TAGSAPI_CATEGORIES_INCLUDE=children,parent
+NANO_TAGSAPI_TYPES_EXCLUDE=password,remember_token
+```
+
+---
+
+#### Important Notes
+
+- All variables are optional. If not set, the default values built into `config.php` will be used.
+- Any of these settings can be overridden by passing the same parameter in an API request (e.g., `?per_page=10`), as `Input::get()` takes precedence over the settings.
+- It is recommended to use environment variables in the production environment.
+
+---
+
+### Conclusion
+
+Version `1.0.10` of the `Nano.TagsApi` add-on represents a qualitative leap in system flexibility and extensibility. By relying on centralized settings, adding extension events, and improving `Categories` queries, it is now easier to integrate `TagsApi` with the requirements of any complex project. The improved handling of pagination and ordering ensures consistent behavior across all endpoints.
+
+We recommend that all projects using `Nano.TagsApi` upgrade to this version to benefit from the improvements and better performance.
+
+---
+

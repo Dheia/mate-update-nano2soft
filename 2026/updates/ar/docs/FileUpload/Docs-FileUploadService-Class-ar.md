@@ -1,4 +1,4 @@
-# توثيق كلاس `FileUploadService`
+## توثيق كلاس `FileUploadService` – الإصدار 1.2.3
 
 **نبذة تعريفية عن حزمة `Nano.FileUpload` ووحدة إدارة رفع الملفات**
 
@@ -12,7 +12,7 @@ Nano\FileUpload\Classes
 
 توفر هذه الوحدة أدوات متقدمة لتسجيل النماذج (الموديولات) التي تحتوي على حقول رفع ملفات، والتحقق من صلاحيات المستخدمين (بما في ذلك أنواع المستخدمين المختلفة: `backend` و `frontend`)، وإدارة الملفات المرفوعة مؤقتًا قبل حفظ السجل، بالإضافة إلى معالجة الأخطاء بشكل موحد. بفضل هذا التصميم، يمكن للمطورين بناء أنظمة رفع ملفات قابلة للتوسع بسهولة وتلبية احتياجات التطبيقات المتقدمة دون المساس بأمان التطبيق أو أدائه.
 
-> **ملاحظة:** يغطي هذا المستند الإصدارات حتى 1.2.0، ويشمل الميزات المتقدمة مثل التخزين المتعدد، التحويل التلقائي للصور، خطافات الأحداث، WebSocket، تحسينات الأمان، دعم عملية `edit` (استبدال الملفات)، واستخدام المعاملات (`Db::transaction`) لضمان التكاملية.
+> **ملاحظة:** يغطي هذا المستند الإصدارات حتى 1.2.3، ويشمل الميزات المتقدمة مثل التخزين المتعدد، التحويل التلقائي للصور، خطافات الأحداث، WebSocket، تحسينات الأمان، دعم عملية `edit` (استبدال الملفات)، واستخدام المعاملات (`Db::transaction`) لضمان التكاملية، بالإضافة إلى توحيد منطق التحقق من المفاتيح المؤقتة عبر تريت `HasFileUploadsMatchTempKey`.
 
 ---
 
@@ -20,7 +20,7 @@ Nano\FileUpload\Classes
 
 كلاس `FileUploadService` هو **طبقة الخدمة (Service Layer)** المسؤولة عن تنفيذ عمليات رفع الملفات وحذفها واسترجاعها في تطبيقات نانوسوفت. يعتمد هذا الكلاس على `FileUploadRegistry` للوصول إلى إعدادات النماذج والتحقق من الصلاحيات، وعلى `FileUploadUserManager` لإدارة المستخدم الحالي والتحقق من صلاحياته.
 
-ببساطة، `FileUploadService` هو **المحرك الذي ينفذ عمليات الرفع الفعلية**، ويتأكد من أن كل عملية تتم وفقًا للإعدادات المسجلة والصلاحيات المحددة، مع دعم الرفع المؤقت (عبر مفتاح جلسة مؤقت) لربط الملفات بالنماذج غير المحفوظة بعد. بدءاً من الإصدار 1.1.0، يدعم الكلاس أيضاً عملية **استبدال الملفات (edit)** في علاقات `attachOne` باستخدام المعاملات (`Db::transaction`) لضمان عدم فقدان البيانات.
+ببساطة، `FileUploadService` هو **المحرك الذي ينفذ عمليات الرفع الفعلية**، ويتأكد من أن كل عملية تتم وفقًا للإعدادات المسجلة والصلاحيات المحددة، مع دعم الرفع المؤقت (عبر مفتاح جلسة مؤقت) لربط الملفات بالنماذج غير المحفوظة بعد. بدءاً من الإصدار 1.1.0، يدعم الكلاس أيضاً عملية **استبدال الملفات (edit)** في علاقات `attachOne` باستخدام المعاملات (`Db::transaction`) لضمان عدم فقدان البيانات. وفي الإصدار 1.2.2، تم توحيد منطق التحقق من المفاتيح المؤقتة عبر تريت `HasFileUploadsMatchTempKey`، مما يزيد الأمان ويقلل تكرار الكود.
 
 ---
 
@@ -54,7 +54,7 @@ Nano\FileUpload\Classes
   $tempKey = $service->generateTempSessionKey('Nano\Shop\Models\Product', 'image');
   ```
 
-#### 2. التحقق من صحة مفتاح جلسة مؤقت
+#### 2. التحقق من صحة مفتاح جلسة مؤقت (الأساسي)
 
 ##### `public function validateTempSessionKey(string $tempSessionKey): ?array`
 - **الهدف**: التحقق من صحة مفتاح الجلسة المؤقت (التوقيع، الانتهاء، البنية) واستخراج بياناته.
@@ -65,7 +65,46 @@ Nano\FileUpload\Classes
   - يفك الترميز ويتحقق من التوقيع.
   - يتحقق من صلاحية المفتاح (الافتراضي 3600 ثانية، قابل للتعديل عبر `security.temp_key_ttl`).
 
-#### 3. رفع ملف واحد
+#### 3. دالة متقدمة للتحقق من المفتاح المؤقت ومطابقته (من التريت)
+
+##### `public function validateAndMatchTempKey($tempKey, string $modelClass, string $field, $user = null, array $options = []): array`
+- **الهدف**: دالة متكاملة تجمع التحقق من صحة المفتاح ومطابقته مع النموذج والحقل والمستخدم، مع خيارات متقدمة للتحكم في السلوك.
+- **المعاملات**:
+  - `$tempKey`: مفتاح الجلسة المؤقت (نص) أو بياناته (مصفوفة).
+  - `$modelClass`: اسم النموذج المتوقع.
+  - `$field`: اسم الحقل المتوقع.
+  - `$user`: المستخدم الحالي (اختياري، يُستخدم للحصول على userId و userType).
+  - `$options`: مصفوفة خيارات متقدمة (انظر الجدول أدناه).
+- **الخيارات المتقدمة**:
+  | الخيار | النوع | الوصف |
+  |--------|-------|-------|
+  | `throw_on_failure` | bool | إطلاق استثناء عند الفشل (`true`) أو إرجاع نتيجة خطأ كمصفوفة (`false`). |
+  | `skip_user_check` | bool | تخطي التحقق من المستخدم. |
+  | `strict_mode` | bool | وضع صارم: يتطلب تطابق النموذج والحقل بالكامل. |
+  | `stop_on_first_failure` | bool | إيقاف عند أول خطأ (`true`) أو تجميع الأخطاء. |
+  | `allow_expired_key` | bool | السماح بالمفاتيح منتهية الصلاحية ضمن فترة سماح. |
+  | `expiry_grace_period` | int | فترة السماح بالثواني (افتراضي 300). |
+  | `custom_validator` | callable | دالة تحقق إضافية. |
+  | `cache_results` | bool | تخزين نتائج التحقق مؤقتاً في نفس الطلب. |
+  | `collect_metadata` | bool | جمع بيانات أداء. |
+- **الإرجاع**: مصفوفة تحتوي على `status`, `message`, `data` (بيانات المفتاح ونتائج المطابقة), `process_data`, `error_code`, إلخ.
+- **الاستخدام الداخلي**: تستخدمها دوال `upload`, `deleteFile`, `attachTempFiles`, `getFiles` للتحقق من المفاتيح المؤقتة المقدمة من العميل.
+- **مثال**:
+  ```php
+  $result = $service->validateAndMatchTempKey($tempKey, 'Product', 'image', $user, [
+      'throw_on_failure' => false,
+      'strict_mode' => true,
+  ]);
+  if ($result['status']) {
+      echo "المفتاح صالح ويطابق النموذج والحقل والمستخدم";
+  } else {
+      echo "فشل التحقق: " . $result['message'];
+  }
+  ```
+
+> **ملاحظة:** هذه الدالة جزء من تريت `HasFileUploadsMatchTempKey` الذي يستخدمه `FileUploadService`. تم إضافتها في الإصدار 1.2.2.
+
+#### 4. رفع ملف واحد
 
 ##### `public function upload(string $modelClass, string $field, $fileData, array $options = []): array`
 - **الهدف**: رفع ملف واحد لحقل معين، مع دعم عمليات `add` (رفع جديد) و `edit` (استبدال ملف موجود في علاقة `attachOne`).
@@ -75,7 +114,7 @@ Nano\FileUpload\Classes
   - `$fileData`: بيانات الملف (كائن `UploadedFile` أو سلسلة base64).
   - `$options`: مصفوفة خيارات إضافية:
     - `model`: كائن النموذج (إذا كان موجودًا ومحفوظًا).
-    - `temp_session_key`: مفتاح جلسة مؤقت (لتجاوز التوليد التلقائي).
+    - `temp_session_key`: مفتاح جلسة مؤقت (لتجاوز التوليد التلقائي). **منذ الإصدار 1.2.2، يتم التحقق من صحة هذا المفتاح ومطابقته باستخدام `validateAndMatchTempKey` قبل استخدامه.**
     - `skip_permission_check`: `bool` لتجاوز التحقق من الصلاحية (مفيد للاختبارات).
     - `title`, `description`: لتحديد عنوان ووصف الملف.
     - `...`: أي خيارات إضافية تُمرر إلى `Base64::onUpload`.
@@ -84,6 +123,7 @@ Nano\FileUpload\Classes
   - **يحدد العملية**:
     - إذا كان `options['model']` موجودًا ومحفوظًا (`exists`) وله علاقة `attachOne` بالحقل وتم العثور على ملف مرتبط، تصبح العملية `edit` (استبدال).
     - وإلا تصبح العملية `add` (رفع جديد).
+  - **إذا تم تمرير `temp_session_key`**، يتم استدعاء `validateAndMatchTempKey` للتحقق من أن المفتاح يخص نفس النموذج والحقل والمستخدم. إذا فشل التحقق، يتم رمي استثناء.
   - يتحقق من صلاحية العملية (`add` أو `edit`) للمستخدم الحالي (مع مراعاة الإعدادات العامة مثل `disable_upload`, `disable_edit`).
   - يطلق حدث `nano.fileupload.beforeUpload` (مع تمرير العملية).
   - يتحقق من صحة الملف (القائمة السوداء، الحجم، الأنواع) عبر `validateFile`.
@@ -98,7 +138,7 @@ Nano\FileUpload\Classes
 - **الإرجاع**: مصفوفة بنفس هيكل `Base64::onUpload` مع حقول إضافية: `code`, `status`, `message`, `error`, `errors`, `data`, `input_data`, `process_data`, `debug`, `error_code`. وتحتوي `process_data` على `operation` (`add`/`edit`) و `existing_file_deleted` (في حالة `edit`).
 - **مثال**:
   ```php
-  // رفع جديد (add)
+  // رفع جديد (add) مع مفتاح مؤقت (سيتم التحقق منه)
   $result = $service->upload('Product', 'image', $file, ['temp_session_key' => $tempKey]);
   
   // استبدال ملف (edit)
@@ -112,7 +152,7 @@ Nano\FileUpload\Classes
   }
   ```
 
-#### 4. رفع عدة ملفات (لحقل متعدد)
+#### 5. رفع عدة ملفات (لحقل متعدد)
 
 ##### `public function uploadMultiple(string $modelClass, string $field, array $filesData, array $options = []): array`
 - **الهدف**: رفع عدة ملفات لحقل متعدد في طلب واحد.
@@ -126,7 +166,7 @@ Nano\FileUpload\Classes
   echo "نجح رفع " . $result['process_data']['success_count'] . " من " . $result['process_data']['total'];
   ```
 
-#### 5. حذف ملف
+#### 6. حذف ملف
 
 ##### `public function deleteFile(int $fileId, ?string $modelClass = null, ?string $field = null, $user = null): array`
 - **الهدف**: حذف ملف محدد مع التحقق من الصلاحية.
@@ -141,7 +181,7 @@ Nano\FileUpload\Classes
   - يتحقق من الصلاحية بناءً على ثلاث حالات:
     1. تم تمرير `modelClass` و `field`: يتحقق من صلاحية `delete` للمستخدم الحالي (مع مراعاة `disable_delete`).
     2. الملف مرتبط بنموذج محفوظ: يستخرج `modelClass` و `field` من `attachment_type` و `field` في سجل الملف.
-    3. الملف مؤقت (`session_key` موجود): يتحقق من صحة المفتاح وأن المستخدم الحالي هو من أنشأه.
+    3. الملف مؤقت (`session_key` موجود): **يستخدم `validateAndMatchTempKey` للتحقق من صحة المفتاح وأن المستخدم الحالي هو من أنشأه (مع `strict_mode = false` لأن `attachment_type` قد يكون null).**
   - إذا كان المستخدم غير مصرح له، يرمي استثناء.
   - يحذف الملف.
   - يطلق حدث `nano.fileupload.afterDelete` ويرسل إشعار WebSocket.
@@ -154,7 +194,7 @@ Nano\FileUpload\Classes
   }
   ```
 
-#### 6. جلب الملفات
+#### 7. جلب الملفات
 
 ##### `public function getFiles(string $modelClass, string $field, ?int $modelId = null, array $options = []): array`
 - **الهدف**: استرجاع الملفات المرتبطة بنموذج وحقل معين أو ملفات مؤقتة.
@@ -163,13 +203,13 @@ Nano\FileUpload\Classes
   - `$field`: اسم الحقل.
   - `$modelId`: (اختياري) معرف النموذج المحفوظ.
   - `$options`: خيارات إضافية:
-    - `temp_session_key`: مفتاح جلسة مؤقت (لجلب الملفات غير المرتبطة).
+    - `temp_session_key`: مفتاح جلسة مؤقت (لجلب الملفات غير المرتبطة). **منذ الإصدار 1.2.2، يتم التحقق من صحة هذا المفتاح ومطابقته باستخدام `validateAndMatchTempKey` قبل استخدامه.**
     - `with_thumbs`: `bool` لتضمين الصور المصغرة.
     - `thumb_sizes`: مصفوفة بأحجام الصور المصغرة (مثل `['thumb' => [100,100]]`).
 - **السلوك**:
   - يتحقق من تسجيل الحقل وصلاحية `view` (مع مراعاة `disable_get`).
   - يبني استعلامًا على `File` مع تصفية حسب `field` و (`attachment_id` + `attachment_type` إذا كان `modelId` موجودًا) أو `session_key` إذا كان `temp_session_key` موجودًا.
-  - **عند استخدام `temp_session_key`**، يتحقق من صحة المفتاح (التوقيع، الانتهاء، مطابقة المستخدم والنموذج والحقل) قبل تنفيذ الاستعلام.
+  - **عند استخدام `temp_session_key`**، يستدعي `validateAndMatchTempKey` للتحقق من صحة المفتاح ومطابقته (النموذج، الحقل، المستخدم) قبل تنفيذ الاستعلام. إذا فشل التحقق، يتم رمي استثناء.
   - يعيد الملفات مع البيانات الأساسية (id, title, description, path, size, content_type) وصور مصغرة إذا طُلب.
 - **الإرجاع**: مصفوفة تحتوي على `code`, `status`, `message`, `data`.
 - **مثال**:
@@ -180,9 +220,9 @@ Nano\FileUpload\Classes
   }
   ```
 
-#### 7. ربط الملفات المؤقتة بنموذج محفوظ
+#### 8. ربط الملفات المؤقتة بنموذج محفوظ
 
-##### `public function attachTempFiles(Model $model, string $field, string $tempSessionKey, array $options = []): array` (تم تحسينه في الإصدار 1.1.0)
+##### `public function attachTempFiles(Model $model, string $field, string $tempSessionKey, array $options = []): array`
 - **الهدف**: نقل الملفات التي تم رفعها باستخدام مفتاح جلسة مؤقت إلى نموذج محفوظ.
 - **المعاملات**:
   - `$model`: كائن النموذج المحفوظ.
@@ -190,13 +230,12 @@ Nano\FileUpload\Classes
   - `$tempSessionKey`: مفتاح الجلسة المؤقت المستخدم أثناء الرفع.
   - `$options`: خيارات إضافية (مثل `skip_permission_check` للاختبارات).
 - **السلوك**:
-  - يتحقق من صحة المفتاح (التوقيع، الانتهاء).
-  - يتحقق من تطابق `modelClass` و `field` بين المفتاح والنموذج.
-  - يتحقق من أن المستخدم الحالي هو نفس المستخدم الذي أنشأ المفتاح (نفس `userId` و `userType`).
-  - **يتحقق من صلاحية `edit`** (لأن الربط يعتبر تعديلاً على النموذج) ما لم يتم تجاوزها بـ `skip_permission_check`.
+  - **يستخدم `validateAndMatchTempKey`** للتحقق من صحة المفتاح ومطابقته مع النموذج والحقل والمستخدم في خطوة واحدة متكاملة (بدلاً من الكود اليدوي المكرر سابقاً). إذا فشل التحقق، يتم رمي استثناء.
+  - يتحقق من صلاحية `edit` (لأن الربط يعتبر تعديلاً على النموذج) ما لم يتم تجاوزها بـ `skip_permission_check`.
   - يبحث عن الملفات التي تحمل `session_key = $tempSessionKey` و `field = $field`.
   - لكل ملف، يحدّث `attachment_id` و `attachment_type` لربطه بالنموذج ويزيل `session_key` و `expires_at`.
   - إذا كان للنموذج علاقة بهذا الحقل، يستخدم `add()`.
+  - يطلق حدث `nano.fileupload.afterAttach` ويرسل إشعار WebSocket.
 - **الإرجاع**: مصفوفة موحدة تحتوي على `code`, `status`, `message`, `data` (الملفات المرتبطة), `process_data` (عدد الملفات المرتبطة, إلخ).
 - **مثال**:
   ```php
@@ -209,7 +248,7 @@ Nano\FileUpload\Classes
   }
   ```
 
-#### 8. التحقق من صحة الملف
+#### 9. التحقق من صحة الملف
 
 ##### `public function validateFile(string $modelClass, string $field, $fileData): void`
 - **الهدف**: التحقق من أن الملف يطابق قيود الحقل المسجل (الحجم الأقصى، الأنواع المسموحة) بالإضافة إلى القائمة السوداء.
@@ -233,7 +272,7 @@ Nano\FileUpload\Classes
   }
   ```
 
-#### 9. دوال مساعدة (التخزين والتحويل والإشعارات)
+#### 10. دوال مساعدة (التخزين والتحويل والإشعارات)
 
 ##### `protected function getStorageDiskForField($modelClass, $field): ?string`
 - يحدد اسم قرص التخزين المخصص للحقل (من `getProcessingOptions`) ويتحقق من وجوده.
@@ -243,6 +282,9 @@ Nano\FileUpload\Classes
 
 ##### `protected function notifyWebSocket($event, $data): void`
 - يطلق حدث `nano.fileupload.websocket.notify` إذا كان WebSocket مفعلاً في الإعدادات.
+
+##### `protected function fireEventSafe(string $eventName, $params = [], $halt = false)`
+- إطلاق حدث بشكل آمن متوافق مع Laravel و OctoberCMS. تستخدمه دوال الخدمة والأحداث داخل التريت `HasFileUploadsMatchTempKey` عبر `fireEventSafeInTrait`.
 
 ---
 
@@ -297,7 +339,7 @@ $product = new Product();
 $product->name = 'منتج جديد';
 $product->save();
 
-// 4. ربط الصورة بالمنتج (الخدمة تتحقق من المفتاح والمستخدم)
+// 4. ربط الصورة بالمنتج (الخدمة تتحقق من المفتاح والمستخدم عبر validateAndMatchTempKey)
 $attachResult = $service->attachTempFiles($product, $field, $tempKey);
 if (!$attachResult['status']) {
     die("فشل الربط: " . $attachResult['error']);
@@ -375,16 +417,21 @@ if ($result['status']) {
 }
 ```
 
-#### مثال 6: التحقق من صحة الملف قبل الرفع (يكتشف ملف PHP خطير)
+#### مثال 6: استخدام `validateAndMatchTempKey` مباشرة للتحقق من مفتاح مؤقت (على سبيل المثال في واجهة API مخصصة)
 
 ```php
-$maliciousFile = $request->file('upload'); // ملف php
-try {
-    $service->validateFile(Product::class, 'image', $maliciousFile);
-    // لن يصل إلى هنا
-} catch (FileUploadException $e) {
-    echo $e->getErrorCode(); // FILE_UPLOAD_FILE_TYPE_BLACKLISTED
-    echo $e->getMessage();   // "نوع الملف php غير مسموح به لأسباب أمنية."
+$tempKey = $request->input('temp_key');
+$user = auth()->user();
+
+$result = $service->validateAndMatchTempKey($tempKey, 'Product', 'image', $user, [
+    'throw_on_failure' => false, // نريد استجابة JSON بدلاً من استثناء
+    'strict_mode' => true,
+]);
+
+if ($result['status']) {
+    return response()->json(['valid' => true, 'data' => $result['data']]);
+} else {
+    return response()->json(['valid' => false, 'error' => $result['message']], $result['code']);
 }
 ```
 
@@ -436,28 +483,14 @@ public function uploadImage(Request $request)
 }
 ```
 
-#### مثال 9: استخدام WebSocket للإشعارات الفورية
-
-في ملف `.env`:
-```ini
-NANO_FILE_UPLOAD_WEBSOCKET_ENABLED=true
-NANO_FILE_UPLOAD_WEBSOCKET_CHANNEL=file-uploads
-```
-
-ثم الاستماع للحدث:
-```php
-Event::listen('nano.fileupload.websocket.notify', function ($channel, $event, $data) {
-    broadcast(new \App\Events\FileUploadWebsocketEvent($channel, $event, $data));
-});
-```
-
 ---
 
 ### التفاعل مع الكلاسات الأخرى
 
-- **مع `FileUploadRegistry`**: يستخدم `$registry` للحصول على إعدادات الحقول (`getFieldConfig`, `getFieldConstraints`, `getProcessingOptions`) والتحقق من الصلاحيات (`can`).
+- **مع `FileUploadRegistry`**: يستخدم `$registry` للحصول على إعدادات الحقول (`getFieldConfig`, `getFieldConstraints`, `getProcessingOptions`) والتحقق من الصلاحيات (`can`, `validate`).
 - **مع `FileUploadUserManager`**: يستخدم `$userManager` للحصول على المستخدم الحالي ونوعه (`getUser`, `getUserType`, `getId`).
 - **مع `Base64` (المنقول إلى داخل الإضافة)**: يستدعي `Base64::onUpload`, `Base64::is_base64`, `Base64::base64ToUploadedFile`, `Base64::getBase64ImageSize`, `Base64::getDataInBase64`.
+- **مع تريت `HasFileUploadsMatchTempKey`**: يستخدم الكلاس هذا التريت للاستفادة من دالة `validateAndMatchTempKey` و `fireEventSafeInTrait`. هذه الدوال متاحة كأنها جزء من `FileUploadService`.
 - **مع `October\Rain\Resize\Resizer`**: لتحجيم الصور (إذا كان `auto_resize` مفعلاً).
 - **مع `Nano2\Watermark\Classes\WatermarkHelper`**: للعلامة المائية (إذا كانت الإضافة موجودة و`auto_watermark` مفعلاً).
 
@@ -467,19 +500,20 @@ Event::listen('nano.fileupload.websocket.notify', function ($channel, $event, $d
 
 1. **استخدم مفتاح جلسة مؤقت دائمًا للنماذج الجديدة**: لتجنب فقدان الملفات إذا لم يتم حفظ النموذج بعد.
 2. **للاستبدال (edit)، استخدم `model` في الخيارات** بدلاً من المفتاح المؤقت، واترك الخدمة تتعامل مع المعاملة (`Db::transaction`) وحذف الملف القديم.
-3. **تحقق من صحة الملف قبل الرفع باستخدام `validateFile`**: لتقديم رسائل خطأ واضحة للمستخدم (الخدمة تفعل ذلك تلقائياً، لكن يمكنك استدعاؤها يدوياً أيضاً).
-4. **سجل معرفات المعاملات (transaction IDs)** في قاعدة البيانات لتتبع عمليات الرفع.
-5. **استخدم `uploadMultiple` للحقول المتعددة** بدلاً من استدعاء `upload` في حلقة، لأن `uploadMultiple` يجمع الأخطاء ويقدم إحصاءات.
-6. **لا تعتمد على `temp_session_key` فقط**: بعد حفظ النموذج، استخدم `attachTempFiles` لنقل الملكية.
-7. **تعامل مع الأخطاء حسب الكود**: 400 (طلب خاطئ)، 403 (صلاحية ممنوعة)، 404 (غير موجود)، 422 (فشل التحقق)، 500 (خطأ داخلي) – واستخدم `error_code` للتمييز الدقيق.
-8. **فعّل `app.debug` في بيئة التطوير** للحصول على تفاصيل الأخطاء الكاملة.
-9. **استخدم `with_thumbs` فقط عند الحاجة** لتقليل حجم الاستجابة وزيادة الأداء.
-10. **احتفظ بمفاتيح الجلسة المؤقتة في الجلسة (session) أو قاعدة بيانات مؤقتة** لتجنب فقدانها.
-11. **اختبر الصلاحيات جيدًا**: تأكد من أن المستخدمين غير المصرح لهم لا يمكنهم رفع أو حذف أو استبدال الملفات.
-12. **استخدم التحويلات التلقائية (`auto_resize`, `auto_watermark`) بحكمة**: قد تستهلك موارد الخادم، لذا فعّلها فقط عند الحاجة.
-13. **راقب سجل `fileupload.log`** للكشف عن محاولات رفع الملفات الخطيرة أو الأخطاء المتكررة.
-14. **أنشئ مهمة مجدولة (cron)** لتنظيف الملفات منتهية الصلاحية (`expires_at`) وغير المرتبطة.
-15. **استخدم `skip_permission_check => true` فقط في الاختبارات**، وليس في بيئة الإنتاج.
+3. **لا تثق بالمفاتيح المؤقتة المقدمة من العميل دون تحقق**: الخدمة تقوم بذلك تلقائياً عبر `validateAndMatchTempKey`، ولكن تأكد من أنك لا تتجاوز هذه الخطوة.
+4. **تحقق من صحة الملف قبل الرفع باستخدام `validateFile`**: لتقديم رسائل خطأ واضحة للمستخدم (الخدمة تفعل ذلك تلقائياً، لكن يمكنك استدعاؤها يدوياً أيضاً).
+5. **سجل معرفات المعاملات (transaction IDs)** في قاعدة البيانات لتتبع عمليات الرفع.
+6. **استخدم `uploadMultiple` للحقول المتعددة** بدلاً من استدعاء `upload` في حلقة، لأن `uploadMultiple` يجمع الأخطاء ويقدم إحصاءات.
+7. **لا تعتمد على `temp_session_key` فقط**: بعد حفظ النموذج، استخدم `attachTempFiles` لنقل الملكية.
+8. **تعامل مع الأخطاء حسب الكود**: 400 (طلب خاطئ)، 403 (صلاحية ممنوعة)، 404 (غير موجود)، 422 (فشل التحقق)، 500 (خطأ داخلي) – واستخدم `error_code` للتمييز الدقيق.
+9. **فعّل `app.debug` في بيئة التطوير** للحصول على تفاصيل الأخطاء الكاملة.
+10. **استخدم `with_thumbs` فقط عند الحاجة** لتقليل حجم الاستجابة وزيادة الأداء.
+11. **احتفظ بمفاتيح الجلسة المؤقتة في الجلسة (session) أو قاعدة بيانات مؤقتة** لتجنب فقدانها.
+12. **اختبر الصلاحيات جيدًا**: تأكد من أن المستخدمين غير المصرح لهم لا يمكنهم رفع أو حذف أو استبدال الملفات.
+13. **استخدم التحويلات التلقائية (`auto_resize`, `auto_watermark`) بحكمة**: قد تستهلك موارد الخادم، لذا فعّلها فقط عند الحاجة.
+14. **راقب سجل `fileupload.log`** للكشف عن محاولات رفع الملفات الخطيرة أو الأخطاء المتكررة.
+15. **أنشئ مهمة مجدولة (cron)** لتنظيف الملفات منتهية الصلاحية (`expires_at`) وغير المرتبطة.
+16. **استخدم `skip_permission_check => true` فقط في الاختبارات**، وليس في بيئة الإنتاج.
 
 ---
 
@@ -495,8 +529,9 @@ Event::listen('nano.fileupload.websocket.notify', function ($channel, $event, $d
 | `حجم الملف يتجاوز الحد المسموح به` | حجم الملف أكبر من `max_filesize`. | قم بضغط الملف أو زيادة `max_filesize` في إعدادات الحقل أو الإعدادات الافتراضية. |
 | `نوع الملف غير مسموح به` | امتداد الملف غير مدرج في `allowed_types`. | استخدم نوع مسموح أو عدل `allowed_types`. |
 | `نوع الملف ... غير مسموح به لأسباب أمنية` | الامتداد موجود في القائمة السوداء (`BLACKLISTED_EXTENSIONS`). | لا يمكن تجاوز هذا الحظر لأسباب أمنية، استخدم أنواع ملفات آمنة. |
-| `مفتاح جلسة مؤقت غير صالح أو منتهي الصلاحية` | المفتاح منتهي (أكثر من `temp_key_ttl`) أو تم التلاعب به. | أعد رفع الملف أو استخدم مفتاحاً جديداً. |
-| `غير مصرح لك بالوصول إلى هذه الملفات المؤقتة` | محاولة الوصول إلى ملفات مؤقتة لمستخدم آخر أو بنموذج/حقل مختلف. | تأكد من أن المفتاح يخص المستخدم الحالي والنموذج/الحقل الصحيح. |
+| `مفتاح جلسة مؤقت غير صالح أو منتهي الصلاحية` | المفتاح منتهي (أكثر من `temp_key_ttl`) أو تم التلاعب به أو فشل التحقق في `validateAndMatchTempKey`. | أعد رفع الملف أو استخدم مفتاحاً جديداً. |
+| `المفتاح المؤقت غير مخصص لهذا النموذج/الحقل` | فشل مطابقة النموذج أو الحقل في `validateAndMatchTempKey`. | تأكد من أن المفتاح يخص نفس النموذج والحقل. |
+| `المفتاح المؤقت يخص مستخدم آخر` | فشل مطابقة المستخدم في `validateAndMatchTempKey`. | تأكد من أن المفتاح يخص المستخدم الحالي. |
 | `Auto-resize failed` | مكتبة GD أو Imagick غير مثبتة، أو مسار الملف غير صالح. | ثبّت `php-gd` أو `php-imagick`، وتحقق من صلاحيات الملف. |
 | `Auto-watermark failed` | إضافة `Nano2.Watermark` غير مثبتة أو مسار الشعار غير صحيح. | ثبّت الإضافة وتأكد من وجود ملف الشعار في المسار المحدد. |
 | `Storage disk 's3' not found` | لم يتم تكوين قرص `s3` في `config/filesystems.php`. | أضف إعدادات القرص المناسبة. |
@@ -506,7 +541,7 @@ Event::listen('nano.fileupload.websocket.notify', function ($channel, $event, $d
 
 ### الخلاصة
 
-كلاس `FileUploadService` هو العمود الفقري لعمليات رفع الملفات في تطبيقات نانوسوفت. يوفر واجهة موحدة وآمنة لرفع وحذف واسترجاع الملفات، مع دعم كامل لأنواع المستخدمين المختلفة والصلاحيات الدقيقة، والربط المؤقت للنماذج غير المحفوظة، والتحويلات التلقائية للصور، والتخزين المتعدد، وخطافات الأحداث، وإشعارات WebSocket. بدءاً من الإصدار 1.1.0، يدعم أيضاً عملية استبدال الملفات (edit) في علاقات `attachOne` باستخدام المعاملات (`Db::transaction`) والأحداث المخصصة، مما يضمن تكاملية البيانات وأمانها. بفضل اعتماده على `FileUploadRegistry` و `FileUploadUserManager`، يمكن للمطورين بناء أنظمة رفع ملفات قوية وقابلة للتوسع دون القلق بشأن التفاصيل التنفيذية أو أمان البيانات.
+كلاس `FileUploadService` هو العمود الفقري لعمليات رفع الملفات في تطبيقات نانوسوفت. يوفر واجهة موحدة وآمنة لرفع وحذف واسترجاع الملفات، مع دعم كامل لأنواع المستخدمين المختلفة والصلاحيات الدقيقة، والربط المؤقت للنماذج غير المحفوظة، والتحويلات التلقائية للصور، والتخزين المتعدد، وخطافات الأحداث، وإشعارات WebSocket. بدءاً من الإصدار 1.1.0، يدعم أيضاً عملية استبدال الملفات (edit) في علاقات `attachOne` باستخدام المعاملات (`Db::transaction`) والأحداث المخصصة. وفي الإصدار 1.2.2، تم إضافة تريت `HasFileUploadsMatchTempKey` الذي يوفر دالة `validateAndMatchTempKey` لتوحيد منطق التحقق من المفاتيح المؤقتة، مما يزيد الأمان ويقلل تكرار الكود في دوال `upload`, `deleteFile`, `attachTempFiles`, `getFiles`. بفضل اعتماده على `FileUploadRegistry` و `FileUploadUserManager`، يمكن للمطورين بناء أنظمة رفع ملفات قوية وقابلة للتوسع دون القلق بشأن التفاصيل التنفيذية أو أمان البيانات.
 
 للاطلاع على أمثلة إضافية متقدمة، راجع [توثيق الأمثلة المتقدمة لكلاس `FileUploadService`](./Docs-FileUploadService-Class-Advenced-Examples-ar.md).
 
@@ -516,6 +551,7 @@ Event::listen('nano.fileupload.websocket.notify', function ($channel, $event, $d
 - [توثيق كلاس `FileUploadRegistry`](./Docs-FileUploadRegistry-Class-ar.md)
 - [أمثلة متقدمة لكلاس `FileUploadRegistry`](./Docs-FileUploadRegistry-Class-Advenced-Examples-ar.md)
 - [أمثلة متقدمة لكلاس `FileUploadService`](./Docs-FileUploadService-Class-Advenced-Examples-ar.md)
+-- [validateAndMatchTempKey Function for `FileUploadService` Class](./Docs-FileUploadService-validateAndMatchTempKey-ar.md)
 - [توثيق كلاس `FileUploadUserManager`](./Docs-FileUploadUserManager-Class-ar.md)
 - [أمثلة متقدمة لكلاس `FileUploadUserManager`](./Docs-FileUploadUserManager-Class-Advenced-Examples-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API)](./Docs-API-Documentation-ar.md)

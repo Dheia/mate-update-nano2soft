@@ -2440,201 +2440,267 @@ curl -X POST "https://yourdomain.com/api/v1/fileupload/temp-key/validate" \
 - [توثيق كلاس `FileUploadUserManager`](./docs/FileUpload/Docs-FileUploadUserManager-Class-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API)](./docs/FileUpload/Docs-API-Documentation-ar.md)
 
-## 2026-04-15 – 2026-04-16
 
-**`Nano.FileUpload` Plugin Update – Version 1.2.3**
+## 2026-04-16 - 2026-04-18
 
-### Adding New API Endpoints for Querying Modules, Permissions, and Validating Temporary Keys
+**تحديثات إضافة `Nano.TagsApi` – الإصدار 1.0.10**
 
----
+### ملخص التحديثات
 
-### Summary of Updates
+في هذا الإصدار، تم إجراء تحسينات شاملة على إدارة `TagsApi` لتكون أكثر مرونة وتكاملاً مع الإعدادات العامة للنظام، مع دعم خيارات جديدة في `config.php`، وتحسين متحكمات `Categories`، `Tags`، `Types`، و`Menus`. تم أيضاً إضافة أحداث جديدة لتوسيع الاستعلامات، وتحسين آلية الصفحات (pagination) والترتيب (ordering)، ودعم الفلاتر المتقدمة مثل `is_has_products`، `is_has_shops`، و`is_has_cateables` في `Categories`.
 
-In version **1.2.3**, the add-on's API was enriched with several new endpoints that allow developers and external systems to:
+تشمل أبرز التحديثات:
 
-- **Query registered modules** and their fields while respecting user permissions.
-- **Fetch detailed settings** for a specific module or field.
-- **Fetch field constraints** (e.g., max size, allowed types).
-- **Fetch advanced processing options** (storage disk, automatic resizing, watermark).
-- **Check permissions** at global, module, and field levels.
-- **Integrated permission check** using the `validate()` method.
-- **Validate and match a temporary key** via API (using the `validateAndMatchTempKey` function from the trait).
-
-All new endpoints are protected by `oauth-users` and follow the unified response structure (`code`, `status`, `message`, `data`, ...).
+- **إضافة خيارات إعدادات جديدة** في `config.php` (مثل `include`, `exclude`, `per_page`, `is_public`) لكل الأقسام.
+- **تحسين متحكم `Categories`** لدعم `mainCategoriesId`، `is_has_*` مع `leftJoin` معقد، و`is_to_sql` للتصحيح.
+- **إضافة أحداث `extendQueryBefore` و `extendQuery`** في جميع المتحكمات.
+- **دعم قراءة `is_public`، `per_page`، `page` من الإعدادات** مع إمكانية التجاوز عبر `Input::get()`.
+- **إضافة خيار `is_departments`** في `Types` للتحكم في فلترة الأقسام.
+- **إضافة خيار `is_stop_order_type` و `is_stop_order_type_departments`** للتحكم في دمج `OrderHelper`.
+- **تحسين دوال `availablefilters` و `formfields`** بإضافة `input_data` و `process_data` في الردود.
 
 ---
 
-### Version Goals
+### الإصدار 1.0.10 – تحسين شامل للإعدادات والمتحكمات
 
-- **Enable developers to explore registered settings** in `FileUploadRegistry` without needing direct access to code or database.
-- **Facilitate front-end integration** (e.g., React or Vue applications) by providing dynamic information about allowed fields and constraints.
-- **Check permissions before attempting upload** to avoid rejection errors and improve user experience.
-- **Provide an endpoint to validate temporary keys**, allowing front-ends to ensure key validity before using it.
-- **Standardize the way of querying system information** via API instead of relying on internal tools.
+#### أهداف الإصدار
 
----
+- جعل جميع المتحكمات تعتمد على الإعدادات المخزنة في `config.php` بدلاً من القيم الثابتة أو `Input::get()` فقط.
+- إضافة مرونة أكبر في فلترة التصنيفات والفئات والوسوم بناءً على العلاقات (مثل المنتجات، المتاجر، الكائنات المرتبطة).
+- تحسين أداء الاستعلامات المعقدة في `Categories` عبر استخدام `leftJoin` مع `nano_tags_cateables`.
+- توفير أدوات تصحيح (`is_to_sql`) لتسهيل تطوير الاستعلامات.
+- توحيد طريقة التعامل مع `page` و `per_page` عبر جميع المتحكمات.
 
-### New Endpoints
+#### الميزات الجديدة
 
-#### 1. Get All Registered Modules (Filtered by Permission)
+##### 1. توسيع ملف الإعدادات `config.php`
 
-- **Path:** `GET /api/v1/fileupload/models`
-- **Description:** Returns a list of registered modules that the current user has `view` permission on, with brief information about their fields (name, type, whether multiple).
-- **Response:** Array of objects containing `class`, `label`, `enabled`, `allowed_user_types`, `fields`.
+تم إضافة مفاتيح جديدة لجميع الأقسام (`types`, `tags`, `categories`, `menus`):
 
-#### 2. Get Settings for a Specific Module
+| المفتاح | الوصف | مثال القيمة |
+|--------|------|-------------|
+| `include` | العلاقات المضمنة افتراضياً | `'children,products'` |
+| `exclude` | الأعمدة المستبعدة | `'password,remember_token'` |
+| `per_page` | عدد النتائج لكل صفحة | `50` |
+| `is_public` | فلترة السجلات العامة | `true` |
+| `is_has_cateables` (لـ categories) | تصفية التصنيفات المرتبطة بأي كائن | `true` |
+| `is_has_shops` (لـ categories) | تصفية التصنيفات المرتبطة بمتاجر | `true` |
+| `is_has_products` (لـ categories) | تصفية التصنيفات المرتبطة بمنتجات | `true` |
+| `is_departments` (لـ types) | فلترة الأنواع التي تمثل أقساماً | `true` |
 
-- **Path:** `GET /api/v1/fileupload/models/{modelClass}`
-- **Description:** Returns the full settings of a specific module (after checking existence and `view` permission).
-- **Response:** Contains `enabled`, `label`, `allowed_user_types`, `disabled_operations`, and `fields` (with brief information per field).
+**مثال من `config.php` الجديد:**
+```php
+'categories' => [
+    'include' => env('NANO_TAGSAPI_CATEGORIES_INCLUDE', ''),
+    'exclude' => env('NANO_TAGSAPI_CATEGORIES_EXCLUDE', ''),
+    'is_display_empty' => env('NANO_TAGSAPI_CATEGORIES_IS_DISPLAY_EMPTY', true),
+    'is_has_cateables' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_CATEABLES', false),
+    'is_has_shops' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP', false),
+    'is_has_products' => env('NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS', false),
+    'is_public' => env('NANO_TAGSAPI_CATEGORIES_IS_PUBLIC', true),
+    'per_page' => env('NANO_TAGSAPI_CATEGORIES_PER_PAGE', 50),
+],
+```
 
-#### 3. Get Settings for a Specific Field
+##### 2. تحسين متحكم `Categories` (فئة `Categories.php`)
 
-- **Path:** `GET /api/v1/fileupload/models/{modelClass}/fields/{field}`
-- **Description:** Returns settings for a specific field (e.g., type, max size, allowed types).
-- **Response:** Includes `type`, `label`, `multiple`, `required`, `max_filesize`, `allowed_types`, `use_caption`, `disabled_operations`.
-
-#### 4. Get Field Constraints
-
-- **Path:** `GET /api/v1/fileupload/models/{modelClass}/fields/{field}/constraints`
-- **Description:** Returns the field constraints used in file validation (`max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`).
-- **Benefit:** Front-ends can apply the same constraints before uploading.
-
-#### 5. Get Advanced Processing Options for a Specific Field
-
-- **Path:** `GET /api/v1/fileupload/processing-options/{modelClass}/{field}`
-- **Description:** Returns the field's processing options: `storage_disk`, `auto_resize`, `resize_options`, `auto_watermark`, `watermark_options`.
-- **Benefit:** Used primarily by advanced front-ends that need to know automatic transformation settings.
-
-#### 6. Check if an Operation is Globally Enabled
-
-- **Path:** `GET /api/v1/fileupload/permissions/global/{operation}`
-- **Parameters:** `operation` can be `add`, `edit`, `delete`, `view`.
-- **Response:** Returns `allowed` (true/false) and `disabled_globally` (opposite of `allowed`).
-
-#### 7. Check Operation Permission at a Specific Module Level
-
-- **Path:** `GET /api/v1/fileupload/permissions/model/{modelClass}/{operation}`
-- **Response:** Returns `model_operation_enabled`, `user_type_allowed`, `can_proceed` (combination of both conditions).
-
-#### 8. Check Operation Permission at a Specific Field Level
-
-- **Path:** `GET /api/v1/fileupload/permissions/field/{modelClass}/{field}/{operation}`
-- **Response:** Returns `field_operation_enabled`, `user_has_full_permission`, `can_proceed`.
-
-#### 9. Integrated Permission Check (using `validate`)
-
-- **Path:** `POST /api/v1/fileupload/permissions/check`
-- **Data (JSON):**
-  ```json
-  {
-    "model_class": "Nano\\Shop\\Models\\Product",
-    "operation": "edit",
-    "field": "image"
+- **قراءة `isPublic` من الإعدادات** إذا لم يتم تمريرها في الطلب.
+- **دعم `mainCategoriesId`** لدمجها مع `parent_id` (مفيد لعرض تصنيفات رئيسية محددة بالإضافة إلى تصنيفات فرعية معينة).
+- **إضافة خيارات `is_has_products`، `is_has_shops`، `is_has_cateables`**:
+  - عند تفعيل أي من هذه الخيارات، يتم بناء استعلام معقد باستخدام `leftJoin` مع جداول `nano_tags_categories as child` و `nano_tags_cateables`.
+  - يتم حساب عدد الكائنات المرتبطة (`cateables_count`, `sub_cateables_count`) وتصفية النتائج بناءً على `cateables_count`.
+- **إضافة خيار `is_to_sql`** لطباعة استعلام SQL النهائي في `trace_log` لتسهيل التصحيح.
+- **تحسين التعامل مع `orderBy` و `orderDirection`**:
+  ```php
+  if ($orderBy && $orderDirection) {
+      $posts->orderBy(\Db::raw($orderBy), \Db::raw($orderDirection));
+  } else {
+      $posts->orderBy(\Db::raw(\Config::get('nano.tagsapi::categories.order_by','sort_order')), 
+                     \Db::raw(\Config::get('nano.tagsapi::categories.order_dir','asc')));
   }
   ```
-- **Response:** Returns `allowed` (true/false) and an explanatory message.
-- **Behavior:** Uses `$this->registry->validate()` which checks global, module, field, user type, and specific permissions, and returns the result without throwing an exception (the exception is caught and converted to a response).
+- **إضافة `$CategorieTransformer->defaultIncludes`** بناءً على قيمة `$include`.
 
-#### 10. Validate and Match a Temporary Key
+##### 3. إضافة أحداث `api.list.extendQueryBefore` و `api.list.extendQuery`
 
-- **Path:** `POST /api/v1/fileupload/temp-key/validate`
-- **Data (JSON):**
-  ```json
-  {
-    "temp_key": "tmp_xxxx:yyyy",
-    "model_class": "Nano\\Shop\\Models\\Product",
-    "field": "image",
-    "strict_mode": true,
-    "allow_expired_key": false,
-    "expiry_grace_period": 300
+تم إضافة هذين الحدثين في جميع المتحكمات (`Categories`, `Tags`, `Types`, `Menus`) لتمكين المطورين من تعديل الاستعلام قبل وبعد تطبيق الفلاتر الأساسية.
+
+**مثال الاستخدام:**
+```php
+Event::listen('api.list.extendQuery', function ($query, $controller, $model, $options) {
+    $query->where('is_featured', true);
+});
+```
+
+##### 4. تحسين متحكم `Types`
+
+- **إضافة دعم `is_departments`**:
+  ```php
+  $is_departments = Input::get('isDepartments', \Config::get('nano.tagsapi::types.is_departments','*'));
+  if($is_departments !== null && $is_departments !== '*' && $is_departments !== 'all' && is_bool($is_departments)){
+      if($is_departments) $posts = $posts->where('is_departments',true);
+      else $posts = $posts->where('is_departments',false);
   }
   ```
-- **Description:** Calls the `validateAndMatchTempKey` function from the `HasFileUploadsMatchTempKey` trait and returns the result as JSON.
-- **Response:** On success returns `valid: true`, `key_data`, and `matched_data`; on failure returns an error message with `error_code`.
+- **إضافة خيارين للتحكم في دمج `OrderHelper`**:
+  - `is_stop_order_type`: لإيقاف تطبيق `OrderHelper` على مستوى `types`.
+  - `is_stop_order_type_departments`: لإيقاف تطبيقه على مستوى الأقسام المرتبطة.
+- **تحسين دوال `availablefilters` و `formfields`**:
+  - إضافة `input_data` و `process_data` في الردود لتسهيل تتبع البيانات المدخلة والمعالجة.
+  - تحسين التعامل مع الاستثناءات وإضافة تفاصيل `debug` في بيئة التطوير.
 
----
+##### 5. تحسين متحكمي `Tags` و `Menus`
 
-### Usage Examples
+- **قراءة `per_page` و `page` من الإعدادات** مع إمكانية التجاوز عبر `Input::get()`.
+- **إضافة `$src_options` واستدعاء الأحداث** بنفس طريقة `Categories`.
+- **دعم `isPublic` من الإعدادات**:
+  ```php
+  if(Input::get('isPublic', \Config::get('nano.tagsapi::tags.is_public', true))){
+      $posts = $posts->where('is_public', true);
+  }
+  ```
 
-#### Get modules available to the current user
+##### 6. توحيد التعامل مع الصفحات (Pagination)
 
-```bash
-curl -X GET "https://yourdomain.com/api/v1/fileupload/models" \
-  -H "Authorization: Bearer <token>"
-```
+في جميع المتحكمات، أصبح الكود التالي هو المعيار:
+```php
+$per_page = Input::get('per_page', null);
+if(is_null($per_page))
+    $per_page = \Config::get('nano.tagsapi::categories.per_page', 15);
+$per_page = intval($per_page);
+if(!$per_page) $per_page = 15;
 
-#### Get settings for the `image` field in the `Product` module
+$page = intval(Input::get('page', 1));
+if(!$page) $page = 1;
 
-```bash
-curl -X GET "https://yourdomain.com/api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image" \
-  -H "Authorization: Bearer <token>"
-```
-
-#### Check `edit` permission on a specific field
-
-```bash
-curl -X GET "https://yourdomain.com/api/v1/fileupload/permissions/field/Nano%5CShop%5CModels%5CProduct/image/edit" \
-  -H "Authorization: Bearer <token>"
-```
-
-#### Validate a temporary key
-
-```bash
-curl -X POST "https://yourdomain.com/api/v1/fileupload/temp-key/validate" \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "temp_key": "tmp_eyJtb2RlbENsYXNzIjoiTmFub1xTaG9wXE1vZGVsc1xQcm9kdWN0Iiw...",
-    "model_class": "Nano\\Shop\\Models\\Product",
-    "field": "image",
-    "strict_mode": true
-  }'
+$paginator = $posts->paginate($per_page, $page);
 ```
 
 ---
 
-### Benefits and Added Value
+### الفوائد والقيمة المضافة
 
-- **Empower front-ends**: Front-end applications (e.g., Single Page Applications) can now dynamically discover available fields, constraints, and permissions, allowing them to build adaptive file upload forms.
-- **Reduce server dependency**: Clients can check their permissions before attempting upload, reducing rejection requests and improving user experience.
-- **Live settings documentation**: Developers can explore add-on settings via API instead of searching through code.
-- **Additional security**: Permission endpoints do not expose sensitive information (e.g., storage keys) and are subject to the same user permissions.
-- **Easy integration with external tools**: These endpoints can be used in CI/CD systems or content management tools.
-
----
-
-### Upgrade Requirements
-
-1. **Update code**:
-   - Replace `FileUploadController.php` with the version containing the new methods.
-   - Update `routes.php` to add the new routes.
-
-2. **No new migrations**:
-   - This version does not require database changes.
-
-3. **No configuration changes**:
-   - `config.php` remains the same.
-
-4. **API permissions**:
-   - All new endpoints are protected by `oauth-users`, so the user must have a valid token to access them.
-
-5. **Compatibility testing**:
-   - It is recommended to run the `FileUploadPlusTest` tests to ensure the new version does not affect existing functionality.
-   - The new endpoints can be tested using tools like Postman or cURL.
+- **مرونة أكبر**: يمكن الآن التحكم في سلوك الـ API بالكامل عبر متغيرات البيئة أو ملف `config.php` دون تعديل الكود.
+- **أداء محسن**: الاستعلامات المعقدة في `Categories` أصبحت أكثر كفاءة بفضل استخدام `leftJoin` المحسّن و`groupBy` المناسب.
+- **سهولة التصحيح**: إضافة `is_to_sql` تسمح للمطورين بمراجعة الاستعلامات النهائية مباشرة.
+- **توافقية مع الإضافات الأخرى**: الأحداث الجديدة `extendQueryBefore/After` تتيح لبقية الإضافات تعديل الاستعلامات بسهولة.
+- **دعم أفضل للعلاقات**: إمكانية تصفية التصنيفات بناءً على وجود منتجات أو متاجر أو أي كائن مرتبط عبر `cateables`.
 
 ---
 
-### Conclusion
+### متطلبات الترقية إلى الإصدار 1.0.10
 
-Version **1.2.3** represents a significant leap in the accessibility of file upload system information via API. By adding endpoints to query modules, fields, permissions, and validate temporary keys, the add-on has become more open and integrable with external systems and modern front-ends. These features make it easy to build rich applications that rely on `Nano.FileUpload` as a back-end for file management, while maintaining the highest levels of security and control.
+1. **تحديث ملف `config.php`**:
+   - أضف المتغيرات الجديدة في ملف الإعدادات الخاص بك أو في `.env` حسب الحاجة.
+   - مثال متغيرات البيئة الجديدة:
+     ```ini
+     NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS=true
+     NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP=true
+     NANO_TAGSAPI_TYPES_IS_DEPARTMENTS=true
+     NANO_TAGSAPI_TYPES_PER_PAGE=50
+     NANO_TAGSAPI_CATEGORIES_PER_PAGE=30
+     ```
+
+2. **تحديث أي كود مخصص يعتمد على الـ API**:
+   - إذا كنت تستخدم `Input::get('per_page')` بشكل مباشر في التطبيق، فسيظل يعمل، لكن القيمة الافتراضية أصبحت من الإعدادات.
+   - إذا كنت تعتمد على القيمة الافتراضية `15` للصفحات، فتأكد من أن إعدادات `per_page` في `config.php` مناسبة.
+
+3. **الاستفادة من الأحداث الجديدة**:
+   - يمكنك الآن إضافة مستمعين للأحداث `api.list.extendQueryBefore` و `api.list.extendQuery` في `boot()` الخاص بأي إضافة.
+
+4. **اختبار الاستعلامات المعقدة**:
+   - إذا قمت بتفعيل `is_has_products` أو `is_has_shops`، تأكد من أن جداول `nano_tags_cateables` تحتوي على البيانات الصحيحة.
+   - استخدم `is_to_sql=true` في بيئة التطوير لمراجعة الاستعلام النهائي.
 
 ---
 
-**Reference Documentation**:
-- [General Plugin Documentation](./docs/FileUpload/Docs-FileUpload-en.md)
-- [`FileUploadRegistry` Class Documentation](./docs/FileUpload/Docs-FileUploadRegistry-Class-en.md)
-- [`FileUploadService` Class Documentation](./docs/FileUpload/Docs-FileUploadService-Class-en.md)
-- [`FileUploadUserManager` Class Documentation](./docs/FileUpload/Docs-FileUploadUserManager-Class-en.md)
-- [API Documentation](./docs/FileUpload/Docs-API-Documentation-en.md)
+### متغيرات البيئة (Environment Variables) المدعومة في `Nano.TagsApi`
+
+يمكنك تخصيص سلوك الإضافة بالكامل عبر متغيرات البيئة في ملف `.env`، دون الحاجة لتعديل ملف `config.php` مباشرة. فيما يلي جميع المتغيرات المتاحة مع وصفها وقيمها الافتراضية:
+
+#### 1. إعدادات `types`
+
+| المتغير | الوصف | القيمة الافتراضية |
+|---------|------|-------------------|
+| `NANO_TAGSAPI_TYPES_INCLUDE` | العلاقات المضمنة افتراضياً (مفصولة بفواصل) | `''` |
+| `NANO_TAGSAPI_TYPES_EXCLUDE` | الأعمدة المستبعدة من الاستعلام | `''` |
+| `NANO_TAGSAPI_TYPES_IS_DEPARTMENTS` | فلترة الأنواع التي تمثل أقساماً (`true`/`false`) | `true` |
+| `NANO_TAGSAPI_TYPES_IS_PUBLIC` | عرض الأنواع العامة فقط | `true` |
+| `NANO_TAGSAPI_TYPES_PER_PAGE` | عدد النتائج لكل صفحة | `15` |
+| `NANO_TAGSAPI_TYPES_ORDER_BY` | عمود الترتيب الافتراضي | `sort_order` |
+| `NANO_TAGSAPI_TYPES_ORDER_DIR` | اتجاه الترتيب الافتراضي (`asc`/`desc`) | `asc` |
+| `NANO_TAGSAPI_TYPES_IS_STOP_ORDER_TYPE` | إيقاف دمج `OrderHelper` على مستوى `types` | `false` |
+| `NANO_TAGSAPI_TYPES_IS_STOP_ORDER_TYPE_DEPARTMENTS` | إيقاف دمج `OrderHelper` على مستوى الأقسام المرتبطة | `false` |
+
+#### 2. إعدادات `tags`
+
+| المتغير | الوصف | القيمة الافتراضية |
+|---------|------|-------------------|
+| `NANO_TAGSAPI_TAGS_INCLUDE` | العلاقات المضمنة افتراضياً | `''` |
+| `NANO_TAGSAPI_TAGS_EXCLUDE` | الأعمدة المستبعدة | `''` |
+| `NANO_TAGSAPI_TAGS_IS_PUBLIC` | عرض الوسوم العامة فقط | `true` |
+| `NANO_TAGSAPI_TAGS_PER_PAGE` | عدد النتائج لكل صفحة | `15` |
+| `NANO_TAGSAPI_TAGS_ORDER_BY` | عمود الترتيب الافتراضي | `sort_order` |
+| `NANO_TAGSAPI_TAGS_ORDER_DIR` | اتجاه الترتيب الافتراضي | `asc` |
+
+#### 3. إعدادات `categories`
+
+| المتغير | الوصف | القيمة الافتراضية |
+|---------|------|-------------------|
+| `NANO_TAGSAPI_CATEGORIES_INCLUDE` | العلاقات المضمنة افتراضياً | `''` |
+| `NANO_TAGSAPI_CATEGORIES_EXCLUDE` | الأعمدة المستبعدة | `''` |
+| `NANO_TAGSAPI_CATEGORIES_IS_DISPLAY_EMPTY` | عرض التصنيفات الفارغة (بدون محتوى مرتبط) | `true` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_CATEABLES` | تصفية التصنيفات المرتبطة بأي كائن عبر `cateables` | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP` | تصفية التصنيفات المرتبطة بمتاجر | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS` | تصفية التصنيفات المرتبطة بمنتجات | `false` |
+| `NANO_TAGSAPI_CATEGORIES_IS_PUBLIC` | عرض التصنيفات العامة فقط | `true` |
+| `NANO_TAGSAPI_CATEGORIES_PER_PAGE` | عدد النتائج لكل صفحة | `15` |
+| `NANO_TAGSAPI_CATEGORIES_ORDER_BY` | عمود الترتيب الافتراضي | `sort_order` |
+| `NANO_TAGSAPI_CATEGORIES_ORDER_DIR` | اتجاه الترتيب الافتراضي | `asc` |
+
+#### 4. إعدادات `menus`
+
+| المتغير | الوصف | القيمة الافتراضية |
+|---------|------|-------------------|
+| `NANO_TAGSAPI_MENUS_INCLUDE` | العلاقات المضمنة افتراضياً | `''` |
+| `NANO_TAGSAPI_MENUS_EXCLUDE` | الأعمدة المستبعدة | `''` |
+| `NANO_TAGSAPI_MENUS_IS_PUBLIC` | عرض القوائم العامة فقط | `true` |
+| `NANO_TAGSAPI_MENUS_PER_PAGE` | عدد النتائج لكل صفحة | `15` |
+| `NANO_TAGSAPI_MENUS_ORDER_BY` | عمود الترتيب الافتراضي | `sort_order` |
+| `NANO_TAGSAPI_MENUS_ORDER_DIR` | اتجاه الترتيب الافتراضي | `asc` |
+
+---
+
+#### مثال لملف `.env`:
+
+```ini
+# إعدادات Nano.TagsApi
+NANO_TAGSAPI_CATEGORIES_IS_HAS_PRODUCTS=true
+NANO_TAGSAPI_CATEGORIES_IS_HAS_SHOP=true
+NANO_TAGSAPI_CATEGORIES_PER_PAGE=30
+NANO_TAGSAPI_TYPES_IS_DEPARTMENTS=true
+NANO_TAGSAPI_TYPES_PER_PAGE=50
+NANO_TAGSAPI_TAGS_PER_PAGE=20
+NANO_TAGSAPI_CATEGORIES_INCLUDE=children,parent
+NANO_TAGSAPI_TYPES_EXCLUDE=password,remember_token
+```
+
+---
+
+#### ملاحظات هامة
+
+- جميع المتغيرات اختيارية. إذا لم يتم تعيينها، فسيتم استخدام القيم الافتراضية المدمجة في `config.php`.
+- يمكن تجاوز أي من هذه الإعدادات عبر تمرير نفس المعامل في طلب API (مثل `?per_page=10`)، حيث أن `Input::get()` له الأولوية على الإعدادات.
+- يُنصح باستخدام متغيرات البيئة في بيئة الإنتاج 
+
+---
+
+### الخاتمة
+
+يمثل الإصدار `1.0.10` من إضافة `Nano.TagsApi` نقلة نوعية في مرونة النظام وقابليته للتوسع. من خلال الاعتماد على الإعدادات المركزية، وإضافة أحداث التوسع، وتحسين استعلامات `Categories`، أصبح من السهل الآن دمج `TagsApi` مع متطلبات أي مشروع معقد. كما أن تحسين التعامل مع الصفحات والترتيب يضمن اتساق السلوك عبر جميع نقاط النهاية.
+
+نوصي جميع المشاريع التي تستخدم `Nano.TagsApi` بالترقية إلى هذا الإصدار للاستفادة من التحسينات والأداء الأفضل.
+
+---
+
 

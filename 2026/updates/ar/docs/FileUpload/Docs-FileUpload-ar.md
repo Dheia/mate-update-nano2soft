@@ -38,6 +38,8 @@ Nano\FileUpload\Classes
 - **الخصائص الرئيسية**:
   - تسجيل النموذج مع `allowed_user_types` (backend/frontend).
   - تعيين صلاحيات لكل عملية (`add`, `edit`, `delete`, `view`) على مستوى النموذج أو الحقل.
+  - **إضافة `disabled_operations`** (منذ الإصدار 1.2.1): تعطيل عمليات محددة على مستوى النموذج أو الحقل دون تعديل الصلاحيات.
+  - **دوال التحقق المتكاملة** (منذ الإصدار 1.2.1): `canGlobal`, `validateGlobal`, `canModel`, `validateModel`, `canField`, `validateField`, `validate` – تسمح بالتحقق من الصلاحيات على مستويات متعددة ورمي استثناءات مناسبة.
   - دعم الإعدادات الافتراضية (`defaults`) لتقليل التكرار.
   - دالة `updateFieldConfig` لتحديث إعدادات حقل معين مع التطبيع ومسح الكاش.
   - دالة `updateModelConfig` محسنة لتطبيع النموذج بالكامل بعد التعديل.
@@ -56,6 +58,7 @@ Nano\FileUpload\Classes
   - جلب الملفات المرتبطة بنموذج أو مؤقتة (`getFiles`).
   - توليد مفاتيح جلسة مؤقتة (`generateTempSessionKey`) مع توقيع HMAC-SHA256.
   - ربط الملفات المؤقتة بنموذج محفوظ (`attachTempFiles`) مع إرجاع استجابة موحدة.
+  - **توحيد التحقق من المفاتيح المؤقتة** (منذ الإصدار 1.2.2): استخدام تريت `HasFileUploadsMatchTempKey` ودالة `validateAndMatchTempKey` للتحقق من صحة المفاتيح ومطابقتها مع النموذج والحقل والمستخدم في جميع الدوال (`upload`, `deleteFile`, `attachTempFiles`, `getFiles`).
   - التحقق من صحة الملف (حجم، نوع، قائمة سوداء) قبل الرفع (`validateFile`).
   - تطبيق التحويلات التلقائية (تحجيم، علامة مائية) على الصور (`applyAutoProcessing`).
   - تعيين قرص التخزين المخصص (`getStorageDiskForField`).
@@ -72,19 +75,33 @@ Nano\FileUpload\Classes
   - دعم دوال `hasAccess` و `hasPermission` لمستخدمي backend، ودالة `canUpload` لمستخدمي frontend.
 
 ### د. طبقة واجهة برمجة التطبيقات (API Layer)
-- **`FileUploadController`**: متحكم API يقدم نقاط نهاية RESTful لرفع الملفات (فردي/متعدد)، حذف ملف، جلب الملفات. يستخدم `FileUploadService` و `FileUploadRegistry` و `FileUploadUserManager` داخليًا.
-- **نقاط النهاية**:
+- **`FileUploadController`**: متحكم API يقدم نقاط نهاية RESTful لرفع الملفات (فردي/متعدد)، حذف ملف، جلب الملفات، بالإضافة إلى نقاط نهاية جديدة للاستعلام عن الموديولات والصلاحيات والتحقق من المفاتيح المؤقتة.
+- **نقاط النهاية الأساسية**:
   - `POST /upload` – رفع ملف واحد.
   - `POST /upload-multiple` – رفع عدة ملفات.
   - `DELETE /delete/{id}` – حذف ملف.
   - `GET /files` – جلب الملفات المرتبطة.
   - `GET /tests` – تشغيل مجموعة الاختبارات (متاح فقط في بيئة التطوير).
+- **نقاط النهاية الجديدة** (منذ الإصدار 1.2.3):
+  - **الاستعلام عن الموديولات والحقول**:
+    - `GET /models` – جلب قائمة الموديولات المسجلة (مرشحة حسب صلاحية المستخدم).
+    - `GET /models/{modelClass}` – جلب إعدادات موديول معين.
+    - `GET /models/{modelClass}/fields/{field}` – جلب إعدادات حقل معين.
+    - `GET /models/{modelClass}/fields/{field}/constraints` – جلب قيود الحقل (الحجم، الأنواع، إلخ).
+    - `GET /processing-options/{modelClass}/{field}` – جلب خيارات المعالجة المتقدمة (التخزين، التحجيم، العلامة المائية).
+  - **التحقق من الصلاحيات**:
+    - `GET /permissions/global/{operation}` – التحقق من تفعيل عملية عالمياً.
+    - `GET /permissions/model/{modelClass}/{operation}` – التحقق من صلاحية عملية على مستوى موديول.
+    - `GET /permissions/field/{modelClass}/{field}/{operation}` – التحقق من صلاحية عملية على مستوى حقل.
+    - `POST /permissions/check` – التحقق المتكامل من الصلاحية باستخدام `validate()`.
+  - **التحقق من المفاتيح المؤقتة**:
+    - `POST /temp-key/validate` – التحقق من صحة مفتاح مؤقت ومطابقته باستخدام `validateAndMatchTempKey`.
 - **المصادقة**: OAuth 2.0 عبر middleware `oauth-users`.
 - **الاستجابات**: موحدة وفق الهيكل `{code, status, message, data, input_data, process_data, debug, error_code}`.
 
 ### هـ. طبقة معالجة الأخطاء والاستثناءات
 - **`FileUploadException`**: كلاس استثناء مخصص يوفر أكواد خطأ فريدة (مثل `FILE_UPLOAD_FILE_SIZE_EXCEEDED`) وسياق إضافي للخطأ. يتم استخدامه في جميع أنحاء الخدمة لتوحيد التعامل مع الأخطاء.
-- يقوم تلقائياً بتحويل كود الخطأ الداخلي إلى كود HTTP مناسب (401, 403, 404, 422, 500, 503 إلخ) بناءً على خريطة محددة مسبقاً.
+- يقوم تلقائياً بتحويل كود الخطأ الداخلي إلى كود HTTP مناسب (401, 403, 404, 422, 500, 503, 423 إلخ) بناءً على خريطة محددة مسبقاً. **تم تعديل كود `ERR_PERMISSION_DENIED` من 403 إلى 422** (منذ الإصدار 1.2.1) لتجنب التعارض مع حالة "حساب غير نشط".
 
 ### و. طبقة الاختبارات (Testing Layer)
 - **`FileUploadPlusTest`**: كلاس اختبار شامل يوفر تغطية كاملة لجميع كلاسات الإضافة.
@@ -104,23 +121,26 @@ Nano\FileUpload\Classes
 1. **تسجيل النموذج (مرة واحدة)**:
    - في `Plugin.php` للإضافة، يتم تعريف دالة `registerFileUploadFields` التي تعيد مصفوفة تعريفات النماذج.
    - يقوم `FileUploadRegistry` تلقائيًا بجمع هذه التعريفات عبر `PluginManager` وتسجيلها، مع تطبيق الإعدادات الافتراضية (حسب نوع الملف) والتخزين المؤقت.
+   - **منذ الإصدار 1.2.1** يمكن إضافة `disabled_operations` على مستوى النموذج أو الحقل لتعطيل عمليات محددة.
 
 2. **رفع الملف الأول (عملية add)**:
    - يرسل العميل طلب `POST /upload` مع `model_class` و `field` والملف.
    - يتحقق `FileUploadController` من وجود النموذج والحقل في `FileUploadRegistry`.
    - يستدعي `FileUploadService::upload` مع البيانات.
    - يحدد `FileUploadService` العملية على أنها `add` (لعدم وجود ملف مرتبط).
-   - يتحقق من الصلاحية عبر `can($modelClass, 'add', ...)`.
+   - **إذا تم تمرير `temp_session_key`، يتم التحقق من صحته ومطابقته باستخدام `validateAndMatchTempKey`** (منذ الإصدار 1.2.2).
+   - يتحقق من الصلاحية عبر `validate($modelClass, 'add', ...)`.
    - يرفع الملف عبر `Base64::onUpload`، ويحسب `hash`, `meta`, ويضبط `expires_at` و `session_key` للملفات المؤقتة (إذا لم يكن هناك نموذج محفوظ).
    - يعيد `temp_session_key` في الاستجابة.
 
 3. **ربط الملف بالنموذج بعد إنشاء المنتج**:
    - بعد حفظ المنتج، يستدعي التطبيق `FileUploadService::attachTempFiles` لربط الملف المؤقت بالنموذج.
+   - **تستخدم `attachTempFiles` دالة `validateAndMatchTempKey`** للتحقق من المفتاح والمستخدم والنموذج والحقل في خطوة واحدة.
 
 4. **استبدال الملف (عملية edit)**:
    - يرسل العميل طلب `POST /upload` مرة أخرى بنفس `model_class` و `field` ولكن مع `model_id` للمنتج الحالي.
    - يتحقق `FileUploadService` من وجود ملف مرتبط بالفعل في علاقة `attachOne`، فيحدد العملية على أنها `edit`.
-   - يتحقق من صلاحية `edit` عبر `can($modelClass, 'edit', ...)`.
+   - يتحقق من صلاحية `edit` عبر `validate($modelClass, 'edit', ...)`.
    - يتم تنفيذ المعاملة (`Db::transaction`):
      - رفع الملف الجديد وحفظه.
      - إطلاق حدث `nano.fileupload.beforeEditDelete`.
@@ -130,13 +150,19 @@ Nano\FileUpload\Classes
    - إذا فشل أي جزء، يتم التراجع عن جميع التغييرات (لا يتم حذف الملف القديم).
 
 5. **جلب الملفات**:
-   - يمكن استدعاء `GET /files` مع `model_class` و `field` و `model_id` لجلب الملفات المرتبطة، أو مع `temp_session_key` لجلب الملفات المؤقتة (مع التحقق الأمني).
+   - يمكن استدعاء `GET /files` مع `model_class` و `field` و `model_id` لجلب الملفات المرتبطة، أو مع `temp_session_key` لجلب الملفات المؤقتة.
+   - **عند استخدام `temp_session_key`، يتم التحقق من صحته ومطابقته باستخدام `validateAndMatchTempKey`** قبل تنفيذ الاستعلام.
+
+6. **استخدام نقاط النهاية الجديدة (منذ الإصدار 1.2.3)**:
+   - يمكن للواجهات الأمامية استخدام `/models` لمعرفة الموديولات والحقول المتاحة.
+   - يمكن استخدام `/permissions/check` للتحقق من صلاحية المستخدم قبل محاولة الرفع.
+   - يمكن استخدام `/temp-key/validate` للتأكد من صحة المفتاح المؤقت قبل استخدامه.
 
 ---
 
 ## 4. حالات الاستخدام النموذجية
 
-### أ. تسجيل نموذج منتج مع صورة رئيسية ومعرض صور (باستخدام الإعدادات المتقدمة)
+### أ. تسجيل نموذج منتج مع صورة رئيسية ومعرض صور (باستخدام الإعدادات المتقدمة و `disabled_operations`)
 ```php
 // في Plugin.php
 public function registerFileUploadFields()
@@ -144,6 +170,7 @@ public function registerFileUploadFields()
     return [
         \Nano\Shop\Models\Product::class => [
             'allowed_user_types' => ['backend'],
+            'disabled_operations' => ['delete'], // تعطيل الحذف على مستوى المنتج
             'fields' => [
                 'image' => [
                     'type' => 'image',
@@ -154,6 +181,7 @@ public function registerFileUploadFields()
                     'auto_watermark' => true,
                     'watermark_options' => ['position' => 'bottom-right', 'resize_percentage' => 15],
                     'storage_disk' => 's3',
+                    'disabled_operations' => ['edit'], // تعطيل استبدال الصورة فقط
                 ],
                 'gallery' => [
                     'type' => 'multiple',
@@ -231,6 +259,35 @@ Event::listen('nano.fileupload.afterEditDelete', function ($oldFile, $modelClass
 });
 ```
 
+### ز. استخدام نقاط النهاية الجديدة للاستعلام عن الموديولات (منذ الإصدار 1.2.3)
+```php
+// جلب جميع الموديولات المتاحة للمستخدم الحالي
+$models = $api->get('/models');
+
+// جلب إعدادات حقل معين
+$fieldConfig = $api->get('/models/Nano%5CShop%5CModels%5CProduct/fields/image');
+
+// التحقق من صلاحية المستخدم لاستبدال صورة منتج
+$permission = $api->post('/permissions/check', [
+    'model_class' => 'Nano\Shop\Models\Product',
+    'operation' => 'edit',
+    'field' => 'image',
+]);
+if ($permission['data']['allowed']) {
+    // عرض واجهة استبدال الصورة
+}
+
+// التحقق من صحة مفتاح مؤقت قبل استخدامه
+$tempKeyValidation = $api->post('/temp-key/validate', [
+    'temp_key' => $tempKey,
+    'model_class' => 'Nano\Shop\Models\Product',
+    'field' => 'image',
+]);
+if ($tempKeyValidation['data']['valid']) {
+    // المفتاح صالح، يمكن استخدامه
+}
+```
+
 ---
 
 ## 5. الفوائد والمزايا
@@ -241,7 +298,9 @@ Event::listen('nano.fileupload.afterEditDelete', function ($oldFile, $modelClass
   - استخدام `FileUploadUserManager` الموحد للحصول على المستخدم الحالي.
   - التحقق من حجم ونوع الملف قبل الرفع عبر `validateFile` (بما في ذلك القائمة السوداء للملفات الخطيرة).
   - مفاتيح جلسة مؤقتة موقعة بـ HMAC-SHA256 تحتوي على `userType` و `timestamp` لمنع التلاعب.
+  - **توحيد التحقق من المفاتيح المؤقتة** (منذ الإصدار 1.2.2) عبر دالة `validateAndMatchTempKey` المستخدمة في جميع الدوال.
   - إمكانية تعطيل عمليات API بالكامل (`disable_upload`, `disable_delete`, `disable_get`, `disable_edit`).
+  - إمكانية تعطيل عمليات محددة على مستوى النموذج أو الحقل عبر `disabled_operations` (منذ الإصدار 1.2.1).
 
 - **المرونة**:
   - تسجيل أي نموذج مع إعدادات مخصصة لكل حقل.
@@ -254,6 +313,7 @@ Event::listen('nano.fileupload.afterEditDelete', function ($oldFile, $modelClass
   - دعم التحويل التلقائي للصور (تحجيم، علامة مائية).
   - دعم WebSocket عبر الأحداث.
   - دالة `updateFieldConfig` لتحديث إعدادات حقل معين دون إعادة تسجيل النموذج.
+  - **نقاط نهاية API جديدة للاستعلام عن الموديولات والصلاحيات والتحقق من المفاتيح المؤقتة** (منذ الإصدار 1.2.3).
 
 - **الأداء**:
   - استخدام مفاتيح جلسة مؤقتة لتجنب حفظ الملفات بشكل غير مرتبط.
@@ -275,6 +335,7 @@ Event::listen('nano.fileupload.afterEditDelete', function ($oldFile, $modelClass
   - إدارة الملفات المؤقتة تلقائيًا.
   - أكواد خطأ فريدة ورسائل مترجمة.
   - نظام اختبار متكامل (`FileUploadPlusTest`) يمكن تشغيله بسهولة عبر API للتحقق من صحة التثبيت.
+  - **نقاط نهاية API للاستعلام** تسهل بناء واجهات أمامية ديناميكية.
 
 ---
 
@@ -363,6 +424,27 @@ public function updateProductImage(Request $request, $id)
 
     return response()->json(['message' => 'تم استبدال الصورة بنجاح']);
 }
+
+// 4. مثال لاستخدام نقاط النهاية الجديدة للتحقق من الصلاحية قبل عرض النموذج
+public function showProductEditForm($id)
+{
+    $product = Product::findOrFail($id);
+    // التحقق من صلاحية المستخدم لاستبدال الصورة
+    $client = new \GuzzleHttp\Client();
+    $response = $client->post(env('API_URL') . '/permissions/check', [
+        'headers' => ['Authorization' => 'Bearer ' . $request->bearerToken()],
+        'json' => [
+            'model_class' => Product::class,
+            'operation' => 'edit',
+            'field' => 'image',
+        ],
+    ]);
+    $permission = json_decode($response->getBody(), true);
+    if (!$permission['data']['allowed']) {
+        return view('product.edit', ['product' => $product, 'can_edit_image' => false]);
+    }
+    return view('product.edit', ['product' => $product, 'can_edit_image' => true]);
+}
 ```
 
 ---
@@ -382,7 +464,7 @@ public function updateProductImage(Request $request, $id)
 
 ## 8. الخاتمة
 
-تمثل كلاسات `Nano.FileUpload` حلاً متكاملاً واحترافياً لإدارة رفع الملفات في تطبيقات نانوسوفت. بفضل التصميم الطبقي (Registry, Service, UserManager, API)، يمكن للمطورين بناء أنظمة رفع ملفات قوية وآمنة بسرعة وسهولة. مع إضافة `FileUploadService`، أصبح النظام أكثر تنظيماً وسهولة في الاستخدام، حيث يوفر نقطة دخول واحدة لتنفيذ عمليات الرفع والحذف والاسترجاع، مع دعم خيارات متقدمة مثل الرفع المؤقت، الصور المصغرة، والتحقق من الصلاحيات بأنواع المستخدمين المختلفة. كما أن دعم عملية `edit` (استبدال الملفات) باستخدام المعاملات والأحداث المخصصة يضمن تكاملية البيانات وأمانها. هذا التصميم يضمن قابلية التوسع والصيانة، ويلبي احتياجات التطبيقات المتقدمة دون المساس بأمان النظام أو أدائه.
+تمثل كلاسات `Nano.FileUpload` حلاً متكاملاً واحترافياً لإدارة رفع الملفات في تطبيقات نانوسوفت. بفضل التصميم الطبقي (Registry, Service, UserManager, API)، يمكن للمطورين بناء أنظمة رفع ملفات قوية وآمنة بسرعة وسهولة. مع إضافة `FileUploadService`، أصبح النظام أكثر تنظيماً وسهولة في الاستخدام، حيث يوفر نقطة دخول واحدة لتنفيذ عمليات الرفع والحذف والاسترجاع، مع دعم خيارات متقدمة مثل الرفع المؤقت، الصور المصغرة، والتحقق من الصلاحيات بأنواع المستخدمين المختلفة. كما أن دعم عملية `edit` (استبدال الملفات) باستخدام المعاملات والأحداث المخصصة يضمن تكاملية البيانات وأمانها. الإصدارات الأخيرة (1.2.1، 1.2.2، 1.2.3) أضافت تحسينات كبيرة: دوال تحقق متكاملة (`validate`, `canGlobal`, ...)، إمكانية تعطيل عمليات محددة (`disabled_operations`)، توحيد منطق التحقق من المفاتيح المؤقتة عبر تريت `HasFileUploadsMatchTempKey`، ونقاط نهاية API جديدة للاستعلام عن الموديولات والصلاحيات والتحقق من المفاتيح. هذا التصميم يضمن قابلية التوسع والصيانة، ويلبي احتياجات التطبيقات المتقدمة دون المساس بأمان النظام أو أدائه.
 
 ---
 

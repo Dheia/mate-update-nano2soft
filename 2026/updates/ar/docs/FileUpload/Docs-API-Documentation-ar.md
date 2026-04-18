@@ -1,6 +1,6 @@
-# توثيق واجهة برمجة التطبيقات (API) لرفع الملفات
+## توثيق واجهة برمجة التطبيقات (API) لرفع الملفات – الإصدار 1.2.3
 
-**الإصدار:** 1.2.0  
+**الإصدار:** 1.2.3  
 **المسار الأساسي:** `/api/v1/fileupload`  
 **المصادقة:** OAuth 2.0 (توكن الوصول في الهيدر `Authorization: Bearer <token>`)
 
@@ -19,6 +19,9 @@
 - استجابات موحدة مع أكواد خطأ فريدة لتسهيل المعالجة البرمجية.
 - أمان كامل عبر OAuth 2.0 والتحقق من صلاحيات المستخدم.
 - **نقطة نهاية لتشغيل الاختبارات** (متاحة فقط في بيئة التطوير).
+- **نقاط نهاية للاستعلام عن الموديولات المسجلة وإعداداتها وقيودها** (جديد في الإصدار 1.2.3).
+- **نقاط نهاية للتحقق من الصلاحيات** على المستويات العالمية، مستوى الموديول، ومستوى الحقل (جديد في الإصدار 1.2.3).
+- **نقطة نهاية للتحقق من صحة المفاتيح المؤقتة** (جديد في الإصدار 1.2.3).
 
 ---
 
@@ -50,7 +53,7 @@
 | `error` | `string\|null` | تفاصيل الخطأ التقنية (في حالة الفشل). |
 | `errors` | `array\|null` | مصفوفة بأخطاء التحقق (مثل صحة المدخلات). |
 | `data` | `mixed` | البيانات الأساسية (مثل معلومات الملف المرفوع). |
-| `meta` | `mixed` | بيانات إضافية (غير مستخدم حالياً). |
+| `meta` | `mixed` | بيانات إضافية (مثل ملخص الاختبارات). |
 | `input_data` | `array` | نسخة من البيانات التي أرسلها المستخدم (للتتبع). |
 | `process_data` | `array` | معلومات داخلية عن المعالجة (مثل مفتاح الجلسة المؤقت، العملية المنفذة `add`/`edit`). |
 | `debug` | `array\|null` | معلومات التصحيح (تظهر فقط عند تفعيل `app.debug`). |
@@ -90,7 +93,7 @@ Authorization: Bearer <your_access_token>
 | `file` | `file` | شرطي* | الملف المرفوع (بصيغة multipart). |
 | `file_base64` | `string` | شرطي* | بيانات الملف بصيغة base64 (بديل عن `file`). |
 | `temp_session_key` | `string` | لا | مفتاح جلسة مؤقت لربط الملف لاحقاً (للنماذج غير المحفوظة). |
-| `model_id` | `int` | لا | معرف النموذج المحفوظ. إذا كان الحقل من نوع `attachOne` وكان النموذج يمتلك ملفاً مرتبطاً بالفعل، **سيتم استبدال الملف القديم بالجديد** (عملية `edit`). |
+| `model_id` | `int` | لا | معرف النموذج المحفوظ. إذا كان الحقل من نوع `attachOne` وكان النموذج يمتلك ملفاً مرتبطاً مسبقاً، **سيتم استبدال الملف القديم بالجديد** (عملية `edit`). |
 
 > * يجب توفير إما `file` أو `file_base64`.
 
@@ -632,17 +635,18 @@ Authorization: Bearer ...
 | المعامل | النوع | مطلوب | الوصف |
 |---------|------|-------|-------|
 | `test_version` | `string` | لا | إصدار الاختبارات (`v1` أو `v2`، الافتراضي `v2`). الإصدار `v2` هو الأحدث ويوفر مخرجات موحدة. |
+| `filter` | `string` | لا | تصفية النتائج (`all`, `passed`, `failed`، الافتراضي `all`). |
 
 #### مثال طلب
 
 ```http
-GET /api/v1/fileupload/tests?test_version=v2 HTTP/1.1
+GET /api/v1/fileupload/tests?test_version=v2&filter=passed HTTP/1.1
 Authorization: Bearer <token>
 ```
 
 #### الاستجابة
 
-تعيد مصفوفة بنتائج جميع الاختبارات مع ملخص (`total`, `passed`, `failed`, `success_rate`). كل اختبار يحتوي على `test_code`, `name`, `description`, `status`, `message`, `data`, `error`, `debug` إلخ.
+تعيد مصفوفة بنتائج جميع الاختبارات (أو المصفاة) مع ملخص (`total`, `passed`, `failed`, `success_rate`). كل اختبار يحتوي على `test_code`, `name`, `description`, `status`, `message`, `data`, `error`, `debug` إلخ.
 
 **✅ استجابة نجاح (مثال مختصر):**
 
@@ -664,13 +668,600 @@ Authorization: Bearer <token>
             "total": 43,
             "passed": 43,
             "failed": 0,
-            "success_rate": 100
+            "success_rate": 100,
+            "test_version": "v2",
+            "filter_applied": "passed"
         }
     }
 }
 ```
 
 > **تنبيه:** لا تستخدم هذه النقطة في الإنتاج أبداً، لأنها قد تكشف معلومات داخلية عن النظام.
+
+---
+
+### 6. جلب جميع الموديولات المسجلة (جديد في 1.2.3)
+
+**الطريقة:** `GET`  
+**المسار:** `/models`
+
+**الوصف:** يعيد قائمة الموديولات المسجلة في النظام التي يملك المستخدم الحالي صلاحية `view` عليها، مع معلومات مختصرة عن حقولها (الاسم، النوع، هل هو متعدد). هذه النقطة مفيدة لتطبيقات الواجهة الأمامية التي تحتاج إلى بناء نماذج رفع ديناميكية بناءً على الإعدادات الفعلية.
+
+#### معاملات الاستعلام
+
+لا توجد معاملات مطلوبة.
+
+#### مثال طلب
+
+```http
+GET /api/v1/fileupload/models HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "Nano\\Shop\\Models\\Product": {
+            "class": "Nano\\Shop\\Models\\Product",
+            "label": "Product",
+            "enabled": true,
+            "allowed_user_types": ["backend", "frontend"],
+            "fields": {
+                "image": {
+                    "type": "image",
+                    "label": "image",
+                    "multiple": false
+                },
+                "gallery": {
+                    "type": "multiple",
+                    "label": "gallery",
+                    "multiple": true
+                }
+            }
+        },
+        "Nano\\User\\Models\\User": {
+            "class": "Nano\\User\\Models\\User",
+            "label": "User",
+            "enabled": true,
+            "allowed_user_types": ["backend"],
+            "fields": {
+                "avatar": {
+                    "type": "image",
+                    "label": "avatar",
+                    "multiple": false
+                }
+            }
+        }
+    },
+    "meta": {
+        "total": 2
+    }
+}
+```
+
+> **ملاحظة:** يتم تصفية الموديولات التي لا يملك المستخدم صلاحية `view` عليها تلقائياً، لذلك قد تختلف القائمة حسب المستخدم.
+
+---
+
+### 7. جلب إعدادات موديول معين (جديد في 1.2.3)
+
+**الطريقة:** `GET`  
+**المسار:** `/models/{modelClass}`
+
+**الوصف:** يعيد الإعدادات الكاملة لموديول معين (بعد التحقق من وجوده وصلاحية `view`). تشمل الإعدادات الحقول المسجلة مع بعض التفاصيل (النوع، الحجم الأقصى، الأنواع المسموحة، إلخ).
+
+#### معاملات المسار
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (مثال: `Nano\Shop\Models\Product`). يجب ترميزه في الرابط (URL-encoded). |
+
+#### مثال طلب
+
+```http
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "enabled": true,
+        "label": "Product",
+        "allowed_user_types": ["backend", "frontend"],
+        "disabled_operations": [],
+        "fields": {
+            "image": {
+                "type": "image",
+                "label": "image",
+                "multiple": false,
+                "required": false,
+                "max_filesize": 2048,
+                "allowed_types": "jpg,jpeg,png",
+                "use_caption": true,
+                "disabled_operations": []
+            },
+            "gallery": {
+                "type": "multiple",
+                "label": "gallery",
+                "multiple": true,
+                "required": false,
+                "max_filesize": 2048,
+                "allowed_types": "jpg,jpeg,png",
+                "use_caption": true,
+                "disabled_operations": []
+            }
+        }
+    }
+}
+```
+
+**❌ استجابة خطأ (موديول غير مسجل):**
+
+```json
+{
+    "code": 404,
+    "status": false,
+    "message": "النموذج غير مسجل في النظام",
+    "error_code": "FILE_UPLOAD_MODEL_NOT_REGISTERED"
+}
+```
+
+**❌ استجابة خطأ (لا توجد صلاحية view):**
+
+```json
+{
+    "code": 403,
+    "status": false,
+    "message": "لا تملك صلاحية رفع الملفات لهذا الحقل",
+    "error_code": "FILE_UPLOAD_PERMISSION_DENIED"
+}
+```
+
+---
+
+### 8. جلب إعدادات حقل معين (جديد في 1.2.3)
+
+**الطريقة:** `GET`  
+**المسار:** `/models/{modelClass}/fields/{field}`
+
+**الوصف:** يعيد إعدادات حقل معين (مثل النوع، الحجم الأقصى، الأنواع المسموحة). يستخدم هذا للتحقق من إعدادات الحقل قبل محاولة الرفع.
+
+#### معاملات المسار
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
+| `field` | `string` | نعم | اسم الحقل. |
+
+#### مثال طلب
+
+```http
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "type": "image",
+        "label": "image",
+        "multiple": false,
+        "required": false,
+        "max_filesize": 2048,
+        "allowed_types": "jpg,jpeg,png",
+        "use_caption": true,
+        "disabled_operations": []
+    }
+}
+```
+
+**❌ استجابة خطأ (حقل غير مسجل):**
+
+```json
+{
+    "code": 404,
+    "status": false,
+    "message": "الحقل 'video' غير مسجل في النموذج 'Nano\\Shop\\Models\\Product'",
+    "error_code": "FILE_UPLOAD_FIELD_NOT_REGISTERED"
+}
+```
+
+---
+
+### 9. جلب قيود الحقل (جديد في 1.2.3)
+
+**الطريقة:** `GET`  
+**المسار:** `/models/{modelClass}/fields/{field}/constraints`
+
+**الوصف:** يعيد قيود الحقل المستخدمة في عملية التحقق من صحة الملف (`max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`). يمكن للواجهات الأمامية تطبيق نفس القيود قبل رفع الملف لتجنب أخطاء الخادم.
+
+#### معاملات المسار
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
+| `field` | `string` | نعم | اسم الحقل. |
+
+#### مثال طلب
+
+```http
+GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image/constraints HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "max_filesize": 2048,
+        "allowed_types": "jpg,jpeg,png",
+        "multiple": false,
+        "max_files": null,
+        "required": false,
+        "is_public": true,
+        "use_caption": true,
+        "thumb_options": {
+            "mode": "crop",
+            "extension": "auto"
+        },
+        "type": "image"
+    }
+}
+```
+
+---
+
+### 10. جلب خيارات المعالجة المتقدمة لحقل معين (جديد في 1.2.3)
+
+**الطريقة:** `GET`  
+**المسار:** `/processing-options/{modelClass}/{field}`
+
+**الوصف:** يعيد خيارات المعالجة المتقدمة الخاصة بالحقل: قرص التخزين (`storage_disk`)، التحجيم التلقائي (`auto_resize` مع `resize_options`)، والعلامة المائية (`auto_watermark` مع `watermark_options`). هذه المعلومات مفيدة للواجهات المتقدمة التي تحتاج إلى معرفة كيفية معالجة الملفات بعد الرفع.
+
+#### معاملات المسار
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
+| `field` | `string` | نعم | اسم الحقل. |
+
+#### مثال طلب
+
+```http
+GET /api/v1/fileupload/processing-options/Nano%5CShop%5CModels%5CProduct/image HTTP/1.1
+Authorization: Bearer ...
+```
+
+#### الاستجابة
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "storage_disk": "s3",
+        "auto_resize": true,
+        "resize_options": {
+            "width": 1920,
+            "height": 1080,
+            "mode": "auto"
+        },
+        "auto_watermark": true,
+        "watermark_options": {
+            "position": "bottom-right",
+            "resize_percentage": 15
+        }
+    }
+}
+```
+
+**❌ استجابة خطأ (حقل غير مسجل):** (نفس هيكل الخطأ السابق)
+
+---
+
+### 11. التحقق من الصلاحيات (عالمي، موديول، حقل) – جديد في 1.2.3
+
+#### 11.1 التحقق من تفعيل عملية معينة عالمياً
+
+**الطريقة:** `GET`  
+**المسار:** `/permissions/global/{operation}`
+
+**معاملات المسار:**
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
+
+**مثال طلب:**
+
+```http
+GET /api/v1/fileupload/permissions/global/edit HTTP/1.1
+Authorization: Bearer ...
+```
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "operation": "edit",
+        "allowed": true,
+        "disabled_globally": false
+    }
+}
+```
+
+#### 11.2 التحقق من صلاحية عملية على مستوى موديول معين
+
+**الطريقة:** `GET`  
+**المسار:** `/permissions/model/{modelClass}/{operation}`
+
+**معاملات المسار:**
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
+| `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
+
+**مثال طلب:**
+
+```http
+GET /api/v1/fileupload/permissions/model/Nano%5CShop%5CModels%5CProduct/edit HTTP/1.1
+Authorization: Bearer ...
+```
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "model_class": "Nano\\Shop\\Models\\Product",
+        "operation": "edit",
+        "model_operation_enabled": true,
+        "user_type_allowed": true,
+        "can_proceed": true
+    }
+}
+```
+
+#### 11.3 التحقق من صلاحية عملية على مستوى حقل معين
+
+**الطريقة:** `GET`  
+**المسار:** `/permissions/field/{modelClass}/{field}/{operation}`
+
+**معاملات المسار:**
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `modelClass` | `string` | نعم | اسم الفئة الكامل للنموذج (URL-encoded). |
+| `field` | `string` | نعم | اسم الحقل. |
+| `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
+
+**مثال طلب:**
+
+```http
+GET /api/v1/fileupload/permissions/field/Nano%5CShop%5CModels%5CProduct/image/edit HTTP/1.1
+Authorization: Bearer ...
+```
+
+**✅ استجابة نجاح:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "model_class": "Nano\\Shop\\Models\\Product",
+        "field": "image",
+        "operation": "edit",
+        "field_operation_enabled": true,
+        "user_has_full_permission": true,
+        "can_proceed": true
+    }
+}
+```
+
+> **ملاحظة:** `user_has_full_permission` يشمل التحقق من نوع المستخدم، الصلاحيات المحددة، والإعدادات العامة والموديول والحقل.
+
+---
+
+### 12. التحقق المتكامل من الصلاحية (باستخدام validate) – جديد في 1.2.3
+
+**الطريقة:** `POST`  
+**المسار:** `/permissions/check`
+
+**الوصف:** يتحقق من الصلاحية بشكل متكامل (العالمية، الموديول، الحقل، نوع المستخدم، الصلاحيات المحددة) ويعيد النتيجة دون الحاجة لمحاولة رفع ملف فعلي.
+
+#### معاملات الطلب (JSON)
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج. |
+| `operation` | `string` | نعم | العملية: `add`, `edit`, `delete`, `view`. |
+| `field` | `string` | لا | اسم الحقل (اختياري، إذا كان التحقق على مستوى حقل). |
+
+#### مثال طلب
+
+```json
+POST /api/v1/fileupload/permissions/check HTTP/1.1
+Authorization: Bearer ...
+Content-Type: application/json
+
+{
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "operation": "edit",
+    "field": "image"
+}
+```
+
+#### الاستجابات
+
+**✅ استجابة نجاح (مسموح):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "allowed": true,
+        "model_class": "Nano\\Shop\\Models\\Product",
+        "operation": "edit",
+        "field": "image",
+        "message": "Permission granted"
+    }
+}
+```
+
+**❌ استجابة نجاح (غير مسموح – مع رسالة الخطأ):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم جلب الملفات",
+    "data": {
+        "allowed": false,
+        "model_class": "Nano\\Shop\\Models\\Product",
+        "operation": "edit",
+        "field": "image",
+        "message": "لا تملك صلاحية رفع الملفات لهذا الحقل"
+    }
+}
+```
+
+> **ملاحظة:** في حالة عدم السماح، يبقى `code` = 200 و `status` = true لأن الطلب نفسه نجح في إجراء التحقق. الخطأ يُبلغ في `data.message`.
+
+---
+
+### 13. التحقق من صحة مفتاح مؤقت ومطابقته (جديد في 1.2.3)
+
+**الطريقة:** `POST`  
+**المسار:** `/temp-key/validate`
+
+**الوصف:** يتحقق من صحة مفتاح الجلسة المؤقت (صيغة، توقيع، صلاحية) ومطابقته مع النموذج والحقل والمستخدم المقدمين. هذه النقطة مفيدة للتطبيقات التي تحتاج إلى التأكد من أن المفتاح المؤقت الذي تحتفظ به لا يزال صالحاً قبل استخدامه في عمليات الربط أو الرفع.
+
+#### معاملات الطلب (JSON)
+
+| المعامل | النوع | مطلوب | الوصف |
+|---------|------|-------|-------|
+| `temp_key` | `string` | نعم | مفتاح الجلسة المؤقت (يبدأ بـ `tmp_`). |
+| `model_class` | `string` | نعم | اسم الفئة الكامل للنموذج المتوقع. |
+| `field` | `string` | نعم | اسم الحقل المتوقع. |
+| `strict_mode` | `bool` | لا | وضع صارم (يتطلب تطابق تام للنموذج والحقل). افتراضي `true`. |
+| `allow_expired_key` | `bool` | لا | السماح بالمفاتيح منتهية الصلاحية ضمن فترة سماح. افتراضي `false`. |
+| `expiry_grace_period` | `int` | لا | فترة السماح بالثواني (عند `allow_expired_key=true`). افتراضي `300` (5 دقائق). |
+
+#### مثال طلب
+
+```json
+POST /api/v1/fileupload/temp-key/validate HTTP/1.1
+Authorization: Bearer ...
+Content-Type: application/json
+
+{
+    "temp_key": "tmp_YWJjMTIzOnNvbWVoYXNo",
+    "model_class": "Nano\\Shop\\Models\\Product",
+    "field": "image",
+    "strict_mode": true,
+    "allow_expired_key": false
+}
+```
+
+#### الاستجابات
+
+**✅ استجابة نجاح (مفتاح صالح):**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم التحقق من صحة المفتاح المؤقت",
+    "data": {
+        "valid": true,
+        "key_data": {
+            "modelClass": "Nano\\Shop\\Models\\Product",
+            "field": "image",
+            "userId": "123",
+            "userType": "backend",
+            "timestamp": 1744123456
+        },
+        "matched_data": {
+            "model_matched": true,
+            "field_matched": true,
+            "user_matched": true,
+            "user_id_matched": true,
+            "user_type_matched": true
+        }
+    },
+    "process_data": {
+        "validated": true,
+        "model_matched": true,
+        "field_matched": true,
+        "user_matched": true
+    }
+}
+```
+
+**❌ استجابة خطأ (مفتاح غير صالح):**
+
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "مفتاح جلسة مؤقت غير صالح أو منتهي الصلاحية",
+    "error_code": "FILE_UPLOAD_TEMP_KEY_INVALID"
+}
+```
+
+**❌ استجابة خطأ (مفتاح لا يطابق النموذج):**
+
+```json
+{
+    "code": 403,
+    "status": false,
+    "message": "المفتاح المؤقت غير مخصص لهذا النموذج/الحقل",
+    "error_code": "FILE_UPLOAD_TEMP_KEY_MISMATCH"
+}
+```
 
 ---
 
@@ -709,22 +1300,31 @@ Authorization: Bearer <token>
 2. **لاستبدال ملف موجود** (عملية `edit`): استخدم `model_id` مع الحقل من نوع `attachOne`. سيتم حذف الملف القديم تلقائياً بعد رفع الجديد، مع ضمان سلامة البيانات عبر المعاملات. تأكد من أن المستخدم لديه صلاحية `edit`.
 
 3. **تعامل مع `error_code` برمجياً**  
-   بدلاً من الاعتماد على رسائل نصية، استخدم `error_code` لتحديد نوع الخطأ وعرض رسائل مناسبة للمستخدم (مثال: `FILE_UPLOAD_PERMISSION_DENIED` → "غير مصرح").
+   بدلاً من الاعتماد على رسائل نصية، استخدم `error_code` لتحديد نوع الخطأ وعرض رسائل مناسبة للمستخدم.
 
-4. **استخدم `with_thumbs` فقط عند الحاجة**  
+4. **استخدم نقاط نهاية الاستعلام (`/models`, `/fields`, `/constraints`) لبناء واجهات ديناميكية**  
+   يمكنك جلب قيود الحقول وعرضها للمستخدم (مثال: عرض الحد الأقصى للحجم، الأنواع المسموحة) قبل أن يختار الملف.
+
+5. **تحقق من الصلاحيات مسبقاً باستخدام `/permissions/check`**  
+   لتجنب محاولات الرفض، يمكنك التحقق من صلاحية المستخدم للعملية قبل عرض نموذج رفع الملف.
+
+6. **تحقق من صحة المفتاح المؤقت قبل استخدامه**  
+   استخدم نقطة `/temp-key/validate` للتأكد من أن المفتاح الذي تخزنه في الجلسة لا يزال صالحاً (لم تنته صلاحيته، ولا يخص مستخدم آخر).
+
+7. **استخدم `with_thumbs` فقط عند الحاجة**  
    طلب الصور المصغرة يستهلك وقتاً إضافياً لإنشاءها (إذا لم تكن موجودة). استخدمها فقط في شاشات العرض التي تحتاجها.
 
-5. **فعّل `app.debug` في بيئة التطوير**  
+8. **فعّل `app.debug` في بيئة التطوير**  
    عند مواجهة أخطاء 500، قم بتفعيل وضع التصحيح للحصول على تفاصيل كاملة في حقل `debug` تساعدك في تشخيص المشكلة.
 
-6. **حافظ على مفاتيح الجلسة المؤقتة بشكل آمن**  
+9. **حافظ على مفاتيح الجلسة المؤقتة بشكل آمن**  
    خزّن `temp_session_key` في جلسة المستخدم أو قاعدة بيانات مؤقتة، ولا تعرضه في الواجهة الأمامية إلا للضرورة القصوى (لأنه يحمل معلومات حساسة).
 
-7. **راجع إعدادات النظام**  
-   تأكد من أن حقول الرفع مسجلة بشكل صحيح في `FileUploadRegistry`، وأن الإعدادات العامة (مثل `disable_upload`, `disable_edit`, `disable_auto_resize`) مضبوطة حسب احتياجاتك.
+10. **راجع إعدادات النظام**  
+    تأكد من أن حقول الرفع مسجلة بشكل صحيح، وأن الإعدادات العامة (مثل `disable_upload`, `disable_edit`, `disable_auto_resize`) مضبوطة حسب احتياجاتك.
 
-8. **راقب سجل `fileupload.log`**  
-   ملف السجل المخصص (`storage/logs/fileupload.log`) يحتوي على تفاصيل محاولات الرفع الفاشلة، بما في ذلك محاولات رفع ملفات خطيرة، مما يساعد في مراقبة الأمان.
+11. **راقب سجل `fileupload.log`**  
+    ملف السجل المخصص (`storage/logs/fileupload.log`) يحتوي على تفاصيل محاولات الرفع الفاشلة، بما في ذلك محاولات رفع ملفات خطيرة، مما يساعد في مراقبة الأمان.
 
 ---
 
@@ -747,13 +1347,22 @@ Authorization: Bearer <token>
 ج: يمكنك طلب أي أبعاد تريدها عبر `thumb_sizes`، وسيتم إنشاء الصورة المصغرة تلقائياً (إذا لم تكن موجودة). الأحجام الشائعة: `[150,150,'crop']`, `[300,300,'crop']`, `[800,600,'auto']`.
 
 **س: كيف أعرف أن الملف قد تم تحجيمه أو إضافة علامة مائية؟**  
-ج: هذه العمليات تتم تلقائياً وفق إعدادات الحقل في `FileUploadRegistry`. إذا كنت مطوراً، راجع إعدادات الحقل (`auto_resize`, `auto_watermark`). إذا كنت مستخدم API، لا تحتاج إلى القيام بأي شيء إضافي.
+ج: هذه العمليات تتم تلقائياً وفق إعدادات الحقل. إذا كنت مطوراً، راجع إعدادات الحقل (`auto_resize`, `auto_watermark`). إذا كنت مستخدم API، لا تحتاج إلى القيام بأي شيء إضافي.
 
 **س: ماذا لو أردت رفع ملف بنفس الاسم مرتين؟**  
 ج: النظام يقوم بتوليد اسم فريد (`disk_name`) تلقائياً، لذا لن يحدث تعارض. يمكنك الاعتماد على `id` و `path` للتمييز.
 
 **س: هل يمكنني رفع ملفات بصيغة PDF أو DOCX؟**  
 ج: نعم، إذا كان الحقل مسجلاً بنوع `file` أو تم تحديد `allowed_types` المناسب. أنواع الملفات المدعومة افتراضياً تشمل `pdf,doc,docx,xls,xlsx,zip,rar,txt` (لنوع `file`).
+
+**س: كيف يمكنني الحصول على قائمة بجميع الموديولات والحقول المتاحة للمستخدم الحالي؟**  
+ج: استخدم نقطة النهاية `/models`. ستحصل على الموديولات التي يملك المستخدم صلاحية `view` عليها مع الحقول الأساسية.
+
+**س: كيف يمكنني التحقق مما إذا كان المستخدم يملك صلاحية رفع ملف لحقل معين دون محاولة الرفع؟**  
+ج: استخدم نقطة النهاية `/permissions/check` مع `operation: "add"` والحقل المطلوب.
+
+**س: المفتاح المؤقت الذي أحصل عليه من عملية الرفع، ما هي صلاحيته؟**  
+ج: المفتاح صالح لمدة ساعة واحدة (قابلة للتغيير في إعدادات النظام). يمكنك التحقق من صلاحيته باستخدام نقطة `/temp-key/validate`.
 
 ---
 
