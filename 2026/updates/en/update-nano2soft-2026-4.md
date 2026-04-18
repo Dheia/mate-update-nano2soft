@@ -2968,5 +2968,3 @@ Versions **1.2.4** and **1.2.5** represent an important step toward improving sy
 - [`FileUploadUserManager` Class Documentation](./docs/FileUpload/Docs-FileUploadUserManager-Class-en.md)
 - [API Documentation](./docs/FileUpload/Docs-API-Documentation-en.md)
 
-
-

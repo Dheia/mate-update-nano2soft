@@ -1,6 +1,6 @@
-## File Upload API Documentation – Version 1.2.3
+## File Upload API Documentation – Version 1.2.5
 
-**Version:** 1.2.3  
+**Version:** 1.2.5  
 **Base Path:** `/api/v1/fileupload`  
 **Authentication:** OAuth 2.0 (access token in header `Authorization: Bearer <token>`)
 
@@ -19,9 +19,11 @@ This document is intended for external developers (web stores, e-commerce applic
 - Unified responses with unique error codes for easy programmatic handling.
 - Full security via OAuth 2.0 and user permission checks.
 - **Endpoint to run tests** (available only in development environment).
-- **Endpoints to query registered modules, their settings, and constraints** (new in version 1.2.3).
-- **Endpoints to check permissions** at global, module, and field levels (new in version 1.2.3).
+- **Endpoints to query registered modules, their settings, and constraints** (new in version 1.2.3, improved in 1.2.5).
+- **Endpoints to check permissions** at global, module, and field levels (new in version 1.2.3, improved in 1.2.5).
 - **Endpoint to validate temporary keys** (new in version 1.2.3).
+
+> **Note about version 1.2.5:** The query and permission endpoints have been restructured to use query parameters instead of route parameters to avoid encoding issues with model names containing backslashes (`\`). The new routes are documented below. The old routes (containing `{modelClass}` in the path) are deprecated and will be removed in a future version.
 
 ---
 
@@ -623,7 +625,7 @@ Authorization: Bearer ...
 
 ---
 
-### 5. Run Plugin Tests (Local Environment Only)
+### 5. Run Add-on Tests (Local Environment Only)
 
 **Method:** `GET`  
 **Path:** `/tests`
@@ -680,12 +682,12 @@ Returns an array of all test results (or filtered) with a summary (`total`, `pas
 
 ---
 
-### 6. Get All Registered Modules (New in 1.2.3)
+### 6. Get All Registered Modules (unchanged)
 
 **Method:** `GET`  
 **Path:** `/models`
 
-**Description:** Returns a list of modules registered in the system that the current user has `view` permission on, with brief information about their fields (name, type, whether multiple). This endpoint is useful for front-end applications that need to build dynamic upload forms based on actual settings.
+**Description:** Returns a list of registered modules that the current user has `view` permission on, with brief information about their fields (name, type, whether multiple). This endpoint is useful for front-end applications that need to build dynamic upload forms based on actual settings.
 
 #### Query Parameters
 
@@ -698,75 +700,27 @@ GET /api/v1/fileupload/models HTTP/1.1
 Authorization: Bearer ...
 ```
 
-#### Response
-
-**✅ Success response:**
-
-```json
-{
-    "code": 200,
-    "status": true,
-    "message": "Files retrieved",
-    "data": {
-        "Nano\\Shop\\Models\\Product": {
-            "class": "Nano\\Shop\\Models\\Product",
-            "label": "Product",
-            "enabled": true,
-            "allowed_user_types": ["backend", "frontend"],
-            "fields": {
-                "image": {
-                    "type": "image",
-                    "label": "image",
-                    "multiple": false
-                },
-                "gallery": {
-                    "type": "multiple",
-                    "label": "gallery",
-                    "multiple": true
-                }
-            }
-        },
-        "Nano\\User\\Models\\User": {
-            "class": "Nano\\User\\Models\\User",
-            "label": "User",
-            "enabled": true,
-            "allowed_user_types": ["backend"],
-            "fields": {
-                "avatar": {
-                    "type": "image",
-                    "label": "avatar",
-                    "multiple": false
-                }
-            }
-        }
-    },
-    "meta": {
-        "total": 2
-    }
-}
-```
-
-> **Note:** Modules for which the user does not have `view` permission are automatically filtered out, so the list may vary by user.
+#### Response (same as before)
 
 ---
 
-### 7. Get Settings for a Specific Module (New in 1.2.3)
+### 7. Get Settings for a Specific Module (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/models/{modelClass}`
+**Path:** `/model/config`
 
 **Description:** Returns the full settings of a specific module (after checking existence and `view` permission). Includes registered fields with some details (type, max size, allowed types, etc.).
 
-#### Path Parameters
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (e.g., `Nano\Shop\Models\Product`). Must be URL-encoded. |
+| `model_class` | `string` | Yes | Full class name of the model (e.g., `Nano\Shop\Models\Product`). **No need to encode it**, pass as a normal value. |
 
 #### Example Request
 
 ```http
-GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct HTTP/1.1
+GET /api/v1/fileupload/model/config?model_class=Nano\Shop\Models\Product HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -778,7 +732,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "enabled": true,
         "label": "Product",
@@ -834,24 +788,24 @@ Authorization: Bearer ...
 
 ---
 
-### 8. Get Settings for a Specific Field (New in 1.2.3)
+### 8. Get Settings for a Specific Field (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/models/{modelClass}/fields/{field}`
+**Path:** `/field/config`
 
 **Description:** Returns settings for a specific field (e.g., type, max size, allowed types). Use this to check field settings before attempting upload.
 
-#### Path Parameters
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (URL-encoded). |
+| `model_class` | `string` | Yes | Full class name of the model. |
 | `field` | `string` | Yes | Field name. |
 
 #### Example Request
 
 ```http
-GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image HTTP/1.1
+GET /api/v1/fileupload/field/config?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -863,7 +817,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "type": "image",
         "label": "image",
@@ -890,24 +844,24 @@ Authorization: Bearer ...
 
 ---
 
-### 9. Get Field Constraints (New in 1.2.3)
+### 9. Get Field Constraints (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/models/{modelClass}/fields/{field}/constraints`
+**Path:** `/field/constraints`
 
 **Description:** Returns the field constraints used in file validation (`max_filesize`, `allowed_types`, `multiple`, `max_files`, `required`, `is_public`, `use_caption`, `thumb_options`, `type`). Front-ends can apply the same constraints before uploading to avoid server errors.
 
-#### Path Parameters
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (URL-encoded). |
+| `model_class` | `string` | Yes | Full class name of the model. |
 | `field` | `string` | Yes | Field name. |
 
 #### Example Request
 
 ```http
-GET /api/v1/fileupload/models/Nano%5CShop%5CModels%5CProduct/fields/image/constraints HTTP/1.1
+GET /api/v1/fileupload/field/constraints?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -919,7 +873,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "max_filesize": 2048,
         "allowed_types": "jpg,jpeg,png",
@@ -939,24 +893,24 @@ Authorization: Bearer ...
 
 ---
 
-### 10. Get Advanced Processing Options for a Specific Field (New in 1.2.3)
+### 10. Get Advanced Processing Options for a Specific Field (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/processing-options/{modelClass}/{field}`
+**Path:** `/processing-options`
 
 **Description:** Returns the advanced processing options for the field: storage disk (`storage_disk`), automatic resizing (`auto_resize` with `resize_options`), and watermark (`auto_watermark` with `watermark_options`). This information is useful for advanced front-ends that need to know how files will be processed after upload.
 
-#### Path Parameters
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (URL-encoded). |
+| `model_class` | `string` | Yes | Full class name of the model. |
 | `field` | `string` | Yes | Field name. |
 
 #### Example Request
 
 ```http
-GET /api/v1/fileupload/processing-options/Nano%5CShop%5CModels%5CProduct/image HTTP/1.1
+GET /api/v1/fileupload/processing-options?model_class=Nano\Shop\Models\Product&field=image HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -968,7 +922,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "storage_disk": "s3",
         "auto_resize": true,
@@ -986,13 +940,13 @@ Authorization: Bearer ...
 }
 ```
 
-**❌ Error response (field not registered):** (same structure as previous error)
+**❌ Error response (field not registered):** (same error structure as before)
 
 ---
 
-### 11. Permission Checks (Global, Module, Field) – New in 1.2.3
+### 11. Permission Checks
 
-#### 11.1 Check if an Operation is Globally Enabled
+#### 11.1 Check if an Operation is Globally Enabled (unchanged)
 
 **Method:** `GET`  
 **Path:** `/permissions/global/{operation}`
@@ -1016,7 +970,7 @@ Authorization: Bearer ...
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "operation": "edit",
         "allowed": true,
@@ -1025,32 +979,36 @@ Authorization: Bearer ...
 }
 ```
 
-#### 11.2 Check Operation Permission at a Specific Module Level
+---
+
+#### 11.2 Check Operation Permission at a Specific Module Level (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/permissions/model/{modelClass}/{operation}`
+**Path:** `/permissions/model`
 
-**Path Parameters:**
+**Description:** Checks whether a specific operation is enabled at a specific module level (considering `disabled_operations` at the model level).
+
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (URL-encoded). |
+| `model_class` | `string` | Yes | Full class name of the model. |
 | `operation` | `string` | Yes | Operation: `add`, `edit`, `delete`, `view`. |
 
-**Example Request:**
+#### Example Request
 
 ```http
-GET /api/v1/fileupload/permissions/model/Nano%5CShop%5CModels%5CProduct/edit HTTP/1.1
+GET /api/v1/fileupload/permissions/model?model_class=Nano\Shop\Models\Product&operation=edit HTTP/1.1
 Authorization: Bearer ...
 ```
 
-**✅ Success response:**
+#### Response
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "model_class": "Nano\\Shop\\Models\\Product",
         "operation": "edit",
@@ -1061,33 +1019,37 @@ Authorization: Bearer ...
 }
 ```
 
-#### 11.3 Check Operation Permission at a Specific Field Level
+---
+
+#### 11.3 Check Operation Permission at a Specific Field Level (updated in 1.2.5)
 
 **Method:** `GET`  
-**Path:** `/permissions/field/{modelClass}/{field}/{operation}`
+**Path:** `/permissions/field`
 
-**Path Parameters:**
+**Description:** Checks whether a specific operation is enabled at a specific field level (considering `disabled_operations` at the field level and user permissions).
+
+#### Query Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `modelClass` | `string` | Yes | Full class name of the model (URL-encoded). |
+| `model_class` | `string` | Yes | Full class name of the model. |
 | `field` | `string` | Yes | Field name. |
 | `operation` | `string` | Yes | Operation: `add`, `edit`, `delete`, `view`. |
 
-**Example Request:**
+#### Example Request
 
 ```http
-GET /api/v1/fileupload/permissions/field/Nano%5CShop%5CModels%5CProduct/image/edit HTTP/1.1
+GET /api/v1/fileupload/permissions/field?model_class=Nano\Shop\Models\Product&field=image&operation=edit HTTP/1.1
 Authorization: Bearer ...
 ```
 
-**✅ Success response:**
+#### Response
 
 ```json
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "model_class": "Nano\\Shop\\Models\\Product",
         "field": "image",
@@ -1103,7 +1065,7 @@ Authorization: Bearer ...
 
 ---
 
-### 12. Integrated Permission Check (using validate) – New in 1.2.3
+#### 11.4 Integrated Permission Check (using validate) – unchanged
 
 **Method:** `POST`  
 **Path:** `/permissions/check`
@@ -1140,7 +1102,7 @@ Content-Type: application/json
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "allowed": true,
         "model_class": "Nano\\Shop\\Models\\Product",
@@ -1157,7 +1119,7 @@ Content-Type: application/json
 {
     "code": 200,
     "status": true,
-    "message": "Files retrieved",
+    "message": "Operation completed successfully",
     "data": {
         "allowed": false,
         "model_class": "Nano\\Shop\\Models\\Product",
@@ -1172,7 +1134,7 @@ Content-Type: application/json
 
 ---
 
-### 13. Validate and Match a Temporary Key (New in 1.2.3)
+### 12. Validate and Match a Temporary Key (unchanged)
 
 **Method:** `POST`  
 **Path:** `/temp-key/validate`
@@ -1302,7 +1264,7 @@ Content-Type: application/json
 3. **Handle `error_code` programmatically**  
    Instead of relying on text messages, use `error_code` to determine the error type and display appropriate user messages.
 
-4. **Use query endpoints (`/models`, `/fields`, `/constraints`) to build dynamic interfaces**  
+4. **Use query endpoints (`/models`, `/field/config`, `/field/constraints`) to build dynamic interfaces**  
    You can fetch field constraints and display them to the user (e.g., show max size, allowed types) before they select a file.
 
 5. **Check permissions beforehand using `/permissions/check`**  
@@ -1364,16 +1326,17 @@ A: Use the `/permissions/check` endpoint with `operation: "add"` and the desired
 **Q: What is the validity period of the temporary key I receive from the upload operation?**  
 A: The key is valid for one hour (configurable in system settings). You can check its validity using the `/temp-key/validate` endpoint.
 
+**Q: Why were the routes changed in version 1.2.5?**  
+A: To avoid encoding issues with model names containing backslashes (`\`) when passed in the route. The new routes using query parameters are simpler and more secure. The old routes still work currently but are deprecated and will be removed in version 1.3.0. We recommend switching to the new routes immediately.
+
 ---
 
 ## Additional Documentation
 
-- [General Plugin Documentation](./Docs-FileUpload-en.md)
+- [General Add-on Documentation](./Docs-FileUpload-en.md)
 - [`FileUploadRegistry` Class Documentation](./Docs-FileUploadRegistry-Class-en.md)
 - [Advanced Examples for `FileUploadRegistry` Class](./Docs-FileUploadRegistry-Class-Advanced-Examples-en.md)
 - [`FileUploadService` Class Documentation](./Docs-FileUploadService-Class-en.md)
 - [Advanced Examples for `FileUploadService` Class](./Docs-FileUploadService-Class-Advanced-Examples-en.md)
 - [`FileUploadUserManager` Class Documentation](./Docs-FileUploadUserManager-Class-en.md)
 - [Advanced Examples for `FileUploadUserManager` Class](./Docs-FileUploadUserManager-Class-Advanced-Examples-en.md)
-
----
