@@ -281,6 +281,122 @@ public static function getDocumentStats($options = []): array
 
 ---
 
+### 11. دوال تقييم حالة KYC (KYC Assessment)
+
+#### `assessKycStatus`
+
+تقييم شامل لحالة KYC لمالك معين (فرد أو شركة). تقوم الدالة بفحص جميع الوثائق المرتبطة بالمالك، وتحديد الوثائق المكتملة، المفقودة، المنتهية، وحساب نسبة الاكتمال والدرجة الإجمالية للتحقق.
+
+```php
+public static function assessKycStatus($owner, ?string $ownerType = null, ?int $ownerId = null, array $options = []): array
+```
+
+| المعامل | النوع | الوصف |
+| :--- | :--- | :--- |
+| `$owner` | `object\|string` | كائن المالك **أو** نوع المالك (إذا تم تمرير `$ownerType` و `$ownerId`). |
+| `$ownerType` | `?string` | نوع المالك (مطلوب إذا كان `$owner` ليس كائنًا). مثال: `RainLab\User\Models\User`. |
+| `$ownerId` | `?int` | معرف المالك (مطلوب إذا كان `$owner` ليس كائنًا). |
+| `$options` | `array` | خيارات إضافية (انظر الجدول أدناه). |
+
+**الخيارات المدعومة في `$options`:**
+
+| الخيار | النوع | الافتراضي | الوصف |
+| :--- | :--- | :--- | :--- |
+| `risk_level` | `string` | `'medium'` | مستوى المخاطرة لتحديد الوثائق الإلزامية (`low`, `medium`, `high`). |
+| `category` | `?string` | `null` | فلترة حسب فئة وثيقة محددة (`primary_id`, `address`, `corporate`, ...). |
+| `document_type` | `string\|array\|null` | `null` | فلترة حسب نوع وثيقة محدد أو مصفوفة من الأنواع. |
+| `include_expired` | `bool` | `true` | تضمين الوثائق المنتهية في النتائج. |
+| `include_pending` | `bool` | `true` | تضمين الوثائق قيد الانتظار. |
+| `include_rejected` | `bool` | `false` | تضمين الوثائق المرفوضة. |
+
+**هيكل الاستجابة:**
+
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "KYC assessment completed successfully.",
+    "error": null,
+    "data": {
+        "is_compliant": false,
+        "completion_percentage": 0,
+        "overall_score": 0,
+        "total_documents_required": 0,
+        "verified_documents_count": 0,
+        "pending_documents_count": 0,
+        "expired_documents_count": 0,
+        "rejected_documents_count": 0,
+        "verified_documents": [],
+        "pending_documents": [],
+        "expired_documents": [],
+        "rejected_documents": [],
+        "missing_required_types": [],
+        "recommendations": []
+    },
+    "input_data": [],
+    "process_data": []
+}
+```
+
+**مثال عملي (تقييم مستخدم بمخاطرة عالية):**
+
+```php
+$user = Auth::getUser();
+$assessment = Manager::assessKycStatus($user, null, null, ['risk_level' => 'high']);
+
+if ($assessment['status']) {
+    echo "نسبة الاكتمال: " . $assessment['data']['completion_percentage'] . "%\n";
+    foreach ($assessment['data']['recommendations'] as $rec) {
+        echo "- $rec\n";
+    }
+}
+```
+
+#### `assessKycStatusByCategory`
+
+تقييم حالة KYC لمالك معين بناءً على تصنيف الوثائق (`category`) ونوع الوثيقة المحدد. لا تعتمد هذه الدالة على `risk_level` أو `getMandatoryTypesForParty`، بل تبني قائمة الوثائق المطلوبة مباشرة من التصنيف والأنواع المحددة.
+
+```php
+public static function assessKycStatusByCategory(
+    $owner,
+    ?string $ownerType = null,
+    ?int $ownerId = null,
+    ?string $category = null,
+    $documentType = null,
+    array $options = []
+): array
+```
+
+| المعامل | النوع | الوصف |
+| :--- | :--- | :--- |
+| `$owner` | `object\|string` | كائن المالك **أو** نوع المالك. |
+| `$ownerType` | `?string` | نوع المالك (مطلوب إذا كان `$owner` ليس كائنًا). |
+| `$ownerId` | `?int` | معرف المالك. |
+| `$category` | `?string` | تصنيف الوثائق (**إلزامي**، إذا كان `null` أو فارغًا يستخدم `CATEGORY_PRIMARY_ID`). |
+| `$documentType` | `string\|array\|null` | نوع وثيقة محدد أو مصفوفة من الأنواع (اختياري). |
+| `$options` | `array` | خيارات إضافية (`include_expired`, `include_pending`, `include_rejected`). |
+
+**مثال عملي (تقييم فئة الهوية الأساسية لمستخدم):**
+
+```php
+$user = Auth::getUser();
+$assessment = Manager::assessKycStatusByCategory(
+    $user,
+    null,
+    null,
+    DocumentType::CATEGORY_PRIMARY_ID,
+    ['passport', 'national_id'],
+    ['include_expired' => true]
+);
+
+if ($assessment['status']) {
+    echo "الوثائق المطلوبة: " . $assessment['data']['total_documents_required'] . "\n";
+    echo "الوثائق المتحقق منها: " . $assessment['data']['verified_documents_count'] . "\n";
+}
+```
+
+---
+
 ## الأحداث (Events)
 
 يطلق `Manager` الأحداث التالية، مما يسمح للمطورين بربط منطق مخصص (مثل إرسال إشعارات، تسجيل سجل، تحديث أنظمة خارجية):
