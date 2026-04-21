@@ -4227,3 +4227,162 @@ With versions 1.1.1 to 1.2.0, the `Nano3.Kyc` add-on has become fully integrated
 - [API Documentation](./docs/Kyc/Docs-API-Documentation-en.md)
 - [`DynamicAddIncludeKyc` Behaviors Documentation](./docs/Kyc/Docs-DynamicAddIncludeKyc-Behaviors-en.md)
 
+## 2026-03-10 - 2026-04-20
+
+### Support Dynamic Reporting API
+
+**Dynamic Reporting System Update: Launch of Version 2.0 with Support for Predefined Reports and an Integrated API**
+
+Enhanced version of the dynamic reporting system – addition of predefined reports, an integrated API, and performance and security improvements
+
+---
+
+### 1. Introduction
+
+The second phase of the **Dynamic Reporting System** project `Nano2.QueryBuilder.Reporting` has been completed, which included essential additions and significant expansions to the system, elevating it to the level of professional reporting tools. In response to feedback from clients and internal developers, we focused in this phase on enabling **Predefined Reports (Templates)** and providing an **integrated API** to handle them, along with improvements in performance, security, and user experience.
+
+This update adds a new layer on top of the previous foundational structure, making the system more flexible and scalable, and opening the door for developers to build advanced reporting applications quickly and securely. All components were developed according to best practices in software design, while maintaining backward compatibility.
+
+---
+
+### 2. Update Objectives
+
+- **Enable Predefined Reports**: Add a mechanism allowing plugins to register static reports (templates) once, then use them through unified APIs.
+- **Provide a Comprehensive API**: Create the `DynamicReports` controller offering RESTful endpoints for managing and executing reports (stored or dynamic) with support for filters, pagination, and export.
+- **Add Pagination Support** for stored and dynamic reports, with the ability to set the number of records per page and maximum limits.
+- **Enhance Security** regarding table and report access, using a unified `ReportUserManager` class that supports different authentication systems (OctoberCMS Backend, RainLab.User, Laravel Auth).
+- **Improve Error Handling** to display safe messages in production while hiding sensitive SQL details, while retaining full debugging information in development mode.
+- **Provide Flexibility in Specifying the Company Field** by adding the `company_key` property in table definitions, eliminating the assumption of a fixed `company_uuid`.
+- **Complete Documentation** for the `DynamicReports` controller with practical examples in both Arabic and English.
+
+---
+
+### 3. Developed and Enhanced Components
+
+#### 3.1 The `HasStoredReports` Trait
+A new trait was added to `ReportsManager` to allow registering and managing predefined reports. This trait provides the following methods:
+
+- `registerReport(array $definition)` – register a single report.
+- `registerReports(array $reports)` – register multiple reports.
+- `getStoredReport(string $reportId)` – get a report definition.
+- `getAvailableStoredReports($user = null)` – get reports available to the user, considering permissions.
+- `runStoredReport(string $reportId, array $filterValues, array $options)` – run a stored report after merging filters and pagination options.
+
+The trait also includes mechanisms for normalizing the report definition, validating required filters, and applying pagination settings.
+
+#### 3.2 The `DynamicReports` Controller
+A new controller was created under the `api/v1/querybuilder` path, providing the following endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `dynamic-reports` | GET | List of stored reports available to the current user |
+| `dynamic-reports/{reportId}` | GET | Show details of a specific report (including columns and filters) |
+| `dynamic-reports/run/{reportId}` | POST | Run a stored report with filters and pagination options |
+| `dynamic-reports/execute` | POST | Run a dynamic (ad‑hoc) report with a custom configuration |
+| `dynamic-reports/export` | POST | Export report results (stored or dynamic) in a specified format (CSV, Excel, JSON, PDF, XML) |
+| `dynamic-reports/schema/{tableName}` | GET | Get the schema of a table (available columns with relationship paths) |
+| `dynamic-reports/validate` | GET/POST | Validate a report configuration without executing it |
+| `dynamic-reports/estimate` | GET/POST | Estimate the cost of a query (complexity, expected performance) |
+
+The controller follows the same pattern as other API controllers (such as `CatchReceipts`) with `init`, `successResponse`, `errorResponse` methods, and unified exception handling.
+
+#### 3.3 Improvements in `ReportQueryConverter`
+- **Dynamic Company Field Support**: `applyCompanyScope` now reads the company column name from the `Table` object (via `getCompanyKey()`), allowing fields like `companys_id` to be used instead of `company_uuid`.
+- **Addition of `exposeMetaDetails`**: A new constructor parameter controls the display of sensitive details (SQL query, bindings, joins) in `meta`. It is automatically set from `ReportsManager` or can be passed via `options`.
+- **Total Count for Pagination**: Added the `getTotalCount` method to calculate the total rows for paginated queries using `COUNT DISTINCT` on the primary key.
+- **Pagination Metadata**: The `buildPaginationMeta` method generates a pagination object containing `total`, `count`, `per_page`, `current_page`, `total_pages`, and `links` (previous and next pages).
+
+#### 3.4 The `ReportUserManager` Class
+A unified class for user and permission management was developed, supporting:
+
+- Retrieving the current user from multiple systems (BackendAuth, Auth, auth helper).
+- Extracting user ID, name, email, and phone number.
+- Checking permissions via `hasAnyAccess` and `hasAccess` methods, with support for callable properties and built-in methods on user objects.
+- Obtaining the company ID (`getCompanyId`) used for company scoping.
+
+#### 3.5 Improvements in `ReportsManager`
+- Added the `loadReports()` method to load stored reports from plugins via the `registerReports` method in `Plugin.php`.
+- Overrode the `getStoredReport`, `getAvailableStoredReports`, and `runStoredReport` methods to call `loadReports()` first.
+- Added the `setExposeMetaDetails` method to control detail exposure at the manager level.
+- Improved `registerDefinition` to immediately apply the definition if the registry is initialized (supporting dynamic registration after initialization).
+
+#### 3.6 Improvements in `HasStoredReports`
+- Added the `applyPaginationToQueryConfig` method to merge pagination options (`page`, `per_page`, `limit`, `offset`) into `query_config`.
+- Updated the `runStoredReport` method to use this function while respecting each report's pagination settings (enabled, default_per_page, max_per_page).
+- Modified `sanitizeReportDefinitionForOutput` to return columns (`columns`) and computed columns (`computed_columns`) alongside filters, allowing the frontend to know which fields each report displays.
+
+#### 3.7 Error Handling Improvements
+- In `ReportQueryErrorHandler`, the `handleError` method was modified to return a unified error structure with the possibility of adding `debug` when `app.debug` is enabled.
+- In the `DynamicReports` controller, the `formatErrorResponseFromResult` method was added to correctly format errors coming from `runReport`, hiding sensitive details in production.
+- The `getSafeErrorMessage` method was expanded to cover different exception types (QueryException, ModelNotFoundException, ValidationException, AuthorizationException, ApplicationException, SystemException, AuthException) with appropriate messages.
+
+#### 3.8 Pagination Support in Stored Reports
+- A `pagination` key was added to the report definition (merged by default in `normalizeReportDefinition`).
+- Options can be set: `enabled`, `default_per_page`, `max_per_page`, `allow_offset`.
+- In `runStoredReport`, `page` and `per_page` from `options` are merged and converted to `limit` and `offset`, respecting the maximum limits.
+
+---
+
+### 4. Workflow (New Flow)
+
+1. **Report Registration**: Plugins define their reports via the `registerReports` method in `Plugin.php`, similar to `registerReportTables`.
+2. **Report Loading**: When `ReportsManager` is initialized (first call to `getRegistry`), `loadReports()` is called to collect reports from plugins and store them in `storedReports`.
+3. **List Reports Query**: The frontend calls `GET /dynamic-reports`, and the controller invokes `getAvailableStoredReports()`, which takes user permissions into account and returns a simplified list.
+4. **Run a Stored Report**: The user sends `POST /dynamic-reports/run/{reportId}` with `filters` and `options`. `runStoredReport` merges filters and pagination options with the original `query_config`, then calls `runReport` (from `ReportsManagerQueryConverter`).
+5. **Query Execution**: `ReportQueryConverter` uses the registered table information (from `ReportSchemaRegistry`) to build the query, applying company scope via `company_key` and adding auto-joins as needed.
+6. **Pagination Calculation**: If a `limit` is present, the total count is calculated (`getTotalCount`) and pagination information is added to `meta`.
+7. **Return Results**: The results are returned with `columns` and `meta`; if `expose_meta_details` is enabled, query details are shown.
+
+---
+
+### 5. Key Achievements and Features
+
+- **Predefined Reports (Templates)**: Static reports can now be saved in code, specifying columns, filters, permissions, and export options, and called flexibly with the ability to pass filter values.
+- **Integrated API**: 8 endpoints covering all frontend needs (list, details, run, export, schema, validate, estimate).
+- **Full Pagination Support**: Users can navigate through result pages with accurate information about total count and pages.
+- **Granular Table and Report Permission Control**: via `permissions` in table and report definitions, and the flexible `ReportUserManager` class.
+- **Sensitive Data Hiding in Production**: SQL queries are not shown to the end user but remain available for development via `expose_meta_details` or `app.debug`.
+- **Comprehensive Documentation**: Detailed documentation files in Arabic and English for the `DynamicReports` controller with practical examples for each endpoint.
+- **Support for Different Company Fields**: via `company_key`, the system can work with any column name (companys_id, company_id, company_uuid, etc.).
+
+---
+
+### 6. Benefits and Added Value
+
+- **For Developers**:
+  - Ability to define complex reports once and reuse them in multiple places.
+  - Clean and documented API for handling reports.
+  - Development time savings through reuse of predefined reports.
+  - Easy expansion by adding new reports via the `registerReports` method only.
+
+- **For End Users**:
+  - Smooth experience in creating reports through a unified interface.
+  - Ability to export reports in multiple formats.
+  - Browsing results across pages with accurate information.
+  - Clear error messages that help correct inputs.
+
+- **For the System as a Whole**:
+  - Enhanced security through separation of table definitions, reports, and user permissions.
+  - High performance thanks to caching and efficient total count calculation.
+  - Flexibility to expand to support new business needs.
+
+---
+
+### 7. Future Development Plans
+
+- Complete PDF support using a specialized library (e.g., Dompdf or wkhtmltopdf).
+- Develop a graphical user interface (GUI) for managing table and report definitions.
+- Integrate report scheduling and email delivery.
+- Support multiple data sources (API, other databases) via unified interfaces.
+- Additional performance improvements for aggregate queries on large datasets.
+
+---
+
+### 8. Conclusion
+
+The update of the dynamic reporting system `Nano2.QueryBuilder.Reporting` represents a qualitative leap in the platform's ability to provide advanced data analysis solutions. By adding the Predefined Reports system and providing an integrated API, developers are empowered to build complex reporting applications quickly and securely, while granting end users a flexible and seamless experience in viewing and analyzing data.
+
+This release contributed to enhancing system security through multi‑level permission mechanisms, improving performance via caching and efficient pagination calculation, and handling errors professionally to protect sensitive information in production environments. The addition of the dynamic `company_key` further enhanced the system's flexibility to adapt to different database structures.
+
+With the completion of this phase, the system is now ready for future expansion to include PDF export support, report scheduling, and integration with multiple data sources, ensuring its continued role as an essential tool in NanoSoft applications. We thank all contributors to this achievement and look forward to continuing development based on user feedback and evolving requirements.
+
