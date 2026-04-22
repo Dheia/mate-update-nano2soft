@@ -467,12 +467,12 @@ Authorization: Bearer ...
 ### 6. Restore a Deleted Document
 
 **Method:** `POST`  
-**Path:** `/documents/restore/{id?}`
+**Path:** `/documents/{id}/restore`
 
 #### Example Request
 
 ```http
-POST /api/v1/kyc/documents/restore/45 HTTP/1.1
+POST /api/v1/kyc/documents/46/restore HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -494,7 +494,7 @@ Authorization: Bearer ...
 ### 7. Verify (Approve) a Document
 
 **Method:** `POST`  
-**Path:** `/documents/verify/{id?}`
+**Path:** `/documents/{id}/verify`
 
 #### Request Parameters (JSON)
 
@@ -505,7 +505,7 @@ Authorization: Bearer ...
 #### Example Request
 
 ```json
-POST /api/v1/kyc/documents/verify/45 HTTP/1.1
+POST /api/v1/kyc/documents/45/verify HTTP/1.1
 Authorization: Bearer ...
 Content-Type: application/json
 
@@ -540,7 +540,7 @@ Content-Type: application/json
 ### 8. Reject a Document
 
 **Method:** `POST`  
-**Path:** `/documents/reject/{id?}`
+**Path:** `/documents/{id}/reject`
 
 #### Request Parameters (JSON)
 
@@ -551,7 +551,7 @@ Content-Type: application/json
 #### Example Request
 
 ```json
-POST /api/v1/kyc/documents/reject/45 HTTP/1.1
+POST /api/v1/kyc/documents/45/reject HTTP/1.1
 Authorization: Bearer ...
 Content-Type: application/json
 
@@ -1052,12 +1052,8 @@ Authorization: Bearer ...
 
 ## Additional Documentation
 
-**Reference Documents**:
 - [General Plugin Documentation](./Docs-Nano3-Kyc-en.md)
-- [DocumentType Class Documentation](./Docs-DocumentType-Class-en.md)
-- [Manager Class Documentation](./Docs-Manager-Class-en.md)
-- [HasAssessKycStatus Trait Documentation](./Docs-HasAssessKycStatus-Trait-en.md)
-- [HasValidKycDocuments Trait Documentation](./Docs-HasValidKycDocuments-Trait-en.md)
-- [Document Model Documentation](./Docs-Document-Model-en.md)
-- [DynamicAddIncludeKyc Behavior Documentation](./Docs-DynamicAddIncludeKyc-Behaviors-en.md)
-
+- [`DocumentType` Class Documentation](./Docs-DocumentType-Class-en.md)
+- [`Manager` Class Documentation](./Docs-Manager-Class-en.md)
+- [`Document` Model Documentation](./Docs-Document-Model-en.md)
+- [`DynamicAddIncludeKyc` Behaviors Documentation](./Docs-DynamicAddIncludeKyc-Behaviors-en.md)
