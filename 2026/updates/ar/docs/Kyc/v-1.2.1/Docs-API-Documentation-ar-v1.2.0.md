@@ -467,12 +467,12 @@ Authorization: Bearer ...
 ### 6. استعادة وثيقة محذوفة
 
 **الطريقة:** `POST`  
-**المسار:** `/documents/restore/{id?}`
+**المسار:** `/documents/{id}/restore`
 
 #### مثال طلب
 
 ```http
-POST /api/v1/kyc/documents/restore/45 HTTP/1.1
+POST /api/v1/kyc/documents/46/restore HTTP/1.1
 Authorization: Bearer ...
 ```
 
@@ -494,7 +494,7 @@ Authorization: Bearer ...
 ### 7. اعتماد (تحقق) وثيقة
 
 **الطريقة:** `POST`  
-**المسار:** `/documents/verify/{id?}`
+**المسار:** `/documents/{id}/verify`
 
 #### معاملات الطلب (JSON)
 
@@ -505,7 +505,7 @@ Authorization: Bearer ...
 #### مثال طلب
 
 ```json
-POST /api/v1/kyc/documents/verify/45 HTTP/1.1
+POST /api/v1/kyc/documents/45/verify HTTP/1.1
 Authorization: Bearer ...
 Content-Type: application/json
 
@@ -540,7 +540,7 @@ Content-Type: application/json
 ### 8. رفض وثيقة
 
 **الطريقة:** `POST`  
-**المسار:** `/documents/reject/{id?}`
+**المسار:** `/documents/{id}/reject`
 
 #### معاملات الطلب (JSON)
 
@@ -551,7 +551,7 @@ Content-Type: application/json
 #### مثال طلب
 
 ```json
-POST /api/v1/kyc/documents/reject/45 HTTP/1.1
+POST /api/v1/kyc/documents/45/reject HTTP/1.1
 Authorization: Bearer ...
 Content-Type: application/json
 
