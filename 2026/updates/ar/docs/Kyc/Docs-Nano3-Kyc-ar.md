@@ -344,3 +344,15 @@ return [
 للاستفسارات والدعم الفني:
 - الموقع: [https://nano2soft.com](https://nano2soft.com)
 - البريد الإلكتروني: support@nano2soft.com
+
+
+## التوثيق الإضافي
+
+**الوثائق المرجعية**:
+- [توثيق كلاس `DocumentType`](./Docs-DocumentType-Class-ar.md)
+- [توثيق كلاس `Manager`](./Docs-Manager-Class-ar.md)
+- [توثيق السمة `HasAssessKycStatus`](./Docs-HasAssessKycStatus-Trait-ar.md)
+- [توثيق سمة `HasValidKycDocuments`](./Docs-HasValidKycDocuments-Trait-ar.md)
+- [توثيق موديل `Document`](./Docs-Document-Model-ar.md)
+- [توثيق سلوك `DynamicAddIncludeKyc`](./Docs-DynamicAddIncludeKyc-Behaviors-ar.md)
+- [توثيق واجهة برمجة التطبيقات (API)](./Docs-API-Documentation-ar.md)
