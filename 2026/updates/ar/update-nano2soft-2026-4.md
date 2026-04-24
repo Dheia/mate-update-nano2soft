@@ -5338,3 +5338,287 @@ Authorization: Bearer ...
 - [توثيق سلوك `DynamicAddIncludeKyc`](./docs/Kyc/Docs-DynamicAddIncludeKyc-Behaviors-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API)](./docs/Kyc/Docs-API-Documentation-ar.md)
 
+
+## 2026-03-27 – 2026-04-23
+
+**إطلاق إضافة `Nano3.TelecomRecharge` – منصة موحدة للتعامل مع مزودي خدمات الشحن الرقمي في اليمن **
+
+### إطلاق إضافة `Nano3.TelecomRecharge` – منصة موحدة للتعامل مع مزودي خدمات الشحن المحليين
+
+تم إطلاق إضافة **`Nano3.TelecomRecharge`** كإضافة برمجية مستقلة ضمن نظام نانوسوفت، تهدف إلى توفير حل موحد وقابل للتوسع للتعامل مع مزودي خدمات الشحن الرقمي في اليمن. الإصدار الأول من الإضافة يقدم تكاملاً كاملاً مع منصة **nflow.tech** (ماستر هوست)، ويوفر واجهة برمجية متكاملة لإدارة عمليات شحن رصيد شركات الاتصالات اليمنية، وتفعيل الباقات، وشحن الألعاب وبطاقات الهدايا.
+
+تم تصميم الإضافة لتدعم إضافة مزودين جدد (مثل Sadad، YouGotaGift، وغيرهم) مستقبلاً دون الحاجة إلى تعديل الكود الأساسي، مما يجعلها منصة مرنة لخدمات الدفع الإلكتروني في اليمن.
+
+---
+
+### 1. مقدمة
+
+استجابةً للحاجة المتزايدة لتكامل تطبيقات نانوسوفت مع بوابات الدفع الإلكتروني المحلية، تم تطوير إضافة `Nano3.TelecomRecharge` كأداة شاملة للتعامل مع واجهة برمجة التطبيقات (API) الخاصة بمنصة **nflow.tech** (ماستر هوست). يوفر الإصدار الأول واجهة موحدة لتنفيذ جميع العمليات الموثقة، بدءًا من استعلام رصيد الوكيل وصولاً إلى شحن الألعاب وتفعيل الباقات، مع دعم كامل لآلية المصادقة Webhook ومعالجة الأخطاء.
+
+تم تصميم الإضافة لتعتمد على بنية قابلة للتوسع، مع فصل المسؤوليات عبر سمات (Traits) متخصصة، ودعم كامل لبيئة Laravel عبر متغيرات البيئة، وتوفير متحكم API متكامل مع توثيق شامل.
+
+---
+
+### 2. أهداف التحديثات
+
+- **إنشاء إضافة برمجية مستقلة**: توفير إضافة `Nano3.TelecomRecharge` كحل موحد للتعامل مع مزودي الشحن الرقمي المحليين.
+- **تكامل كامل مع nflow.tech**: تغطية جميع نقاط النهاية الموثقة في وثائق API الرسمية.
+- **فصل المسؤوليات عبر السمات**: تقسيم الكود إلى سمات متخصصة (`NflowEndpoints`، `NflowExtendedEndpoints`، `NflowDataEndpoints`) لتسهيل الصيانة والتوسع.
+- **دعم الدوال العامة المرنة**: إضافة دوال عامة (`executeService`، `queryBalance`، `chargeBalanceGeneric`، `activateOfferGeneric`) تسمح بتنفيذ أي خدمة بأرقام الشبكة والخدمة.
+- **توفير متحكم API احترافي**: إنشاء `NflowController` مع نقاط نهاية RESTful محمية بـ OAuth.
+- **توثيق شامل**: إعداد ملفي توثيق شاملين باللغة العربية (وثيقة الكلاس، أمثلة متقدمة، توثيق API).
+- **دعم Webhook**: تمكين استقبال تحديثات الحالة عبر GET إلى رابط محدد.
+- **معالجة أخطاء احترافية**: عرض رسائل آمنة للمستخدم في الإنتاج مع إمكانية تسجيل التفاصيل الكاملة في التطوير.
+
+---
+
+### 3. المكونات المطورة
+
+#### 3.1 إضافة `Nano3.TelecomRecharge`
+
+- **الاسم:** `Nano3.TelecomRecharge`
+- **النطاق:** `Nano3\TelecomRecharge`
+- **الهدف:** توفير واجهة موحدة للتعامل مع خدمات الشحن الرقمي المحلية (اليمن) عبر مزودين متعددين، مع إصدار أول مخصص لمنصة nflow.tech.
+- **الهيكل الأساسي:**
+  - `classes/services/NflowService.php` – الكلاس الرئيسي
+  - `classes/services/NflowEndpoints.php` – العمليات العامة
+  - `classes/services/NflowExtendedEndpoints.php` – الدوال العامة المرنة والاختصارات
+  - `classes/services/NflowDataEndpoints.php` – بيانات الشبكات والخدمات والمساعدة
+  - `controllers/NflowController.php` – متحكم API
+  - `routes.php` – نقاط النهاية
+  - `config.php` – الإعدادات ومتغيرات البيئة
+  - `lang.php` – ملف اللغة
+  - `docs/TelecomRecharge/` – التوثيق بالعربية
+
+#### 3.2 كلاس `NflowService` (النواة)
+
+يقع الكلاس في المسار `Nano3\TelecomRecharge\Classes\Services\NflowService`، ويستخدم ثلاث سمات:
+
+- `NflowEndpoints`: العمليات العامة (رصيد الوكيل، حالة المعاملة، إيداعات الوكيل، فئات الألعاب).
+- `NflowExtendedEndpoints`: الدوال العامة المرنة ودوال الاختصار للشبكات.
+- `NflowDataEndpoints`: بيانات الشبكات والخدمات، ودوال التحقق المساعدة.
+
+**الوظائف الأساسية:**
+
+| الدالة | الوصف |
+|--------|-------|
+| `__construct()` | تهيئة الكلاس مع بيانات الاعتماد (من المعاملات أو من ملف البيئة). |
+| `generateToken()` | توليد التوكن المؤقت باستخدام صيغة MD5 الموثقة. |
+| `login()` | تسجيل الدخول والحصول على `accessToken`، مع إمكانية تحديد نقطة النهاية. |
+| `post()` | تنفيذ طلب POST إلى `/rest-api/` مع إضافة `api-token` في الهيدر. |
+| `parseResponse()` | تحليل الاستجابة JSON وإرجاع مصفوفة موحدة تحتوي على `success` و `data` و `status_code`. |
+| `handleException()` | معالجة استثناءات Guzzle وإرجاع رسائل خطأ آمنة حسب بيئة التشغيل. |
+| `testConnection()` | اختبار الاتصال بالخادم والتحقق من صحة بيانات الاعتماد. |
+
+#### 3.3 سمة `NflowEndpoints` (العمليات العامة)
+
+| الدالة | الوصف |
+|--------|-------|
+| `getAccountBalance()` | استعلام رصيد الوكيل (`NetworkNumber=0`, `ServiceNumber=1`) |
+| `getOperationStatus($transactionId)` | استعلام حالة معاملة سابقة (`ServiceNumber=2`) |
+| `getFeedClientsBalance()` | عرض إيداعات الوكيل (`ServiceNumber=3`) |
+| `getGamesAndGiftCardsCategories()` | جلب فئات الألعاب والبطاقات (`ServiceNumber=4`) |
+
+#### 3.4 سمة `NflowExtendedEndpoints` (الدوال العامة والاختصارات)
+
+##### أ. الدوال العامة المرنة
+
+| الدالة | الوصف |
+|--------|-------|
+| `executeService($networkNumber, $serviceNumber, $additionalFields, $transactionId)` | تنفيذ أي خدمة بأرقام الشبكة والخدمة يدوياً. |
+| `queryBalance($networkNumber, $mobileNumber, $transactionId)` | استعلام رصيد لأي شبكة تدعم الخدمة (تحدد رقم الخدمة تلقائياً). |
+| `chargeBalanceGeneric($networkNumber, $mobileNumber, $amount, $transactionId, $webHookUrl, $webHookCode)` | شحن رصيد لأي شبكة تدعم الخدمة (تحدد رقم الخدمة تلقائياً). |
+| `activateOfferGeneric($networkNumber, $mobileNumber, $offerCode, $transactionId, $webHookUrl, $webHookCode)` | تفعيل باقة لأي شبكة تدعم الخدمة (تحدد رقم الخدمة تلقائياً). |
+
+##### ب. دوال الاختصار للشبكات
+
+| الدالة | الشبكة |
+|--------|--------|
+| `queryYemenMobileBalance($mobileNumber, $transactionId)` | يمن موبايل – استعلام الرصيد |
+| `queryYemenMobileLoan($mobileNumber, $transactionId)` | يمن موبايل – استعلام القرض |
+| `queryYemenMobileOffers($mobileNumber, $transactionId)` | يمن موبايل – استعلام الباقات |
+| `queryAdslBalance($mobileNumber, $transactionId)` | ADSL |
+| `queryLandPhoneBalance($mobileNumber, $transactionId)` | هاتف أرضي |
+| `queryYemen4GBalance($mobileNumber, $transactionId)` | Yemen 4G |
+| `queryAdenNetBalance($mobileNumber, $transactionId)` | عدن نت |
+
+##### ج. دوال الدفع الأصلية (للتوافق)
+
+| الدالة | الوصف |
+|--------|-------|
+| `chargeBalance($networkNumber, $serviceNumber, $mobileNumber, $amount, $transactionId, $webHookUrl, $webHookCode)` | شحن رصيد مع تحديد رقم الخدمة يدوياً. |
+| `activateOffer($networkNumber, $serviceNumber, $mobileNumber, $offerCode, $transactionId, $webHookUrl, $webHookCode)` | تفعيل باقة مع تحديد رقم الخدمة يدوياً. |
+| `chargeGameOrGiftCard($linkCode, $fields, $quantity, $transactionId, $mobileNumber, $webHookUrl, $webHookCode)` | شحن لعبة أو بطاقة هدايا. |
+
+#### 3.5 سمة `NflowDataEndpoints` (البيانات والمساعدة)
+
+| الدالة | الوصف |
+|--------|-------|
+| `getNetworksList()` | قائمة الشبكات المتاحة (مع أرقامها وأسمائها). |
+| `getNetworkName($networkNumber)` | اسم الشبكة من رقمها. |
+| `isValidNetwork($networkNumber)` | التحقق من صحة رقم الشبكة. |
+| `getAllServices()` | قائمة كاملة بالخدمات لكل شبكة (كما في جدول Services Data). |
+| `getServiceName($networkNumber, $serviceNumber)` | وصف الخدمة من أرقام الشبكة والخدمة. |
+| `getServicesForNetwork($networkNumber)` | قائمة الخدمات لشبكة معينة. |
+| `isValidService($networkNumber, $serviceNumber)` | التحقق من صحة رقم الخدمة لشبكة معينة. |
+| `getBillBalanceServiceNumber($networkNumber)` | رقم خدمة شحن الرصيد للشبكة. |
+| `getQueryBalanceServiceNumber($networkNumber)` | رقم خدمة استعلام الرصيد للشبكة. |
+| `getQueryOffersServiceNumber($networkNumber)` | رقم خدمة الباقات للشبكة. |
+| `supportsBalanceQuery($networkNumber)` | هل الشبكة تدعم استعلام الرصيد؟ |
+| `supportsBalanceBill($networkNumber)` | هل الشبكة تدعم شحن الرصيد المباشر؟ |
+| `supportsOffers($networkNumber)` | هل الشبكة تدعم الباقات؟ |
+| `isValidMobileNumber($mobileNumber, $networkNumber)` | التحقق من صحة رقم الجوال حسب الشبكة. |
+| `formatMobileNumber($mobileNumber)` | تنسيق الرقم (إزالة الأصفار الزائدة). |
+| `getOperationStatusText($operationStatus)` | تحويل رمز حالة العملية إلى نص عربي. |
+| `getAvailableServicesWithDetails($networkNumber)` | قائمة الخدمات مع التصنيف (استعلام، دفع، باقة). |
+
+#### 3.6 متحكم `NflowController`
+
+يقع المتحكم في المسار `Nano3\TelecomRecharge\APIControllers\NflowController`، ويوفر نقاط نهاية RESTful محمية بـ OAuth. جميع الدوال تستدعي `NflowService` وتتعامل مع الاستجابات بشكل موحد.
+
+**الهيكل العام للمتحكم:**
+
+- دالة `getNflowServiceObj()`: تهيئة الخدمة وتسجيل الدخول.
+- دوال عامة: `executeService`, `queryBalance`, `chargeBalanceGeneric`, `activateOfferGeneric`.
+- دوال العمليات العامة: `getAccountBalance`, `getOperationStatus`, `getFeedClientsBalance`, `getGamesAndGiftCardsCategories`.
+- دوال استعلامات الشبكات (اختصارات): `queryYemenMobileBalance`, `queryYemenMobileLoan`, `queryYemenMobileOffers`, `queryAdslBalance`, `queryLandPhoneBalance`, `queryYemen4GBalance`, `queryAdenNetBalance`.
+- دوال شحن (اختصار): `chargeYemenMobileBalance`.
+- دوال تفعيل الباقات (اختصار): `activateYouOffer`, `activateSabafonOffer`.
+- دوال الألعاب: `chargeGameOrGiftCard`.
+- دوال البيانات: `getNetworksList`, `getAllServices`, `testConnection`.
+- دوال مساعدة: `handleApiResponse`, `errorResponse`, `errorWrongArgs`, `errorNotFound`.
+
+#### 3.7 ملف التوجيه (routes.php)
+
+تم إنشاء ملف توجيه متكامل يوفر جميع نقاط النهاية مع استخدام مجموعتين:
+
+- المجموعة الخارجية: `prefix = api/v1/telecomrecharge/nflow`، وتحتوي على `cors`, `api`, `web`.
+- المجموعة الداخلية: `middleware = oauth-users`، `as = nflow.`، وتحتوي على جميع المسارات.
+
+**نقاط النهاية الرئيسية:**
+
+| المسار | الطريقة | الاسم | الوصف |
+|--------|--------|-------|-------|
+| `execute` | POST | `nflow.execute` | تنفيذ خدمة مخصصة |
+| `balance/query` | GET | `nflow.balance.query` | استعلام رصيد أي شبكة |
+| `balance/charge` | POST | `nflow.balance.charge` | شحن رصيد أي شبكة |
+| `offer/activate` | POST | `nflow.offer.activate` | تفعيل باقة أي شبكة |
+| `account-balance` | GET | `nflow.account-balance` | رصيد الوكيل |
+| `operation-status` | GET | `nflow.operation-status` | حالة معاملة |
+| `feed-clients-balance` | GET | `nflow.feed-clients-balance` | إيداعات الوكيل |
+| `games-categories` | GET | `nflow.games-categories` | فئات الألعاب |
+| `yemen-mobile/balance` | GET | `nflow.yemen-mobile.balance` | رصيد يمن موبايل |
+| `yemen-mobile/loan` | GET | `nflow.yemen-mobile.loan` | قرض يمن موبايل |
+| `yemen-mobile/offers` | GET | `nflow.yemen-mobile.offers` | باقات يمن موبايل |
+| `adsl/balance` | GET | `nflow.adsl.balance` | رصيد ADSL |
+| `land-phone/balance` | GET | `nflow.land-phone.balance` | رصيد هاتف أرضي |
+| `yemen-4g/balance` | GET | `nflow.yemen-4g.balance` | رصيد Yemen 4G |
+| `aden-net/balance` | GET | `nflow.aden-net.balance` | رصيد عدن نت |
+| `yemen-mobile/charge` | POST | `nflow.yemen-mobile.charge` | شحن يمن موبايل |
+| `you/offer/activate` | POST | `nflow.you.offer.activate` | تفعيل باقة YOU |
+| `sabafon/offer/activate` | POST | `nflow.sabafon.offer.activate` | تفعيل باقة سبافون |
+| `game-charge` | POST | `nflow.game-charge` | شحن لعبة أو بطاقة |
+| `networks` | GET | `nflow.networks` | قائمة الشبكات |
+| `services` | GET | `nflow.services.list` | قائمة الخدمات |
+| `test-connection` | GET | `nflow.test-connection` | اختبار الاتصال |
+
+#### 3.8 التوثيق
+
+تم إنشاء ملفين توثيقيين باللغة العربية ضمن مسار `docs/TelecomRecharge/`:
+
+1. **`Docs-NflowService-Class-ar.md`**: وثيقة شاملة للكلاس `NflowService` تتضمن:
+   - مقدمة عن الكلاس وأهدافه.
+   - المتطلبات والإعداد (بيانات الاعتماد، متغيرات البيئة).
+   - هيكل الاستجابة.
+   - شرح جميع الدوال مع أمثلة.
+   - دعم Webhook.
+   - معالجة الأخطاء.
+   - ملخص نهائي.
+
+2. **`Docs-NflowService-Advanced-Examples-ar.md`**: وثيقة الأمثلة المتقدمة وتشمل:
+   - مقدمة عن الأمثلة.
+   - المتطلبات الأساسية.
+   - أمثلة للعمليات العامة (رصيد الوكيل، حالة المعاملة، إيداعات الوكيل).
+   - أمثلة لاستعلامات الرصيد (يمن موبايل، ADSL، هاتف أرضي، Yemen 4G، عدن نت).
+   - أمثلة لشحن الرصيد (باستخدام الدوال العامة والاختصارات).
+   - أمثلة لتفعيل الباقات.
+   - أمثلة لشحن الألعاب وبطاقات الهدايا.
+   - أمثلة لاستخدام الدوال العامة المرنة (`executeService`).
+   - أمثلة لاستخدام Webhook.
+   - أمثلة للتحقق من صحة البيانات باستخدام دوال المساعدة.
+   - أمثلة لمعالجة الأخطاء.
+   - أفضل الممارسات.
+   - اختبار الاتصال.
+
+3. **`Nflow-API-Documentation-ar.md`**: توثيق واجهة برمجة التطبيقات (نقاط النهاية) مع أمثلة باستخدام cURL.
+
+---
+
+### 4. آلية العمل (التدفق الجديد)
+
+1. **تهيئة الكلاس**: يتم إنشاء كائن `NflowService` إما بتمرير بيانات الاعتماد مباشرة أو باستخدام متغيرات البيئة.
+2. **توليد التوكن المؤقت**: يتم استدعاء `generateToken()` لحساب `Token` باستخدام MD5.
+3. **تسجيل الدخول**: يتم استدعاء `login()` مع نقطة النهاية المناسبة للحصول على `accessToken`.
+4. **تنفيذ العمليات**: يتم استدعاء الدوال المناسبة (مثل `queryBalance` أو `chargeBalanceGeneric`) التي تقوم بتجميع البيانات واستدعاء `executeService`.
+5. **إرسال الطلب**: دالة `post()` تقوم بإرسال الطلب إلى `/rest-api/` مع إضافة `api-token` في الهيدر.
+6. **معالجة الاستجابة**: دالة `parseResponse()` تحلل JSON وتعيد مصفوفة موحدة تحتوي على `success`, `data`, `status_code`.
+7. **معالجة الأخطاء**: في حالة حدوث استثناء، يتم استدعاء `handleException()` التي تعيد رسالة خطأ آمنة حسب بيئة التشغيل.
+
+---
+
+### 5. أبرز الإنجازات والميزات
+
+- **إضافة برمجية متكاملة**: تم إطلاق إضافة `Nano3.TelecomRecharge` كحل موحد للتعامل مع مزودي الشحن الرقمي المحليين.
+- **تغطية كاملة لنقاط النهاية**: جميع العمليات الموثقة في وثائق nflow.tech مغطاة بدوال محددة.
+- **دوال عامة مرنة**: يمكن تنفيذ أي خدمة بأرقام الشبكة والخدمة عبر `executeService`، مما يسهل إضافة شبكات جديدة مستقبلاً.
+- **دعم Webhook**: إمكانية تمرير `WebHookURL` و `WebHookCode` في عمليات الدفع، واستقبال تحديثات الحالة عبر GET.
+- **معالجة أخطاء احترافية**: عرض رسائل آمنة للمستخدم في الإنتاج، مع تسجيل التفاصيل الكاملة في بيئة التطوير.
+- **دعم متغيرات البيئة**: يمكن ضبط بيانات الاعتماد عبر `.env` لتسهيل التهيئة.
+- **فصل المسؤوليات**: استخدام السمات (Traits) جعل الكود أكثر تنظيماً وقابلية للصيانة.
+- **متحكم API متكامل**: مع نقاط نهاية محمية بـ OAuth وتنسيق استجابة موحد.
+- **توثيق شامل**: ملفات توثيق تفصيلية باللغة العربية تغطي جميع الجوانب.
+
+---
+
+### 6. الفوائد والقيمة المضافة
+
+- **للمطورين**:
+  - إمكانية دمج خدمات nflow.tech في تطبيقات نانوسوفت بسهولة.
+  - واجهة برمجية نظيفة وموثقة.
+  - توفير وقت التطوير من خلال دوال مختصرة وعامة.
+  - إمكانية التوسع بإضافة مزودين جدد دون تعديل الكود الأساسي.
+
+- **للمستخدمين النهائيين**:
+  - تجربة سلسة في شحن الرصيد وتفعيل الباقات.
+  - تحديثات فورية عبر Webhook.
+  - رسائل خطأ واضحة تساعد في تصحيح الإدخالات.
+
+- **للنظام ككل**:
+  - أمان محسن عبر المصادقة المزدوجة (OAuth + API Token).
+  - مرونة عالية في التكامل مع بوابات الدفع المختلفة.
+  - هيكل قابل للتوسع لدعم شبكات جديدة في المستقبل.
+
+---
+
+### 7. خطط التطوير المستقبلية
+
+- **دعم مزودين إضافيين**: إضافة دعم لمزودي خدمات محليين آخرين (مثل Sadad، YouGotaGift) عبر تطوير كلاسات متخصصة ضمن نفس الإضافة.
+- **واجهة إدارة رسومية**: تطوير واجهة إدارة لمراقبة العمليات وسجل المعاملات.
+- **دعم عمليات إضافية**: إضافة دوال لعمليات مثل استعلام رصيد الوكيل بالتفصيل، وإدارة الفواتير.
+- **تحسين نظام التخزين المؤقت**: تخزين نتائج الاستعلامات المتكررة لتقليل استهلاك API.
+- **دعم التراجع (Undo)**: إمكانية التراجع عن عمليات الشحن الأخيرة (إذا أمكن من خلال API).
+
+---
+
+### 8. الخاتمة
+
+يمثل إطلاق إضافة `Nano3.TelecomRecharge` خطوة مهمة في دمج خدمات الشحن الرقمي المحلي في نظام نانوسوفت. من خلال توفير كلاس `NflowService`، ومتحكم `NflowController`، ونظام متكامل من السمات والدوال المساعدة، أصبح بإمكان المطورين دمج خدمات nflow.tech في تطبيقاتهم بسرعة وأمان. الإضافة مصممة لتكون قابلة للتوسع، مما يسمح بإضافة مزودين جدد مستقبلاً دون الحاجة إلى إعادة هيكلة الكود الأساسي.
+
+مع الانتهاء من هذه المرحلة، تصبح الإضافة جاهزة للاستخدام في مشاريع نانوسوفت المختلفة، ونتطلع إلى مواصلة التطوير بناءً على ملاحظات المستخدمين والمتطلبات المتطورة.
+
+**الوثائق المرجعية**:
+- [التوثيق الداخلي للكلاس NflowService](./docs/TelecomRecharge/Docs-NflowService-Class-ar.md)
+- [أمثلة عملية متقدمة](./docs/TelecomRecharge/Docs-NflowService-Advanced-Examples-ar.md)
+- [توثيق واجهة API (نقاط النهاية)](./docs/TelecomRecharge/Nflow-API-Documentation-ar.md)
+
+

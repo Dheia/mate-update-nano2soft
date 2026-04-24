@@ -5339,3 +5339,286 @@ We look forward to your feedback and suggestions to continue developing this ess
 - [`DynamicAddIncludeKyc` Behavior Documentation](./docs/Kyc/Docs-DynamicAddIncludeKyc-Behaviors-en.md)
 - [API Documentation](./docs/Kyc/Docs-API-Documentation-en.md)
 
+
+## 2026-03-27 – 2026-04-23
+
+**Launch of `Nano3.TelecomRecharge` Plugin – A Unified Platform for Interacting with Digital Recharge Service Providers in Yemen**
+
+### Launch of `Nano3.TelecomRecharge` Plugin – A Unified Platform for Interacting with Local Recharge Service Providers
+
+The **`Nano3.TelecomRecharge`** plugin was launched as an independent software plugin within the NanoSoft system, aiming to provide a unified and scalable solution for interacting with digital recharge service providers in Yemen. The first version of the plugin offers complete integration with the **nflow.tech** platform (Master Host) and provides an integrated programming interface for managing recharge operations for Yemeni telecommunications companies, activating packages, and recharging games and gift cards.
+
+The plugin is designed to support adding new providers (such as Sadad, YouGotaGift, etc.) in the future without needing to modify the core code, making it a flexible platform for electronic payment services in Yemen.
+
+---
+
+### 1. Introduction
+
+In response to the growing need to integrate NanoSoft applications with local electronic payment gateways, the `Nano3.TelecomRecharge` add-on was developed as a comprehensive tool for interacting with the API of the **nflow.tech** platform (Master Host). The first version provides a unified interface to execute all documented operations, from querying agent balance to recharging games and activating packages, with full support for Webhook authentication mechanism and error handling.
+
+The add-on is designed to rely on a scalable architecture, separating responsibilities through specialized Traits, with full support for the Laravel environment via environment variables, and providing an integrated API controller with comprehensive documentation.
+
+---
+
+### 2. Update Objectives
+
+- **Create an Independent Software Plugin:** Provide the `Nano3.TelecomRecharge` add-on as a unified solution for interacting with local recharge providers.
+- **Full Integration with nflow.tech:** Cover all documented endpoints in the official API documentation.
+- **Separation of Responsibilities via Traits:** Divide the code into specialized traits (`NflowEndpoints`, `NflowExtendedEndpoints`, `NflowDataEndpoints`) for easier maintenance and expansion.
+- **Support Flexible Generic Functions:** Add generic functions (`executeService`, `queryBalance`, `chargeBalanceGeneric`, `activateOfferGeneric`) allowing execution of any service using network and service numbers.
+- **Provide a Professional API Controller:** Create `NflowController` with OAuth-protected RESTful endpoints.
+- **Comprehensive Documentation:** Prepare two comprehensive documentation files in Arabic (class document, advanced examples, API documentation).
+- **Webhook Support:** Enable receiving status updates via GET to a specific URL.
+- **Professional Error Handling:** Display safe messages for users in production with the ability to log full details in development.
+
+---
+
+### 3. Developed Components
+
+#### 3.1 `Nano3.TelecomRecharge` Plugin
+
+- **Name:** `Nano3.TelecomRecharge`
+- **Namespace:** `Nano3\TelecomRecharge`
+- **Objective:** Provide a unified interface for interacting with local digital recharge services (Yemen) via multiple providers, with the first version dedicated to the nflow.tech platform.
+- **Core Structure:**
+  - `classes/services/NflowService.php` – Main class
+  - `classes/services/NflowEndpoints.php` – General operations
+  - `classes/services/NflowExtendedEndpoints.php` – Flexible generic functions and shortcuts
+  - `classes/services/NflowDataEndpoints.php` – Network and service data, helper functions
+  - `controllers/NflowController.php` – API controller
+  - `routes.php` – Endpoints
+  - `config.php` – Settings and environment variables
+  - `lang.php` – Language file
+  - `docs/TelecomRecharge/` – Arabic documentation
+
+#### 3.2 `NflowService` Class (Core)
+
+Located at `Nano3\TelecomRecharge\Classes\Services\NflowService`, it uses three traits:
+
+- `NflowEndpoints`: General operations (agent balance, transaction status, agent deposits, game categories).
+- `NflowExtendedEndpoints`: Flexible generic functions and network-specific shortcuts.
+- `NflowDataEndpoints`: Network and service data, helper validation functions.
+
+**Core Functions:**
+
+| Function | Description |
+|----------|-------------|
+| `__construct()` | Initialize the class with credentials (from parameters or environment file). |
+| `generateToken()` | Generate a temporary token using the documented MD5 formula. |
+| `login()` | Log in and obtain `accessToken`, with the ability to specify the endpoint. |
+| `post()` | Execute a POST request to `/rest-api/` adding `api-token` in the header. |
+| `parseResponse()` | Parse JSON response and return a standardized array containing `success`, `data`, and `status_code`. |
+| `handleException()` | Handle Guzzle exceptions and return safe error messages based on the runtime environment. |
+| `testConnection()` | Test connection to the server and validate credentials. |
+
+#### 3.3 `NflowEndpoints` Trait (General Operations)
+
+| Function | Description |
+|----------|-------------|
+| `getAccountBalance()` | Query agent balance (`NetworkNumber=0`, `ServiceNumber=1`) |
+| `getOperationStatus($transactionId)` | Query status of a previous transaction (`ServiceNumber=2`) |
+| `getFeedClientsBalance()` | View agent deposits (`ServiceNumber=3`) |
+| `getGamesAndGiftCardsCategories()` | Fetch game and gift card categories (`ServiceNumber=4`) |
+
+#### 3.4 `NflowExtendedEndpoints` Trait (Generic Functions and Shortcuts)
+
+##### A. Flexible Generic Functions
+
+| Function | Description |
+|----------|-------------|
+| `executeService($networkNumber, $serviceNumber, $additionalFields, $transactionId)` | Execute any service using network and service numbers manually. |
+| `queryBalance($networkNumber, $mobileNumber, $transactionId)` | Query balance for any network supporting the service (determines service number automatically). |
+| `chargeBalanceGeneric($networkNumber, $mobileNumber, $amount, $transactionId, $webHookUrl, $webHookCode)` | Recharge balance for any network supporting the service (determines service number automatically). |
+| `activateOfferGeneric($networkNumber, $mobileNumber, $offerCode, $transactionId, $webHookUrl, $webHookCode)` | Activate a package for any network supporting the service (determines service number automatically). |
+
+##### B. Network-Specific Shortcut Functions
+
+| Function | Network |
+|----------|--------|
+| `queryYemenMobileBalance($mobileNumber, $transactionId)` | Yemen Mobile – Balance inquiry |
+| `queryYemenMobileLoan($mobileNumber, $transactionId)` | Yemen Mobile – Loan inquiry |
+| `queryYemenMobileOffers($mobileNumber, $transactionId)` | Yemen Mobile – Package inquiry |
+| `queryAdslBalance($mobileNumber, $transactionId)` | ADSL |
+| `queryLandPhoneBalance($mobileNumber, $transactionId)` | Land Phone |
+| `queryYemen4GBalance($mobileNumber, $transactionId)` | Yemen 4G |
+| `queryAdenNetBalance($mobileNumber, $transactionId)` | Aden Net |
+
+##### C. Original Payment Functions (For Compatibility)
+
+| Function | Description |
+|----------|-------------|
+| `chargeBalance($networkNumber, $serviceNumber, $mobileNumber, $amount, $transactionId, $webHookUrl, $webHookCode)` | Recharge balance, specifying the service number manually. |
+| `activateOffer($networkNumber, $serviceNumber, $mobileNumber, $offerCode, $transactionId, $webHookUrl, $webHookCode)` | Activate a package, specifying the service number manually. |
+| `chargeGameOrGiftCard($linkCode, $fields, $quantity, $transactionId, $mobileNumber, $webHookUrl, $webHookCode)` | Recharge a game or gift card. |
+
+#### 3.5 `NflowDataEndpoints` Trait (Data and Helpers)
+
+| Function | Description |
+|----------|-------------|
+| `getNetworksList()` | List of available networks (with their numbers and names). |
+| `getNetworkName($networkNumber)` | Network name from its number. |
+| `isValidNetwork($networkNumber)` | Validate the network number. |
+| `getAllServices()` | Full list of services for each network (as in the Services Data table). |
+| `getServiceName($networkNumber, $serviceNumber)` | Service description from network and service numbers. |
+| `getServicesForNetwork($networkNumber)` | List of services for a specific network. |
+| `isValidService($networkNumber, $serviceNumber)` | Validate the service number for a given network. |
+| `getBillBalanceServiceNumber($networkNumber)` | Balance recharge service number for the network. |
+| `getQueryBalanceServiceNumber($networkNumber)` | Balance inquiry service number for the network. |
+| `getQueryOffersServiceNumber($networkNumber)` | Package inquiry service number for the network. |
+| `supportsBalanceQuery($networkNumber)` | Does the network support balance inquiry? |
+| `supportsBalanceBill($networkNumber)` | Does the network support direct balance recharge? |
+| `supportsOffers($networkNumber)` | Does the network support packages? |
+| `isValidMobileNumber($mobileNumber, $networkNumber)` | Validate mobile number according to the network. |
+| `formatMobileNumber($mobileNumber)` | Format the number (remove leading zeros). |
+| `getOperationStatusText($operationStatus)` | Convert operation status code to Arabic text. |
+| `getAvailableServicesWithDetails($networkNumber)` | List of services with categorization (inquiry, payment, package). |
+
+#### 3.6 `NflowController` Controller
+
+The controller is located at `Nano3\TelecomRecharge\APIControllers\NflowController` and provides OAuth-protected RESTful endpoints. All functions call `NflowService` and handle responses uniformly.
+
+**Controller Structure:**
+
+- `getNflowServiceObj()` function: Initialize the service and log in.
+- Generic functions: `executeService`, `queryBalance`, `chargeBalanceGeneric`, `activateOfferGeneric`.
+- General operation functions: `getAccountBalance`, `getOperationStatus`, `getFeedClientsBalance`, `getGamesAndGiftCardsCategories`.
+- Network query functions (shortcuts): `queryYemenMobileBalance`, `queryYemenMobileLoan`, `queryYemenMobileOffers`, `queryAdslBalance`, `queryLandPhoneBalance`, `queryYemen4GBalance`, `queryAdenNetBalance`.
+- Recharge function (shortcut): `chargeYemenMobileBalance`.
+- Package activation functions (shortcuts): `activateYouOffer`, `activateSabafonOffer`.
+- Game functions: `chargeGameOrGiftCard`.
+- Data functions: `getNetworksList`, `getAllServices`, `testConnection`.
+- Helper functions: `handleApiResponse`, `errorResponse`, `errorWrongArgs`, `errorNotFound`.
+
+#### 3.7 Routing File (routes.php)
+
+An integrated routing file was created providing all endpoints using two groups:
+
+- Outer group: `prefix = api/v1/telecomrecharge/nflow`, containing `cors`, `api`, `web`.
+- Inner group: `middleware = oauth-users`, `as = nflow.`, containing all routes.
+
+**Main Endpoints:**
+
+| Route | Method | Name | Description |
+|-------|--------|------|-------------|
+| `execute` | POST | `nflow.execute` | Execute custom service |
+| `balance/query` | GET | `nflow.balance.query` | Query balance for any network |
+| `balance/charge` | POST | `nflow.balance.charge` | Recharge balance for any network |
+| `offer/activate` | POST | `nflow.offer.activate` | Activate package for any network |
+| `account-balance` | GET | `nflow.account-balance` | Agent balance |
+| `operation-status` | GET | `nflow.operation-status` | Transaction status |
+| `feed-clients-balance` | GET | `nflow.feed-clients-balance` | Agent deposits |
+| `games-categories` | GET | `nflow.games-categories` | Game categories |
+| `yemen-mobile/balance` | GET | `nflow.yemen-mobile.balance` | Yemen Mobile balance |
+| `yemen-mobile/loan` | GET | `nflow.yemen-mobile.loan` | Yemen Mobile loan |
+| `yemen-mobile/offers` | GET | `nflow.yemen-mobile.offers` | Yemen Mobile packages |
+| `adsl/balance` | GET | `nflow.adsl.balance` | ADSL balance |
+| `land-phone/balance` | GET | `nflow.land-phone.balance` | Land Phone balance |
+| `yemen-4g/balance` | GET | `nflow.yemen-4g.balance` | Yemen 4G balance |
+| `aden-net/balance` | GET | `nflow.aden-net.balance` | Aden Net balance |
+| `yemen-mobile/charge` | POST | `nflow.yemen-mobile.charge` | Recharge Yemen Mobile |
+| `you/offer/activate` | POST | `nflow.you.offer.activate` | Activate YOU package |
+| `sabafon/offer/activate` | POST | `nflow.sabafon.offer.activate` | Activate Sabafon package |
+| `game-charge` | POST | `nflow.game-charge` | Recharge game or card |
+| `networks` | GET | `nflow.networks` | List networks |
+| `services` | GET | `nflow.services.list` | List services |
+| `test-connection` | GET | `nflow.test-connection` | Test connection |
+
+#### 3.8 Documentation
+
+Two documentation files were created in Arabic within the `docs/TelecomRecharge/` path:
+
+1. **`Docs-NflowService-Class-ar.md`**: Comprehensive document for the `NflowService` class including:
+   - Introduction to the class and its objectives.
+   - Requirements and setup (credentials, environment variables).
+   - Response structure.
+   - Explanation of all functions with examples.
+   - Webhook support.
+   - Error handling.
+   - Final summary.
+
+2. **`Docs-NflowService-Advanced-Examples-ar.md`**: Advanced examples document including:
+   - Introduction to examples.
+   - Prerequisites.
+   - Examples for general operations (agent balance, transaction status, agent deposits).
+   - Examples for balance queries (Yemen Mobile, ADSL, Land Phone, Yemen 4G, Aden Net).
+   - Examples for balance recharge (using generic functions and shortcuts).
+   - Examples for package activation.
+   - Examples for recharging games and gift cards.
+   - Examples for using flexible generic functions (`executeService`).
+   - Examples for using Webhook.
+   - Examples for data validation using helper functions.
+   - Examples for error handling.
+   - Best practices.
+   - Connection testing.
+
+3. **`Nflow-API-Documentation-ar.md`**: API interface documentation (endpoints) with examples using cURL.
+
+---
+
+### 4. Workflow (New Flow)
+
+1. **Class Initialization**: A `NflowService` object is created either by passing credentials directly or using environment variables.
+2. **Generate Temporary Token**: `generateToken()` is called to calculate the `Token` using MD5.
+3. **Login**: `login()` is called with the appropriate endpoint to obtain an `accessToken`.
+4. **Execute Operations**: Appropriate functions (like `queryBalance` or `chargeBalanceGeneric`) are called, which assemble data and call `executeService`.
+5. **Send Request**: The `post()` function sends the request to `/rest-api/` adding `api-token` in the header.
+6. **Process Response**: `parseResponse()` parses the JSON and returns a standardized array containing `success`, `data`, `status_code`.
+7. **Error Handling**: In case of an exception, `handleException()` is called which returns a safe error message based on the runtime environment.
+
+---
+
+### 5. Key Achievements and Features
+
+- **Integrated Software Plugin**: The `Nano3.TelecomRecharge` add-on was launched as a unified solution for interacting with local recharge providers.
+- **Full Endpoint Coverage**: All documented operations in the nflow.tech documentation are covered by specific functions.
+- **Flexible Generic Functions**: Any service can be executed using network and service numbers via `executeService`, facilitating future addition of new networks.
+- **Webhook Support**: Ability to pass `WebHookURL` and `WebHookCode` in payment operations, and receive status updates via GET.
+- **Professional Error Handling**: Display safe messages for users in production, with full details logged in development environment.
+- **Environment Variable Support**: Credentials can be set via `.env` for easy configuration.
+- **Separation of Responsibilities**: Using traits made the code more organized and maintainable.
+- **Integrated API Controller**: With OAuth-protected endpoints and unified response format.
+- **Comprehensive Documentation**: Detailed documentation files in Arabic covering all aspects.
+
+---
+
+### 6. Benefits and Added Value
+
+- **For Developers**:
+  - Ability to easily integrate nflow.tech services into NanoSoft applications.
+  - Clean and documented programming interface.
+  - Save development time through shortcut and generic functions.
+  - Ability to expand by adding new providers without modifying core code.
+
+- **For End Users**:
+  - Smooth experience in recharging balance and activating packages.
+  - Instant updates via Webhook.
+  - Clear error messages that help correct inputs.
+
+- **For the System as a Whole**:
+  - Enhanced security through dual authentication (OAuth + API Token).
+  - High flexibility in integrating with various payment gateways.
+  - Scalable structure to support new networks in the future.
+
+---
+
+### 7. Future Development Plans
+
+- **Support Additional Providers**: Add support for other local service providers (e.g., Sadad, YouGotaGift) by developing specialized classes within the same add-on.
+- **Graphical Management Interface**: Develop a management interface to monitor operations and transaction logs.
+- **Support Additional Operations**: Add functions for operations such as detailed agent balance inquiry and invoice management.
+- **Improve Caching System**: Cache frequent query results to reduce API consumption.
+- **Support Reversal (Undo)**: Ability to reverse recent recharge operations (if possible via API).
+
+---
+
+### 8. Conclusion
+
+The launch of the `Nano3.TelecomRecharge` add-on represents a significant step in integrating local digital recharge services into the NanoSoft system. By providing the `NflowService` class, `NflowController` controller, and an integrated system of traits and helper functions, developers can now integrate nflow.tech services into their applications quickly and securely. The add-on is designed to be scalable, allowing new providers to be added in the future without restructuring the core code.
+
+With the completion of this phase, the add-on is ready for use in various NanoSoft projects, and we look forward to continuing development based on user feedback and evolving requirements.
+
+**Reference Documents**:
+- [Internal Documentation for NflowService Class](./docs/TelecomRecharge/Docs-NflowService-Class-en.md)
+- [Advanced Practical Examples](./docs/TelecomRecharge/Docs-NflowService-Advanced-Examples-en.md)
+- [API Interface Documentation (Endpoints)](./docs/TelecomRecharge/Nflow-API-Documentation-en.md)
+
