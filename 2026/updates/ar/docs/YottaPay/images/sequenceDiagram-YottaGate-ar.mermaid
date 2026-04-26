@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant عميل
+    participant متجر (API)
+    participant YottaPay كلاس
+    participant YottaGate API
+
+    عميل->>متجر: طلب دفع (رقم هاتف، مبلغ)
+    متجر->>YottaPay: process($order, $data)
+    YottaPay->>YottaGate: POST /login (get token)
+    YottaGate-->>YottaPay: token
+    YottaPay->>YottaGate: POST /onLinePayment (create adjustment)
+    YottaGate-->>YottaPay: adjustment_id, transactionId
+    YottaPay-->>متجر: PaymentResult (success, adjustment_id)
+    متجر-->>عميل: عرض نموذج إدخال OTP
+    عميل->>متجر: إرسال OTP
+    متجر->>YottaPay: complete($order, ['otp' => '1234'])
+    YottaPay->>YottaGate: PATCH /onLinePayment (confirm with OTP)
+    YottaGate-->>YottaPay: completed=true, transactionId
+    YottaPay-->>متجر: PaymentResult (success)
+    متجر-->>عميل: تأكيد الدفع

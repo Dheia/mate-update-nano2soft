@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant Customer
+    participant Store (API)
+    participant YottaPay Class
+    participant YottaGate API
+
+    Customer->>Store: Payment request (phone, amount)
+    Store->>YottaPay: process($order, $data)
+    YottaPay->>YottaGate: POST /login (get token)
+    YottaGate-->>YottaPay: token
+    YottaPay->>YottaGate: POST /onLinePayment (create adjustment)
+    YottaGate-->>YottaPay: adjustment_id, transactionId
+    YottaPay-->>Store: PaymentResult (success, adjustment_id)
+    Store-->>Customer: Display OTP input form
+    Customer->>Store: Submit OTP
+    Store->>YottaPay: complete($order, ['otp' => '1234'])
+    YottaPay->>YottaGate: PATCH /onLinePayment (confirm with OTP)
+    YottaGate-->>YottaPay: completed=true, transactionId
+    YottaPay-->>Store: PaymentResult (success)
+    Store-->>Customer: Payment confirmation
