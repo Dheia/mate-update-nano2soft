@@ -6144,6 +6144,7 @@ https://yourdomain.com/api/v1/yepayment/yottapay/test-ui
 
 ### 12. روابط ذات صلة
 
+- [YottaGate API Documentation ](./docs/YottaPay/Docs-YottaPay-ar.md)
 - [وثيقة API الخاصة بـ YottaGate – تسجيل الدخول وتغيير كلمة المرور](./yottaPay%20Login%20-%20Change%20My%20Password%20API%20Documentation%20V.1.1.pdf)
 - [وثيقة API الخاصة بـ YottaGate – إنشاء وتأكيد الدفع (Online Payments v1.3)](./API%20Online%20Payments%20v%201.3.pdf)
 - [وثيقة API الخاصة بـ YottaGate – استرجاع الأموال (Online Payment Return v1.4)](./API%20Online%20Payment%20Return%20v%201.4.pdf)

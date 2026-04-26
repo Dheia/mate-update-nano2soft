@@ -6145,6 +6145,7 @@ None – this version is dedicated to adding a new feature only.
 
 ### 12. Related Links
 
+- [YottaGate API Documentation ](./docs/YottaPay/Docs-YottaPay-en.md)
 - [YottaGate API Documentation – Login & Change Password](./yottaPay%20Login%20-%20Change%20My%20Password%20API%20Documentation%20V.1.1.pdf)
 - [YottaGate API Documentation – Create & Confirm Payment (Online Payments v1.3)](./API%20Online%20Payments%20v%201.3.pdf)
 - [YottaGate API Documentation – Money Return (Online Payment Return v1.4)](./API%20Online%20Payment%20Return%20v%201.4.pdf)
