@@ -1,6 +1,6 @@
-## Identity Verification (KYC) API Documentation – Version 1.2.7
+## Identity Verification (KYC) API Documentation – Version 1.2.6
 
-**Version:** 1.2.7 
+**Version:** 1.2.6
 **Base Path:** `/api/v1/kyc`  
 **Authentication:** OAuth 2.0 (access token in header `Authorization: Bearer <token>`)
 
