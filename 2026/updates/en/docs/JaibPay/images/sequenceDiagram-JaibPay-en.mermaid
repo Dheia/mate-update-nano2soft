@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant C as Customer
+    participant S as NanoSoft Store
+    participant J as Jaib API
+
+    C->>S: Enter purchase code, mobile, amount
+    S->>J: LogAPI request (userName, password, agentCode)
+    J-->>S: accessToken, pinApi
+    S->>J: ExeBuy request (pinApi, mobile, requestID, code, amount, currencyCode)
+    J-->>S: referenceID, msg
+    S->>S: Update order state to Paid
+    S-->>C: Payment success notification

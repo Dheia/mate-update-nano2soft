@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant C as العميل
+    participant M as متجر نانوسوفت
+    participant J as Jaib API
+
+    C->>M: إدخال كود الشراء والجوال والمبلغ
+    M->>J: طلب LogAPI (userName, password, agentCode)
+    J-->>M: accessToken, pinApi
+    M->>J: طلب ExeBuy (pinApi, mobile, requestID, code, amount, currencyCode)
+    J-->>M: referenceID, msg
+    M->>M: تحديث حالة الطلب إلى مدفوع
+    M-->>C: إشعار نجاح الدفع
