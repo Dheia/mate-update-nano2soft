@@ -1,4 +1,4 @@
-## 2026-04-19 – 2026-04-20
+## 2026-04-10 – 2026-04-16
 
 **Updates to the `Nano3.Kyc` plugin – Versions 1.0.1 to 1.0.6**
 
