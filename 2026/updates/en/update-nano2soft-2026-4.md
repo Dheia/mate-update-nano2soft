@@ -7440,4 +7440,3 @@ NanoSoft Development Team – Electronic Payments Department
 **References:** Dheia Ali, Nano2Soft
 
 ---
-
