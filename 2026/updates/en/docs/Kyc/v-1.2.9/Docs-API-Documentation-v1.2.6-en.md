@@ -1,6 +1,6 @@
-## Identity Verification (KYC) API Documentation – Version 1.2.7
+## Identity Verification (KYC) API Documentation – Version 1.2.6
 
-**Version:** 1.2.7 
+**Version:** 1.2.6
 **Base Path:** `/api/v1/kyc`  
 **Authentication:** OAuth 2.0 (access token in header `Authorization: Bearer <token>`)
 
@@ -1513,8 +1513,5 @@ Additional options can be passed for each relationship via query parameters usin
 - [`HasAssessKycStatus` Trait Documentation](./Docs-HasAssessKycStatus-Trait-en.md)
 - [`HasValidKycDocuments` Trait Documentation](./Docs-HasValidKycDocuments-Trait-en.md)
 - [`Document` Model Documentation](./Docs-Document-Model-en.md)
-- [Document Model Documentation](./Docs-Document-Model-en.md)
-- [KycDocumentModel Behavior Documentation](./Docs-KycDocumentModel-Behaviors-en.md)
-- [DynamicAddIncludeKyc Behavior Documentation](./Docs-DynamicAddIncludeKyc-Behaviors-en.md)
-- [KycDocumentManager Class Documentation](./Docs-KycDocumentManager-Class-en.md)
+- [`DynamicAddIncludeKyc` Behavior Documentation](./Docs-DynamicAddIncludeKyc-Behaviors-en.md)
 - [API Documentation](./Docs-API-Documentation-en.md)
