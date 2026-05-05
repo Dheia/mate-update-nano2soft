@@ -4,16 +4,13 @@
 
 `Nano3\Kyc\Behaviors\KycDocumentModel` هو سلوك (Behavior) يُضاف إلى أي موديل في برمجيات نانوسوفت (NanoSoft App) لربطه بوثائق اعرف عميلك (KYC) كموديل مالك. يتكون السلوك من:
 
-- **الكلاس الرئيسي** `KycDocumentModel` الذي يعرّف علاقة `documents` (مورفيك) مع موديل `Document`، ونطاقات Toggle متقدمة للفلاتر، ونطاقات مساعدة للفلاتر الجماعية، ونطاقات عد جديدة.
-- **السمة** `KycDocumentScopesAndHelpers` التي تحتوي على النطاق المتقدم `whereHasDocuments`، نطاقات مساعدة، نطاقات عد الوثائق، دوال إحصائية، ودوال فحص مباشرة.
+- **الكلاس الرئيسي** `KycDocumentModel` الذي يعرّف علاقة `documents` (مورفيك) مع موديل `Document`.
+- **السمة** `KycDocumentScopesAndHelpers` التي تحتوي على نطاقات متقدمة للاستعلام عن الوثائق، ودوال إحصائية، ودوال فحص مباشرة.
 
 بمجرد إضافة هذا السلوك إلى موديل (مثلاً `RainLab\User\Models\User`)، يصبح بإمكانك:
 
 - استخدام العلاقة `$user->documents` لاستعراض وثائقه.
 - استخدام نطاقات قوية مثل `whereHasDocuments` لفلترة النتائج بناءً على خصائص الوثائق (النوع، الفئة، الحالة، التحقق...).
-- استخدام نطاقات Toggle (تبديل) مثل `isToggelAnyKycDocuments` المصممة خصيصاً لفلاتر `switch` و `checkbox` في OctoberCMS.
-- استخدام نطاقات جماعية للفلاتر مثل `kycDocumentsCategory` و `kycDocumentsType` و `kycDocumentsStatus`.
-- استخدام نطاقات عد متخصصة مثل `addVerifiedDocumentsCount` و `addPendingDocumentsCount`.
 - استخدام دوال إحصائية جاهزة مثل `documents_count` و `verified_documents_count`.
 - التحقق من وجود وثائق بأنواع معينة بسرعة عبر دوال مثل `hasVerifiedDocument()`.
 
@@ -147,140 +144,13 @@ User::where('role', 'customer')
 
 ---
 
-## نطاقات Toggle (تبديل) متوافقة مع فلاتر OctoberCMS
-
-تتيح هذه النطاقات إنشاء فلاتر من نوع `switch` و `checkbox` في لوحة التحكم. تتميز بذكاء تبديل القيمة تلقائياً عند النقر، وتدعم أوضاع "وجود/عدم وجود" الوثائق.
-
-### `scopeIsToggelAnyKycDocuments($query, $value)`
-
-فلتر `switch` لوجود أي وثائق. القيمة `1` تعني "لديه وثائق"، والقيمة `0` تعني "ليس لديه وثائق".
-
-```php
-// المستخدمون الذين لديهم أي وثائق
-User::isToggelAnyKycDocuments(1)->get();
-
-// المستخدمون الذين ليس لديهم أي وثائق
-User::isToggelAnyKycDocuments(0)->get();
-```
-
-### `scopeIsToggelKycDocumentsVerified($query, $value)`
-
-فلتر `checkbox` لوجود وثائق معتمدة.
-
-```php
-// لديهم وثائق معتمدة
-User::isToggelKycDocumentsVerified(1)->get();
-
-// ليس لديهم وثائق معتمدة
-User::isToggelKycDocumentsVerified(0)->get();
-```
-
-### `scopeIsToggelKycDocumentsNotVerified($query, $value)`
-
-عكس الفلتر السابق: `1` = لديه وثائق غير معتمدة، `0` = ليس لديه.
-
-### `scopeIsToggelKycDocumentsPending($query, $value)`
-
-فلتر وجود وثائق بحالة "معلقة".
-
-### `scopeIsToggelKycDocumentsExpired($query, $value)`
-
-فلتر وجود وثائق بحالة "منتهية".
-
-### `scopeIsToggelKycDocumentsByType($query, $value)`
-
-فلتر حسب نوع الوثيقة (مثل `'passport'`). القيمة الممررة هي نوع الوثيقة المختار.
-
-```php
-// المستخدمون الذين لديهم جواز سفر
-User::isToggelKycDocumentsByType('passport')->get();
-
-// المستخدمون الذين ليس لديهم جواز سفر
-User::isToggelKycDocumentsByType(0, 'passport')->get(); // مع toggle: أرسل 0 بعد النقر
-```
-
-### `scopeIsToggelKycDocumentsByCategory($query, $value)`
-
-فلتر حسب فئة الوثيقة (مثل `'primary_id'`).
-
-### `scopeIsToggelKycDocumentsStatus($query, $value)`
-
-فلتر حسب حالة مخصصة (مثل `'rejected'`).
-
-### نطاقات Toggle مدمجة (AND)
-
-تسمح هذه النطاقات بتحقيق شرطين معاً (مثلاً: وثيقة معتمدة **و** من فئة `primary_id`).
-
-#### `scopeIsToggelKycDocumentsVerifiedAndCategory($query, $value, $category = 'primary_id')`
-
-```php
-// المستخدمون الذين لديهم وثيقة معتمدة من فئة primary_id
-User::isToggelKycDocumentsVerifiedAndCategory(1, 'primary_id')->get();
-```
-
-#### `scopeIsToggelKycDocumentsVerifiedAndType($query, $value, $type = 'passport')`
-
-```php
-// المستخدمون الذين لديهم جواز سفر معتمد
-User::isToggelKycDocumentsVerifiedAndType(1, 'passport')->get();
-```
-
-#### `scopeIsToggelKycDocumentsVerifiedAndCategoryPrimaryId($query, $value)`
-
-اختصار للشرط المدمج مع `primary_id`:
-
-```php
-User::isToggelKycDocumentsVerifiedAndCategoryPrimaryId(1)->get();
-```
-
----
-
-## نطاقات الفلاتر الجماعية (Group Filters)
-
-توفر هذه النطاقات دعماً مباشراً لفلاتر `group` في OctoberCMS، حيث يمكن استخدامها كـ `scope` في تعريفات الفلاتر.
-
-### `scopeKycDocumentsCategory($query, $value)`
-
-فلترة السجلات التي تملك وثائق من فئة محددة.
-
-```yaml
-kyc_documents_category:
-    label: 'تصنيف الوثيقة'
-    type: group
-    modelClass: Nano3\Kyc\Models\Document
-    options: getDocumentCategoryFilterOptions
-    scope: kycDocumentsCategory
-```
-
-### `scopeKycDocumentsType($query, $value)`
-
-فلترة حسب نوع الوثيقة.
-
-### `scopeKycDocumentsStatus($query, $value)`
-
-فلترة حسب حالة الوثيقة (verified, pending, rejected, expired).
-
-```yaml
-kyc_documents_status:
-    label: 'حالة الوثيقة'
-    type: group
-    options:
-        verified: 'معتمدة'
-        pending: 'معلقة'
-    scope: kycDocumentsStatus
-```
-
----
-
 ## نطاقات عدد الوثائق (Counting Scopes)
 
-تسمح هذه النطاقات بإضافة عدد الوثائق إلى نتائج الاستعلام أو ترتيب النتائج بناءً على هذا العدد. يوفر السلوك نطاقات عامة ومتخصصة.
+تسمح هذه النطاقات بإضافة عدد الوثائق إلى نتائج الاستعلام أو ترتيب النتائج بناءً على هذا العدد.
 
-### النطاق العام `scopeAddDocumentsCount`
+### `scopeAddDocumentsCount(Builder $query, $columnName = 'documents_count', $options = [])`
 
-```php
-public function scopeAddDocumentsCount(Builder $query, $columnName = 'documents_count', $options = [])
-```
+تضيف عموداً محسوباً يمثل عدد الوثائق (مع إمكانية تخصيص فلترة العدد عبر `$options`).
 
 **المعاملات:**
 - `$columnName`: اسم العمود المضاف إلى SELECT.
@@ -290,26 +160,21 @@ public function scopeAddDocumentsCount(Builder $query, $columnName = 'documents_
 
 ترتيب النتائج تصاعدياً أو تنازلياً بناءً على عدد الوثائق (مع إمكانية فلترة العدد).
 
-### نطاقات العد المتخصصة (جديدة في 1.3.0)
+**المعاملات:**
+- `$orderDirection`: `'ASC'` أو `'DESC'`.
+- `$options`: مصفوفة فلترة اختيارية (مثل خيارات `addDocumentsCount`).
 
-| النطاق | الوصف |
-|--------|-------|
-| `scopeAddVerifiedDocumentsCount($query, $columnName)` | عدد الوثائق المعتمدة. |
-| `scopeAddPendingDocumentsCount($query, $columnName)` | عدد الوثائق المعلقة. |
-| `scopeAddRejectedDocumentsCount($query, $columnName)` | عدد الوثائق المرفوضة. |
-| `scopeAddExpiredDocumentsCount($query, $columnName)` | عدد الوثائق المنتهية. |
-
-**أمثلة:**
+### أمثلة
 
 ```php
 // جلب المستخدمين مع عدد وثائقهم (كل الوثائق)
 $users = User::addDocumentsCount('total_docs')->get();
+foreach ($users as $user) {
+    echo $user->total_docs;
+}
 
 // جلب المستخدمين مع عدد الوثائق المعتمدة فقط
-User::addVerifiedDocumentsCount('verified_count')->get();
-
-// جلب المستخدمين مع عدد الوثائق المعلقة
-User::addPendingDocumentsCount('pending_count')->get();
+User::addDocumentsCount('verified_count', ['is_verified' => true])->get();
 
 // ترتيب المستخدمين تنازلياً حسب عدد الوثائق المعتمدة
 User::sortByDocumentsCount('DESC', ['is_verified' => true])->get();
@@ -395,7 +260,7 @@ $expiringUsers = User::whereHasDocuments([
 ### 2. تقرير بأفضل 10 مستخدمين بعدد الوثائق المعتمدة
 
 ```php
-$topUsers = User::addVerifiedDocumentsCount('verified_docs')
+$topUsers = User::addDocumentsCount('verified_docs', ['is_verified' => true])
     ->sortByDocumentsCount('DESC', ['is_verified' => true])
     ->limit(10)
     ->get();
@@ -412,17 +277,7 @@ if ($user->hasVerifiedDocument()) {
 }
 ```
 
-### 4. استخدام نطاقات Toggle في بناء استعلامات
-
-```php
-// المستخدمون الذين لديهم وثائق معتمدة AND من فئة الهوية الأساسية
-User::isToggelKycDocumentsVerifiedAndCategory(1, 'primary_id')->get();
-
-// المستخدمون الذين ليس لديهم أي وثائق
-User::isToggelAnyKycDocuments(0)->get();
-```
-
-### 5. استخدام النطاق مع علاقات أخرى
+### 4. استخدام النطاق مع علاقات أخرى
 
 ```php
 // المدن التي لديها مستخدمون بوثائق غير معتمدة
@@ -439,15 +294,12 @@ City::whereHas('users', function ($q) {
 - **الأداء**: استخدام `whereHas` مع عدد كبير من الوثائق يمكن أن يكون مكلفاً. يُنصح باستخدام الفهارس المناسبة (مثل `owner_id`, `owner_type`, `document_type`, `status`) والتي تم إنشاؤها بواسطة الهجرة.
 - **التوسع**: يمكنك إضافة نطاقات إضافية إلى الموديل الموسع دون تعديل الكلاس الأصلي.
 - **التوافق**: السلوك مصمم للعمل مع OctoberCMS Builder. جميع النطاقات تقبل `Builder` وتعيد `Builder` مما يسمح بتسلسل الاستعلامات.
-- **نطاقات Toggle**: تدعم آلية التبديل الذكي عند استخدامها مع فلاتر `switch`/`checkbox` في OctoberCMS، حيث يتم استدعاء `post('scopeName')` لعكس القيمة تلقائياً.
 
 ---
 
 ## الخلاصة
 
-سلوك `KycDocumentModel` والسمة `KycDocumentScopesAndHelpers` يوفران طبقة قوية وسهلة لإدارة وثائق KYC لأي موديل. من خلال النطاق المتقدم `whereHasDocuments` والنطاقات المساعدة، بالإضافة إلى نطاقات Toggle المتوافقة مع فلاتر OctoberCMS، ونطاقات العد المتخصصة، يمكنك بناء استعلامات معقدة وفلترة متطورة وتجارب مستخدم غنية في لوحة التحكم بسهولة.
-
----
+سلوك `KycDocumentModel` والسمة `KycDocumentScopesAndHelpers` يوفران طبقة قوية وسهلة لإدارة وثائق KYC لأي موديل. من خلال النطاق المتقدم `whereHasDocuments` والنطاقات المساعدة، يمكنك بناء استعلامات معقدة وفلترة متطورة بسهولة. دوال الإحصاء والفحص تجعل التحقق من حالة الوثائق أمراً بسيطاً ومباشراً، مما يسرّع تطوير تطبيقات متطلبات الامتثال في منصات نانوسوفت.
 
 ## التوثيق الإضافي
 

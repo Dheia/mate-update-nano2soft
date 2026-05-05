@@ -4,16 +4,13 @@
 
 `Nano3\Kyc\Behaviors\KycDocumentModel` is a behavior that can be added to any model in NanoSoft applications to link it to KYC (Know Your Customer) documents as an owner model. The behavior consists of:
 
-- The main class `KycDocumentModel` which defines a `documents` relationship (morphic) with the `Document` model, advanced Toggle scopes for filters, helper scopes for group filters, and new counting scopes.
-- The trait `KycDocumentScopesAndHelpers` which contains the advanced `whereHasDocuments` scope, helper scopes, document counting scopes, statistical functions, and direct checking functions.
+- The main class `KycDocumentModel` which defines a `documents` relationship (morphic) with the `Document` model.
+- The trait `KycDocumentScopesAndHelpers` which contains advanced scopes for querying documents, statistical methods, and direct checking functions.
 
 Once this behavior is added to a model (e.g., `RainLab\User\Models\User`), you can:
 
 - Use the `$user->documents` relationship to view their documents.
 - Use powerful scopes such as `whereHasDocuments` to filter results based on document properties (type, category, status, verification...).
-- Use Toggle scopes (e.g., `isToggelAnyKycDocuments`) specifically designed for `switch` and `checkbox` filters in OctoberCMS.
-- Use group filter scopes such as `kycDocumentsCategory`, `kycDocumentsType`, and `kycDocumentsStatus`.
-- Use specialized counting scopes like `addVerifiedDocumentsCount` and `addPendingDocumentsCount`.
 - Use ready-made statistical functions like `documents_count` and `verified_documents_count`.
 - Quickly check for specific document types via functions like `hasVerifiedDocument()`.
 
@@ -147,140 +144,13 @@ User::where('role', 'customer')
 
 ---
 
-## Toggle Scopes Compatible with OctoberCMS Filters
+## Counting Scopes
 
-These scopes allow creating `switch` and `checkbox` filters in the control panel. They intelligently toggle the value automatically on click, and support "presence/absence" modes for documents.
+These scopes allow adding the document count to query results or ordering results based on that count.
 
-### `scopeIsToggelAnyKycDocuments($query, $value)`
+### `scopeAddDocumentsCount(Builder $query, $columnName = 'documents_count', $options = [])`
 
-`switch` filter for any documents. Value `1` means "has documents", value `0` means "does not have documents".
-
-```php
-// Users who have any documents
-User::isToggelAnyKycDocuments(1)->get();
-
-// Users who have no documents
-User::isToggelAnyKycDocuments(0)->get();
-```
-
-### `scopeIsToggelKycDocumentsVerified($query, $value)`
-
-`checkbox` filter for having verified documents.
-
-```php
-// Have verified documents
-User::isToggelKycDocumentsVerified(1)->get();
-
-// Do not have verified documents
-User::isToggelKycDocumentsVerified(0)->get();
-```
-
-### `scopeIsToggelKycDocumentsNotVerified($query, $value)`
-
-The opposite of the previous filter: `1` = has unverified documents, `0` = does not have.
-
-### `scopeIsToggelKycDocumentsPending($query, $value)`
-
-Filter for having pending documents.
-
-### `scopeIsToggelKycDocumentsExpired($query, $value)`
-
-Filter for having expired documents.
-
-### `scopeIsToggelKycDocumentsByType($query, $value)`
-
-Filter by document type (e.g., `'passport'`). The passed value is the selected document type.
-
-```php
-// Users who have a passport
-User::isToggelKycDocumentsByType('passport')->get();
-
-// Users who do not have a passport
-User::isToggelKycDocumentsByType(0, 'passport')->get(); // with toggle: send 0 after click
-```
-
-### `scopeIsToggelKycDocumentsByCategory($query, $value)`
-
-Filter by document category (e.g., `'primary_id'`).
-
-### `scopeIsToggelKycDocumentsStatus($query, $value)`
-
-Filter by a custom status (e.g., `'rejected'`).
-
-### Combined AND Toggle Scopes
-
-These scopes allow achieving two conditions together (e.g., verified document **AND** belonging to a specific category).
-
-#### `scopeIsToggelKycDocumentsVerifiedAndCategory($query, $value, $category = 'primary_id')`
-
-```php
-// Users who have a verified document from the primary_id category
-User::isToggelKycDocumentsVerifiedAndCategory(1, 'primary_id')->get();
-```
-
-#### `scopeIsToggelKycDocumentsVerifiedAndType($query, $value, $type = 'passport')`
-
-```php
-// Users who have a verified passport
-User::isToggelKycDocumentsVerifiedAndType(1, 'passport')->get();
-```
-
-#### `scopeIsToggelKycDocumentsVerifiedAndCategoryPrimaryId($query, $value)`
-
-Shorthand for the combined condition with `primary_id`:
-
-```php
-User::isToggelKycDocumentsVerifiedAndCategoryPrimaryId(1)->get();
-```
-
----
-
-## Group Filter Scopes
-
-These scopes provide direct support for `group` filters in OctoberCMS, where they can be used as `scope` in filter definitions.
-
-### `scopeKycDocumentsCategory($query, $value)`
-
-Filters records that have documents belonging to a specific category.
-
-```yaml
-kyc_documents_category:
-    label: 'Document Category'
-    type: group
-    modelClass: Nano3\Kyc\Models\Document
-    options: getDocumentCategoryFilterOptions
-    scope: kycDocumentsCategory
-```
-
-### `scopeKycDocumentsType($query, $value)`
-
-Filter by document type.
-
-### `scopeKycDocumentsStatus($query, $value)`
-
-Filter by document status (verified, pending, rejected, expired).
-
-```yaml
-kyc_documents_status:
-    label: 'Document Status'
-    type: group
-    options:
-        verified: 'Verified'
-        pending: 'Pending'
-    scope: kycDocumentsStatus
-```
-
----
-
-## Document Counting Scopes
-
-These scopes allow adding the document count to query results or ordering results based on that count. The behavior provides both general and specialized counting scopes.
-
-### General Scope `scopeAddDocumentsCount`
-
-```php
-public function scopeAddDocumentsCount(Builder $query, $columnName = 'documents_count', $options = [])
-```
+Adds a computed column representing the number of documents (with optional filtering via `$options`).
 
 **Parameters:**
 - `$columnName`: Name of the column added to SELECT.
@@ -290,26 +160,21 @@ public function scopeAddDocumentsCount(Builder $query, $columnName = 'documents_
 
 Orders results ascending or descending based on the document count (with optional filtering).
 
-### Specialized Counting Scopes (New in 1.3.0)
+**Parameters:**
+- `$orderDirection`: `'ASC'` or `'DESC'`.
+- `$options`: Optional filtering array (similar to `addDocumentsCount` options).
 
-| Scope | Description |
-|-------|-------------|
-| `scopeAddVerifiedDocumentsCount($query, $columnName)` | Number of verified documents. |
-| `scopeAddPendingDocumentsCount($query, $columnName)` | Number of pending documents. |
-| `scopeAddRejectedDocumentsCount($query, $columnName)` | Number of rejected documents. |
-| `scopeAddExpiredDocumentsCount($query, $columnName)` | Number of expired documents. |
-
-**Examples:**
+### Examples
 
 ```php
 // Fetch users with their total document count
 $users = User::addDocumentsCount('total_docs')->get();
+foreach ($users as $user) {
+    echo $user->total_docs;
+}
 
 // Fetch users with only verified document count
-User::addVerifiedDocumentsCount('verified_count')->get();
-
-// Fetch users with pending document count
-User::addPendingDocumentsCount('pending_count')->get();
+User::addDocumentsCount('verified_count', ['is_verified' => true])->get();
 
 // Sort users descending by verified document count
 User::sortByDocumentsCount('DESC', ['is_verified' => true])->get();
@@ -395,7 +260,7 @@ $expiringUsers = User::whereHasDocuments([
 ### 2. Top 10 Users by Verified Document Count
 
 ```php
-$topUsers = User::addVerifiedDocumentsCount('verified_docs')
+$topUsers = User::addDocumentsCount('verified_docs', ['is_verified' => true])
     ->sortByDocumentsCount('DESC', ['is_verified' => true])
     ->limit(10)
     ->get();
@@ -412,17 +277,7 @@ if ($user->hasVerifiedDocument()) {
 }
 ```
 
-### 4. Using Toggle Scopes in Query Building
-
-```php
-// Users who have verified documents AND from the primary identity category
-User::isToggelKycDocumentsVerifiedAndCategory(1, 'primary_id')->get();
-
-// Users who have no documents
-User::isToggelAnyKycDocuments(0)->get();
-```
-
-### 5. Using the Scope with Other Relationships
+### 4. Using the Scope with Other Relationships
 
 ```php
 // Cities that have users with unverified documents
@@ -439,25 +294,22 @@ City::whereHas('users', function ($q) {
 - **Performance**: Using `whereHas` with a large number of documents can be expensive. It is recommended to use appropriate indexes (e.g., `owner_id`, `owner_type`, `document_type`, `status`), which are created by the migration.
 - **Extensibility**: You can add additional scopes to the extended model without modifying the original class.
 - **Compatibility**: The behavior is designed to work with the OctoberCMS Builder. All scopes accept a `Builder` and return a `Builder`, allowing query chaining.
-- **Toggle Scopes**: Support the intelligent toggle mechanism when used with `switch`/`checkbox` filters in OctoberCMS, where calling `post('scopeName')` automatically inverts the value.
 
 ---
 
 ## Summary
 
-The `KycDocumentModel` behavior and the `KycDocumentScopesAndHelpers` trait provide a powerful and easy-to-use layer for managing KYC documents for any model. Through the advanced `whereHasDocuments` scope, helper scopes, OctoberCMS-compatible Toggle scopes, and specialized counting scopes, you can build complex queries, sophisticated filtering, and rich control panel user experiences with ease.
-
----
+The `KycDocumentModel` behavior and the `KycDocumentScopesAndHelpers` trait provide a powerful and easy-to-use layer for managing KYC documents for any model. Through the advanced `whereHasDocuments` scope and the helper scopes, you can build complex queries and sophisticated filtering with ease. The statistical and checking functions make verifying document status simple and straightforward, speeding up the development of compliance applications on NanoSoft platforms.
 
 ## Additional Documentation
 
 **Reference Documentation**:
-- [General Plugin Documentation](./Docs-Nano3-Kyc-en.md)
-- [`DocumentType` Class Documentation](./Docs-DocumentType-Class-en.md)
-- [`Manager` Class Documentation](./Docs-Manager-Class-en.md)
-- [`HasAssessKycStatus` Trait Documentation](./Docs-HasAssessKycStatus-Trait-en.md)
-- [`HasValidKycDocuments` Trait Documentation](./Docs-HasValidKycDocuments-Trait-en.md)
-- [`Document` Model Documentation](./Docs-Document-Model-en.md)
-- [`DynamicAddIncludeKyc` Behavior Documentation](./Docs-DynamicAddIncludeKyc-Behaviors-en.md)
-- [`KycDocumentManager` Class Documentation](./Docs-KycDocumentManager-Class-en.md)
-- [API Documentation](./Docs-API-Documentation-en.md)
+- [General Plugin Documentation](./docs/Kyc/Docs-Nano3-Kyc-en.md)
+- [`DocumentType` Class Documentation](./docs/Kyc/Docs-DocumentType-Class-en.md)
+- [`Manager` Class Documentation](./docs/Kyc/Docs-Manager-Class-en.md)
+- [`HasAssessKycStatus` Trait Documentation](./docs/Kyc/Docs-HasAssessKycStatus-Trait-en.md)
+- [`HasValidKycDocuments` Trait Documentation](./docs/Kyc/Docs-HasValidKycDocuments-Trait-en.md)
+- [`Document` Model Documentation](./docs/Kyc/Docs-Document-Model-en.md)
+- [`DynamicAddIncludeKyc` Behavior Documentation](./docs/Kyc/Docs-DynamicAddIncludeKyc-Behaviors-en.md)
+- [`KycDocumentManager` Class Documentation](./docs/Kyc/Docs-KycDocumentManager-Class-en.md)
+- [API Documentation](./docs/Kyc/Docs-API-Documentation-en.md)
