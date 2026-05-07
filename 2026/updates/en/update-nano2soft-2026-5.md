@@ -1157,4 +1157,186 @@ Version **1.1.0** represents a qualitative leap for the `Nano.AccountsApi` addâ€
 - [Exchange Differences Functions Documentation](./docs/Accounts/Docs-TransactionsHelper-ExchangeDifferences-en.md)
 - [Practical Examples for Exchange Differences Functions](./docs/Accounts/Docs-TransactionsHelper-ExchangeDifferences-Example-en.md)
 
+## 2026-05-06 - 2026-05-07
+
+**Addition of `Nano.StudyyearApi` â€“ Version 1.0.0**
+
+### Creating a RESTful API for Managing Academic Years, Semesters, and Months
+
+---
+
+### Update Summary
+
+The first version **1.0.0** of the `Nano.StudyyearApi` plugin provides a complete and unified API for interacting with data managed by the `Tss.Studyyear` plugin. This plugin is built according to the project's standard `Nano.*Api` pattern, offering clear and protected endpoints for retrieving academic years (`Periods`), semesters (`Semsters`), and academic months (`Months`). This version also includes a comprehensive configuration and multi-level permission system, professional data transformers, and full translation support.
+
+---
+
+### Release Objectives
+
+- **Provide a unified API** for all academic year entities (years, semesters, months).
+- **Apply a consistent architectural pattern** with other `Nano.*Api` plugins (such as `Nano.StudentsApi` and `Nano.AbsenceApi`).
+- **Enable external applications and frontends** to easily and securely access this vital data.
+- **Provide high flexibility in settings and permissions** for each resource individually.
+- **Support advanced filtering and search** across all endpoints.
+- **Facilitate future expansion** to add write operations (create, update, delete) without fundamental structural changes.
+
+---
+
+### New Features and Improvements
+
+#### 1. Complete RESTful Controllers
+
+Three main controllers were created following the unified `ApiController` pattern:
+
+| Controller | Targeted Model | Description |
+|------------|----------------|-------------|
+| `Periods` | `Tss\Studyyear\Models\Period` | Managing academic years |
+| `Semsters` | `Tss\Studyyear\Models\Semster` | Managing semesters (first and second) |
+| `Months` | `Tss\Studyyear\Models\Month` | Managing academic months |
+
+**Each controller provides:**
+
+- **`index()`**: Fetch a list with full support for filtering, search, sorting, and pagination.
+- **`show($id)`**: View details of a single record with all related relations.
+- **`getRecords(array $options)`**: A customizable core function used internally for building complex queries.
+- **`activelystats()`**: Endpoint for monitoring the last data update (for caching purposes).
+- **`getLastUpdateAt()`**: Return the timestamp of the last update.
+- **`validationList($user)`**: Unified function for checking access permissions based on user type (backend / frontend) and settings.
+
+#### 2. Tight and Customizable Permission System
+
+A multi-level permission system was applied, allowing administrators to precisely control access to each endpoint:
+
+- **At the general user level**: Is the `list` operation allowed at all?
+- **At the user type level**: Is it allowed for backend users? For frontend users?
+- **At the specific permission level**: Does the user need to hold a specific permission (e.g., `tss.studyyear.periods.access`)?
+
+These settings are controlled via `config.php` using environment variables (`env`), allowing behavior changes without touching the code.
+
+**Example of `periods` settings in `config.php`:**
+```php
+'periods' => [
+    'is_allow_list'            => env('NANO_STUDYYEARAPI_PERIODS_IS_ALLOW_LIST', true),
+    'is_allow_list_backend'    => env('NANO_STUDYYEARAPI_PERIODS_IS_ALLOW_LIST_BACKEND', true),
+    'is_allow_list_frontend'   => env('NANO_STUDYYEARAPI_PERIODS_IS_ALLOW_LIST_FRONTEND', true),
+    'is_check_access_list'     => env('NANO_STUDYYEARAPI_PERIODS_IS_CHECK_ACCESS_LIST', true),
+    'is_check_list_permission' => env('NANO_STUDYYEARAPI_PERIODS_IS_CHECK_LIST_PERMISSION', true),
+    // ...
+],
+```
+
+#### 3. Integrated Data Transformers
+
+Three data transformers were created to format API responses professionally:
+
+- **`PeriodTransformer`**: Displays academic year fields with included relations (`company`, `department`).
+- **`SemsterTransformer`**: Displays semester fields with included relations (`company`, `department`, `period`).
+- **`MonthTransformer`**: Displays academic month fields with included relations (`company`, `department`, `period`, `semster`).
+
+All transformers support:
+- **Data formatting**: Converting values to correct types (int, string, bool, float, date).
+- **`formatDate` function**: For safe date formatting.
+- **Field filtering (`exclude`)**: Users can specify field names they do not wish to receive to reduce transmitted data size.
+- **`object_type`**: Adding object type to the response.
+- **Error handling**: All `include` functions are wrapped in `try-catch` blocks to avoid failing the entire query due to a missing relation.
+
+#### 4. Smart Support for Default Values
+
+When the academic year ID (`study_year_id`) is not passed when fetching semesters (`Semsters`) or months (`Months`), the controllers automatically adopt the **default academic year** (`Period::getPrimary()`) as a filter, ensuring a smooth developer experience without explicitly specifying the year in every request.
+
+**Practical example in `Semsters::getRecords()`:**
+```php
+if (!$study_year_id) {
+    $primary = Period::getPrimary();
+    if ($primary) {
+        $study_year_id = $primary->id;
+    }
+}
+```
+
+#### 5. Caching Support
+
+All `index` endpoints support caching via `nano.api::api_enable_cache` settings, significantly improving performance on repeated requests. Cache is automatically invalidated when any record is updated via `getLastUpdateAt()`.
+
+#### 6. Advanced Filtering and Search
+
+Numerous filters can be passed to `getRecords` such as:
+- `companys_id` and `departments_id` (with automatic `IsCompany` scope support).
+- `isActive`, `calendar_type`, `ref_type`, `status`.
+- `study_year_id`, `semsters_id`, `month_num` (depending on the resource).
+- Text search `q` across name, short description, and code.
+
+#### 7. Multilingual Error Messages
+
+A complete translation file (`lang/en/lang.php`) is included containing all success, error, and permission messages, making Arabic or other language translations easy.
+
+---
+
+### Usage Examples
+
+#### Fetch active academic years
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/studyyear/periods?isActive=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Fetch semesters of the default academic year, including year and company
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/studyyear/semsters?include=period,company" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Fetch months of a specific semester ordered by month
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/studyyear/months?semsters_id=5&orderBy=month_num&orderDirection=asc" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### View details of a specific academic year
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/studyyear/periods/12" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+### Benefits and Added Value
+
+- **Seamless integration with user interfaces**: Any frontend application (React, Vue, Angular) can easily fetch year, semester, and month data to build academic calendars or registration forms.
+- **Reduced developer burden**: Instead of writing complex queries manually, the plugin provides a rich and direct query interface.
+- **Production-ready**: The advanced permission and settings system allows direct deployment in production environments with full access control.
+- **Simple future expansion**: Adding `POST`, `PUT`, and `DELETE` operations in the future will only require extending the existing controllers without restructuring.
+- **High performance**: Using `scopeExclude` for controlling retrieved columns and caching ensures fast response times.
+
+---
+
+### Upgrade Requirements
+
+1. **Install Plugin**: Copy the `nano/studyyearapi` folder to `plugins/nano/studyyearapi`.
+2. **Register Plugin**: Ensure you run `php artisan plugin:refresh Nano.StudyyearApi`.
+3. **Environment Variables**: Adjust `env` variables as needed (e.g., enabling or disabling access for frontend users).
+4. **Permissions**: Ensure that roles and users in the backend system possess the appropriate permissions (e.g., `tss.studyyear.periods.access`) if the `is_check_list_permission` option is enabled.
+5. **Clear Cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+6. **No database migrations** are required for this version.
+
+---
+
+### Conclusion
+
+Version **1.0.0** of `Nano.StudyyearApi` lays the foundation for dealing with academic calendar data through a modern and secure API. By following best practices and the unified architectural pattern of `Nano.*Api` plugins, this plugin provides a solid base upon which to build more features such as creating and modifying academic years, and integrating with attendance or timetable systems.
+
+---
+
+**Reference Documentation**:
+- [`Nano.StudyyearApi` Documentation](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
+- [`Nano.StudentsApi` Documentation](./docs/StudentsApi/Docs-StudentsApi-en.md)
+
 
