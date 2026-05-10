@@ -1,4 +1,4 @@
-## 2026-04-29 – 2026-04-30
+## 2026-4-9 – 2026-4-9
 
 ### إضافة بوابة دفع JaibPay (محفظة جيب) إلى نظام المدفوعات في نانوسوفت
 
@@ -275,7 +275,7 @@ https://yourdomain.com/api/v1/yepayment/jaibpay/test-ui
 
 ### 12. روابط ذات صلة
 
-- [JaibPay API Documentation ](./Docs-JaibPay-ar.md)
+- [JaibPay API Documentation ](./docs/JaibPay/Docs-JaibPay-ar.md)
 - [وثيقة API الخاصة بـ Jaib Pay – تسجيل الدخول (Login.pdf)](./Login.pdf)
 - [وثيقة API الخاصة بـ Jaib Pay – تنفيذ واستعلام الدفع (Jaib Wallet Pay API.pdf)](./Jaib%20Wallet%20Pay%20API.pdf)
 - [مجموعة Postman لاختبار API Jaib Pay](./Jaib%20Pay%20API.postman_collection.json)

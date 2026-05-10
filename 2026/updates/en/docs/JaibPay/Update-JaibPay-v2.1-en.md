@@ -275,7 +275,7 @@ None – this version is dedicated to adding a new feature only.
 
 ### 12. Related Links
 
-- [JaibPay API Documentation ](./Docs-JaibPay-en.md)
+- [JaibPay API Documentation ](./docs/JaibPay/Docs-JaibPay-en.md)
 - [Jaib Pay API Documentation – Login (Login.pdf)](./Login.pdf)
 - [Jaib Pay API Documentation – Execute and Query Payment (Jaib Wallet Pay API.pdf)](./Jaib%20Wallet%20Pay%20API.pdf)
 - [Postman Collection for Jaib Pay API](./Jaib%20Pay%20API.postman_collection.json)
