@@ -6,6 +6,12 @@
 
 1. **تنفيذ عملية شراء عبر الكود** (Execute Buy Online By Code) – يقوم العميل بإدخال كود الشراء الذي أنشأه مسبقاً في تطبيق جيب، ويتم خصم المبلغ فوراً من رصيده دون حاجة إلى تأكيد إضافي أو رمز OTP.
 
+بعد التحديثات الأخيرة، أصبحت البوابة تدعم أيضاً:
+- **استرداد المبلغ (Refund)** – عبر `POST /api/v1/BuyOnline/RefoundBuy`
+- **اختبار المنفذ** – دالة `testPortConnection` لتشخيص مشاكل الاتصال
+- **معالجة موحدة للاستجابات** – دالة `normalizeApiResponse` لتقديم رسائل خطأ واضحة
+- **جلب آمن للإعدادات المشفرة** – دالة `getSettingsByKey` لجلب كلمة المرور المخزنة بشكل مشفر
+
 هذا الكلاس يمكن استخدامه مباشرة من خلال `Nano\Yepayment\PaymentTypes\JaibPay` أو عبر نظام المدفوعات الموحد `Nano\MicroCart\Classes\Payments\PaymentGateway`.
 
 ---
@@ -44,6 +50,11 @@ $url = PaymentGatewaySettings::get('jaibpay_url', '');
 $username = PaymentGatewaySettings::get('jaibpay_username', '');
 $agentCode = PaymentGatewaySettings::get('jaibpay_agentcode', '10004');
 ```
+
+> **هام:** بالنسبة للإعدادات المشفرة مثل `jaibpay_password`، يجب استخدام دالة `getSettingsByKey()` بدلاً من `PaymentGatewaySettings::get()` المباشر لضمان جلب القيمة المفكوكة بشكل صحيح:
+> ```php
+> $password = $this->getSettingsByKey('jaibpay_password');
+> ```
 
 ---
 
@@ -100,24 +111,27 @@ class JaibPay extends PaymentProvider
 6. حفظ بيانات إضافية في `order->other_data['jaibpay']`.
 7. تحديث حالة الطلب إلى `PaidState` عبر `$result->success()`.
 8. إرجاع `PaymentResult` بنجاح.
+9. **في حال الفشل:** يتم تعيين `$result->message` من رسالة الخطأ القادمة من Jaib (مثل "كود الشراء غير صحيح")، ثم استدعاء `$result->fail()`.
 
 #### `public function complete(PaymentResult $result): PaymentResult`
-غير مستخدم في هذا النوع (الدفع الفوري). يترك فارغاً أو يمكن استخدامه لاسترجاع الأموال مستقبلاً.
+غير مستخدم في هذا النوع (الدفع الفوري). يترك فارغاً أو يمكن استخدامه لاسترداد الأموال مستقبلاً.
 
-#### `private function getAuthToken(): ?array`
+#### `public function getAuthToken(): ?array`
 يطلب `accessToken` و `pinApi` من Jaib API.
 
 **نقطة النهاية:** `POST /api/v1/TokenAuth/LogAPI`  
 **البيانات:** `{"userName": "...", "password": "...", "agentCode": "..."}`  
 **الإرجاع:** مصفوفة تحتوي على `accessToken`, `pinApi`, `expire` أو `null` في حال الفشل.  
-**التخزين المؤقت:** يتم تخزينها في Cache لمدة 86000 ثانية.
+**التخزين المؤقت:** يتم تخزينها في Cache لمدة 86000 ثانية.  
+**تحسينات:** تستخدم `normalizeApiResponse` لتقديم رسائل خطأ واضحة، وتستخدم `getSettingsByKey` لجلب كلمة المرور المشفرة.
 
 #### `private function executeBuy(string $accessToken, string $pinApi, string $requestID): array`
 ينفذ عملية الشراء عبر الكود.
 
 **نقطة النهاية:** `POST /api/v1/BuyOnline/ExeBuy`  
 **البيانات:** `{"pinApi": "...", "mobile": "...", "requestID": "...", "code": "...", "amount": ..., "currencyCode": "...", "notes": "..."}`  
-**الإرجاع:** مصفوفة تحتوي على `success`, `referenceID`, `requestID`, `msg`, `amount`, `currencyCode`.
+**الإرجاع:** مصفوفة تحتوي على `success`, `referenceID`, `requestID`, `msg`, `amount`, `currencyCode`.  
+**تحسينات:** تستخدم `normalizeApiResponse` لتقديم رسائل خطأ دقيقة مثل "كود الشراء غير صحيح" أو "قد تم استخدام الكود مسبقاً".
 
 #### `public function checkTransactionStatus(string $requestID): array`
 يستعلم عن حالة معاملة باستخدام `requestID`.
@@ -125,6 +139,33 @@ class JaibPay extends PaymentProvider
 **نقطة النهاية:** `POST /api/v1/BuyOnline/CheckProgress`  
 **البيانات:** `{"pinApi": "...", "requestID": "..."}`  
 **الإرجاع:** مصفوفة تحتوي على `success`, `request_id`, `reference_id`, `raw_response`.
+
+#### `public function refund(string $referenceID, ?string $requestID = null, ?float $amount = null, ?string $currencyCode = null, ?string $notes = null): array`
+**🆕 دالة جديدة** – تسترد مبلغ معاملة سابقة.
+
+**نقطة النهاية:** `POST /api/v1/BuyOnline/RefoundBuy`  
+**المعاملات:**
+- `$referenceID` – رقم العملية المرجعي الأساسي (مطلوب)
+- `$requestID` – معرف طلب فريد جديد (اختياري، يولّد تلقائياً)
+- `$amount` – المبلغ المراد استرداده (اختياري، يُجلب من الطلب)
+- `$currencyCode` – رمز العملة (اختياري)
+- `$notes` – ملاحظات (اختياري)
+
+**تأثير الدالة على الطلب:**
+- عند النجاح: يتم تغيير `order->payment_state` إلى `RefundedState`.
+- يتم تخزين بيانات الاسترداد في `order->other_data['jaibpay_refund']` كمصفوفة تحتوي على:
+  ```php
+  [
+      'refund_referenceID'   => 'رقم مرجع الاسترداد من Jaib',
+      'original_referenceID' => 'رقم العملية الأصلية',
+      'requestID'            => 'معرف الطلب الفريد',
+      'amount'               => 5000.0,
+      'currencyCode'         => 'YER',
+      'notes'                => 'ملاحظات الاسترداد',
+      'msg'                  => 'تمت العملية بنجاح',
+      'created_at'           => '2025-01-01 12:00:00'
+  ];
+  ```
 
 #### `private function getApiUrl(string $type): string`
 يبني روابط API بناءً على النوع (`login`, `buy`, `refund`, `check`).
@@ -134,13 +175,89 @@ class JaibPay extends PaymentProvider
 
 ---
 
-## 4. آلية الدفع خطوة بخطوة (للمطور)
+## 4. الدوال المساعدة الجديدة
 
-### 4.1. تدفق العملية الكامل
+### 4.1. `normalizeApiResponse` – معالجة موحدة لاستجابات API
+
+```php
+private function normalizeApiResponse($response): array
+```
+
+**الوظيفة:** تستقبل استجابة HTTP (أو استثناء) وتستخرج بشكل موحد جميع المعلومات المهمة:
+
+| المفتاح | الوصف |
+|---------|-------|
+| `success` | نجاح العملية (boolean) |
+| `status_code` | رمز HTTP (مثل 200، 500) |
+| `error_code` | كود الخطأ من Jaib (مثل `51`، `-100`، `-1026`) |
+| `error_message` | رسالة الخطأ النصية من Jaib |
+| `data` | بيانات النتيجة (المحتوى الكامل لـ `result`) |
+| `raw` | الاستجابة الخام كاملة |
+
+**الاستخدام:** تُستخدم في جميع دوال API (`getAuthToken`, `executeBuy`, `checkTransactionStatus`, `refund`) لتوحيد معالجة الردود وتقديم رسائل خطأ دقيقة للمستخدم.
+
+### 4.2. `looksLikeJson` – التحقق من شكل JSON
+
+```php
+private function looksLikeJson($string): bool
+```
+
+دالة مساعدة تتحقق مما إذا كان النص المُعطى يشبه JSON (يبدأ بـ `{` أو `[`). تُستخدم داخلياً في `normalizeApiResponse`.
+
+### 4.3. `testPortConnection` – اختبار المنفذ
+
+```php
+public static function testPortConnection(string $url, ?int $port = null, int $timeout = 5): array
+```
+
+**الوظيفة:** تختبر ما إذا كان منفذ معين مفتوحاً على خادم. تدعم:
+- استخراج المنفذ تلقائياً من الرابط (مثل `https://www.api2.e-jaib.com:5088`)
+- أولوية المنفذ الممرر Parameter على المنفذ الموجود في الرابط
+- استخدام المنفذ الافتراضي حسب scheme (443 لـ HTTPS، 80 لـ HTTP)
+- فحص DNS وتحديد ما إذا كانت المشكلة في DNS أم في المنفذ
+- قياس زمن الاستجابة بالمللي ثانية
+
+**مثال استدعاء:**
+```php
+$result = JaibPay::testPortConnection('https://www.api2.e-jaib.com:5088');
+if ($result['success']) {
+    echo "المنفذ مفتوح، زمن الاستجابة: " . $result['details']['elapsed_ms'] . "ms";
+} else {
+    echo "فشل الاتصال: " . $result['message'];
+}
+```
+
+### 4.4. `getSettingsByKey` – جلب آمن للإعدادات
+
+```php
+public function getSettingsByKey($key, $defaultValue = null)
+```
+
+**الوظيفة:** تجلب قيمة إعداد من `PaymentGatewaySettings` بطريقة صحيحة، مع دعم الحقول المشفرة:
+- إذا كان المفتاح ضمن `encryptedSettings()`، تستخدم `getEncryptableValue()` لفك التشفير.
+- وإلا تستخدم `get()` العادية.
+
+**الاستخدام الأساسي:** جلب كلمة المرور المخزنة بشكل مشفر (`jaibpay_password`).
+
+---
+
+## 5. آلية الدفع خطوة بخطوة (للمطور)
+
+### 5.1. تدفق العملية الكامل
+
+1. **المصادقة:** `getAuthToken()` → `POST /api/v1/TokenAuth/LogAPI` ← `{ accessToken, pinApi, expire }`
+2. **تنفيذ الدفع:** `executeBuy()` → `POST /api/v1/BuyOnline/ExeBuy` ← `{ referenceID, requestID, msg }`
+3. **حفظ البيانات:** تخزين `requestID` في `order->payment_first_trans_id` و `referenceID` في `order->payment_trans_id` وتحديث الطلب إلى `PaidState`
+4. **الاستعلام (اختياري):** `checkTransactionStatus()` → `POST /api/v1/BuyOnline/CheckProgress`
+5. **استرداد المبلغ (جديد):** `refund()` → `POST /api/v1/BuyOnline/RefoundBuy` ← تغيير حالة الطلب إلى `RefundedState`
+
+
+### 5.2. مخطط تدفق العملية الكامل
 
 <img src="./images/sequenceDiagram-JaibPay-ar.jpg" alt="JaibPay Flow Diagram" width="600">
 
-### 4.2. دمج البوابة في واجهة برمجة تطبيقات (API) مخصصة
+
+### 5.3. دمج البوابة في واجهة برمجة تطبيقات (API) مخصصة
 
 #### أ. تنفيذ دفعة جديدة (بدء الدفع)
 
@@ -215,13 +332,28 @@ GET /api/payment/jaibpay/status?request_id=550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
+#### ج. استرداد المبلغ (جديد)
+
+```php
+Route::post('/payment/jaibpay/refund', function (Request $request) {
+    $order = Order::find($request->order_id);
+    $jaib = new JaibPay($order, [
+        'amount'   => $request->amount,
+        'currency' => $request->currency ?? 'YER',
+        'notes'    => $request->notes ?? 'استرداد مبلغ',
+    ]);
+    $refundResult = $jaib->refund($request->reference_id);
+    return response()->json($refundResult);
+});
+```
+
 ---
 
-## 5. نقاط نهاية الاختبار المضمنة في `routes.php`
+## 6. نقاط نهاية الاختبار المضمنة في `routes.php`
 
 ضمن ملف `routes.php` الخاص بـ `Nano.Yepayment`، تم توفير مجموعة من نقاط النهاية المساعدة تحت المجموعة `/api/v1/yepayment`، والمخصصة للمطورين والمسؤولين لاختبار البوابة.
 
-### 5.1. قائمة نقاط النهاية
+### 6.1. قائمة نقاط النهاية
 
 | المسار | الطريقة | الوصف |
 |--------|---------|-------|
@@ -229,10 +361,31 @@ GET /api/payment/jaibpay/status?request_id=550e8400-e29b-41d4-a716-446655440000
 | `/jaibpay/test-create-payment` | POST | إنشاء دفعة جديدة (تنفيذ الدفع المباشر) |
 | `/jaibpay/test-check-status` | GET | الاستعلام عن حالة معاملة باستخدام `request_id` |
 | `/jaibpay/test-full-payment` | POST | اختبار شامل (إنشاء دفعة + استعلام) |
+| `/jaibpay/test-refund` | POST | **🆕** استرداد مبلغ معاملة |
+| `/jaibpay/test-port` | GET | **🆕** اختبار المنفذ (يستخدم `JaibPay::testPortConnection`) |
 | `/jaibpay/stats` | GET | إحصائيات استخدام البوابة (عدد الطلبات، نسبة النجاح) |
 | `/jaibpay/test-ui` | GET | واجهة ويب تفاعلية لاختبار جميع الوظائف |
 
-### 5.2. شرح كل نقطة نهاية
+### 6.2. شرح نقاط النهاية الجديدة
+
+#### `POST /jaibpay/test-refund`
+**بيانات الطلب (JSON):**
+```json
+{
+    "order_id": 200,
+    "reference_id": "16986110064345",
+    "amount": 5000,
+    "currency": "YER",
+    "notes": "استرداد"
+}
+```
+> إذا لم يتم تمرير `reference_id` وتم تمرير `order_id`، يحاول النظام جلبه تلقائياً من بيانات الطلب. كما يتحقق من أن الطلب مدفوع وأنه تم عبر JaibPay.  
+**الاستجابة:** `{ success, data: { reference_id, request_id, api_data } }`
+
+#### `GET /jaibpay/test-port?url=...&port=...`
+**الاستجابة:** `{ success, message, details: { host, port, elapsed_ms, dns_resolved, ... } }`
+
+### 6.3. شرح كل نقطة نهاية
 
 #### `POST /jaibpay/test-auth`
 لا تحتاج إلى بيانات إدخال (تستخدم الإعدادات المخزنة).  
@@ -261,29 +414,29 @@ GET /api/payment/jaibpay/status?request_id=550e8400-e29b-41d4-a716-446655440000
 
 #### `GET /jaibpay/test-ui`
 يعرض واجهة HTML متكاملة تحتوي على:
-- اختبار يدوي خطوة بخطوة (إنشاء دفعة، استعلام، اختبار شامل)
+- اختبار يدوي خطوة بخطوة (مصادقة، إنشاء دفعة، استعلام، استرداد)
 - اختبار تلقائي بعدد مرات قابل للتحديد (1-10 مرات)
 - إحصائيات فورية (عدد الطلبات، نسبة النجاح، آخر السجلات)
 - سجلات الاختبارات المخزنة في LocalStorage
-- أدوات إضافية (اختبار الاتصال، تصدير السجلات، إعادة التعيين)
+- أدوات إضافية (اختبار المنفذ، تصدير السجلات، إعادة التعيين)
 
 #### `GET /jaibpay/stats`
 **الاستجابة:** إحصائيات مثل `total_orders`, `jaibpay_orders`, `successful_payments`, `success_rate`, إعدادات البوابة.
 
 ---
 
-## 6. التعامل مع البوابة عبر API خارجي (للتطبيقات الأخرى)
+## 7. التعامل مع البوابة عبر API خارجي (للتطبيقات الأخرى)
 
 إذا كنت تطور تطبيقاً خارجياً (مثلاً تطبيق جوال أو متجر إلكتروني مستقل) وترغب في دمج JaibPay دون استخدام كلاس `JaibPay` مباشرة، يمكنك الاتصال بـ **نقاط النهاية العامة** التي يوفرها النظام (المذكورة أعلاه) بعد المصادقة عبر `oauth-users`.
 
-### 6.1. المصادقة المسبقة
+### 7.1. المصادقة المسبقة
 
 يجب أن يكون لديك توكن OAuth 2.0 صالح (يمكن الحصول عليه من نظام نانوسوفت عبر نقطة نهاية تسجيل الدخول المعتادة). ثم ترسل التوكن في الهيدر:
 ```
 Authorization: Bearer <token>
 ```
 
-### 6.2. مثال متكامل باستخدام cURL
+### 7.2. مثال متكامل باستخدام cURL
 
 #### أ. إنشاء دفعة جديدة
 ```bash
@@ -306,26 +459,81 @@ curl -X GET "https://yourdomain.com/api/v1/yepayment/jaibpay/test-check-status?r
   -H "Authorization: Bearer <token>"
 ```
 
+#### ج. استرداد المبلغ
+```bash
+curl -X POST "https://yourdomain.com/api/v1/yepayment/jaibpay/test-refund" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": 200,
+    "reference_id": "16986110064345",
+    "amount": 5000,
+    "currency": "YER"
+  }'
+```
+
+#### د. اختبار المنفذ
+```bash
+curl -X GET "https://yourdomain.com/api/v1/yepayment/jaibpay/test-port?url=https://www.api2.e-jaib.com:5088" \
+  -H "Authorization: Bearer <token>"
+```
+
 > **ملاحظة:** نقاط النهاية هذه محمية بـ `BackendAuth` أيضاً (تتطلب أن يكون المستخدم مسؤولاً). إذا كنت تريد توفيرها للعملاء العاديين، يجب تعديل `routes.php` لإزالة فحص `BackendAuth` أو إضافة middleware مخصص.
 
 ---
 
-## 7. رموز الأخطاء الشائعة والحلول
+## 8. رموز الأخطاء الشائعة والحلول
 
 | كود HTTP | الخطأ (من Jaib API) | السبب والحل |
 |----------|----------------------|--------------|
 | 401 | Unauthorized | فشل المصادقة – تحقق من `userName`/`password`/`agentCode` في الإعدادات. |
 | 400 | "رقم الكود غير صحيح" (code 51) | كود الشراء غير صحيح أو منتهي الصلاحية – تأكد من الكود المدخل. |
-| 400 | "قد تم استخدام الكود مسبقا" (code -1026) | تم استهلاك الكود مسبقاً – استخدم كود جديد. |
+| 400 | "قد تم استخدام الكود مسبقاً" (code -1026) | تم استهلاك الكود مسبقاً – استخدم كود جديد. |
 | 400 | "رصيد غير كاف" | رصيد العميل في محفظة جيب لا يكفي للمبلغ المطلوب. |
 | 400 | "المعاملة غير موجودة" | `requestID` غير صحيح – تحقق من المعرف المخزن. |
-| 500 | Internal Server Error | مشكلة في الاتصال بـ Jaib API – تأكد من الرابط، أو حاول لاحقاً. |
+| 400 | "رسم مرجع العملية غير صحيح" | `referenceID` غير صحيح عند الاسترداد. |
+| 500 | Internal Server Error | مشكلة في الاتصال بـ Jaib API – تأكد من الرابط والمنفذ، أو حاول لاحقاً. |
+| cURL 28 | Connection timed out | المنفذ 5088 غير مفتوح من جهة الاستضافة – استخدم `testPortConnection` للتشخيص. |
 
 ---
 
-## 8. أمثلة عملية لاستخدام الكلاس في كود مخصص
+## 9. هيكل البيانات المخزنة في الطلب
 
-### 8.1. إنشاء دفعة جديدة بدون استخدام `PaymentGateway`
+### 9.1. بيانات الدفع – `order->other_data['jaibpay']`
+
+```php
+[
+    'request_id'      => '550e8400-e29b-41d4-a716-446655440000',  // معرف الطلب الفريد
+    'reference_id'    => '16986110064345',      // رقم العملية المرجعي من Jaib
+    'pin_api'         => 'tIcI4zm',             // رمز PIN API المستخدم
+    'amount'          => 5000.0,                // المبلغ
+    'currency_code'   => 'YER',                 // رمز العملة
+    'mobile'          => '774760761',           // رقم جوال العميل
+    'purchase_code'   => '3719',                // كود الشراء المستخدم
+    'created_at'      => '2025-01-01T12:00:00Z' // وقت إنشاء المعاملة
+]
+```
+
+### 9.2. بيانات الاسترداد – `order->other_data['jaibpay_refund']`
+
+```php
+[
+    'refund_referenceID'   => '16986138584353',  // رقم مرجع الاسترداد من Jaib
+    'original_referenceID' => '16986110064345',  // رقم العملية الأصلية
+    'requestID'            => 'uuid-...',        // معرف طلب الاسترداد
+    'amount'               => 5000.0,            // المبلغ المسترد
+    'currencyCode'         => 'YER',             // رمز العملة
+    'notes'                => 'استرداد مبلغ',    // ملاحظات
+    'msg'                  => 'تمت العملية بنجاح', // رسالة من Jaib
+    'created_at'           => '2025-01-01T12:30:00Z' // وقت الاسترداد
+]
+```
+
+---
+
+## 10. أمثلة عملية لاستخدام الكلاس في كود مخصص
+
+### 10.1. إنشاء دفعة جديدة بدون استخدام `PaymentGateway`
 
 ```php
 use Nano\Yepayment\PaymentTypes\JaibPay;
@@ -350,7 +558,7 @@ if ($processResult->successful) {
 }
 ```
 
-### 8.2. الاستعلام عن حالة دفعة
+### 10.2. الاستعلام عن حالة دفعة
 
 ```php
 $jaib = new JaibPay();
@@ -360,7 +568,25 @@ if ($status['success']) {
 }
 ```
 
-### 8.3. استخدام دالة المصادقة للحصول على التوكن فقط
+### 10.3. استرداد مبلغ معاملة
+
+```php
+$order = Order::find(200);
+$jaib = new JaibPay($order, [
+    'amount'   => 5000,
+    'currency' => 'YER',
+    'notes'    => 'استرداد كامل المبلغ',
+]);
+$refundResult = $jaib->refund('16986110064345');
+
+if ($refundResult['success']) {
+    // تم الاسترداد بنجاح
+    // حالة الطلب أصبحت RefundedState تلقائياً
+    // بيانات الاسترداد مخزنة في $order->other_data['jaibpay_refund']
+}
+```
+
+### 10.4. استخدام دالة المصادقة للحصول على التوكن فقط
 
 ```php
 $jaib = new JaibPay();
@@ -370,9 +596,23 @@ if ($auth) {
 }
 ```
 
+### 10.5. اختبار المنفذ
+
+```php
+$result = JaibPay::testPortConnection('https://www.api2.e-jaib.com:5088');
+if ($result['success']) {
+    echo "المنفذ مفتوح، زمن الاستجابة: " . $result['details']['elapsed_ms'] . "ms";
+} else {
+    echo "فشل الاتصال: " . $result['message'];
+    if ($result['details']['dns_resolved']) {
+        echo " (تم تحليل DNS بنجاح – المشكلة في المنفذ نفسه)";
+    }
+}
+```
+
 ---
 
-## 9. ملخص نقاط النهاية في `routes.php` (مرجع سريع)
+## 11. ملخص نقاط النهاية في `routes.php` (مرجع سريع)
 
 | المسار الكامل | الطريقة | الاستخدام |
 |---------------|---------|-----------|
@@ -380,6 +620,8 @@ if ($auth) {
 | `/api/v1/yepayment/jaibpay/test-create-payment` | POST | إنشاء دفعة جديدة |
 | `/api/v1/yepayment/jaibpay/test-check-status` | GET | الاستعلام عن حالة معاملة |
 | `/api/v1/yepayment/jaibpay/test-full-payment` | POST | اختبار شامل (إنشاء + استعلام) |
+| `/api/v1/yepayment/jaibpay/test-refund` | POST | 🆕 استرداد مبلغ معاملة |
+| `/api/v1/yepayment/jaibpay/test-port` | GET | 🆕 اختبار المنفذ |
 | `/api/v1/yepayment/jaibpay/stats` | GET | إحصائيات البوابة |
 | `/api/v1/yepayment/jaibpay/test-ui` | GET | واجهة اختبار ويب |
 
@@ -387,10 +629,12 @@ if ($auth) {
 
 ---
 
-## 10. المراجع
+## 12. المراجع
 
 - [كلاس JaibPay.php](./JaibPay.php) – الكود الكامل للبوابة.
 - [ملف routes.php](./routes.php) – تعريف نقاط النهاية الخاصة بـ JaibPay.
+- [وثيقة تحديثات JaibPay (مايو 2026)](./Update-JaibPay-ar.md) – سجل التحديثات والتحسينات.
+- [دليل تطوير بوابات الدفع – نانوسوفت](./SKILL.md)
 - [وثيقة API الخاصة بـ Jaib Pay – تسجيل الدخول (Login.pdf)](./Login.pdf)
 - [وثيقة API الخاصة بـ Jaib Pay – تنفيذ واستعلام الدفع (Jaib Wallet Pay API.pdf)](./Jaib%20Wallet%20Pay%20API.pdf)
 - [مجموعة Postman لاختبار API Jaib Pay](./Jaib%20Pay%20API.postman_collection.json)
