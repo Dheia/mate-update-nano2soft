@@ -2128,4 +2128,247 @@ Version **1.0.0** of `Nano.SchoolApi` represents a quantum leap in making school
 - [`Nano.SchoolApi` Documentation](./docs/SchoolApi/Docs-SchoolApi-en.md)
 - [`Nano.StudentsApi` Documentation](./docs/StudentsApi/Docs-StudentsApi-en.md)
 
+## 2026-05-11 - 2026-05-12
+
+**Addition of `Nano.AbsenceApi` – Version 1.0.0**
+
+### Creating a RESTful API for Attendance, Absence, Sheets, and Their Types
+
+---
+
+### Update Summary
+
+The first version **1.0.0** of the `Nano.AbsenceApi` plugin introduces a complete API for interacting with attendance and absence records, attendance sheets, and their classifications. The plugin is built according to the standard `Nano.*Api` pattern, providing protected endpoints for retrieving and managing absence records (`Absences`), sheet files (`Files`), and classifications (`ClassTypes` and `ClassTypeCompanies`). This version also supports creating and updating attendance records via the API, with a multi-level permission system and professional data transformers.
+
+---
+
+### Release Objectives
+
+- **Provide a unified API** for all attendance and absence entities (records, sheets, classifications).
+- **Implement a consistent architectural pattern** with other `Nano.*Api` plugins.
+- **Enable external applications** to record attendance, modify it, and query reports via the API.
+- **Provide fine-grained permission control** for each resource and each operation (read, create, update).
+- **Support advanced filtering** by academic year, semester, month, class, group, student, attendance status, and more.
+- **Facilitate future expansion** for adding reports or bulk delete operations.
+
+---
+
+### New Features and Improvements
+
+#### 1. Comprehensive RESTful Controllers
+
+Four main controllers were created covering all entities:
+
+| Controller | Targeted Model | Supported Operations |
+|------------|----------------|----------------------|
+| `Absences` | `Tss\Absence\Models\Absence` | List, view, **create, update** |
+| `Files` | `Tss\Absence\Models\File` | List, view |
+| `ClassTypes` | `Tss\Absence\Models\ClassType` | List, view |
+| `ClassTypeCompanies` | `Tss\Absence\Models\ClassTypeCompany` | List, view |
+
+**Each controller supports:**
+
+- **`index()`**: Fetch a paginated list with multiple filtering, search, sorting, and pagination.
+- **`show($id)`**: View details of a single record with relations.
+- **`getRecords(array $options)`**: Core function for building complex queries.
+- **`activelystats()`**: Endpoint for monitoring last update (for caching).
+- **`validationList($user)`**: Unified check for access permissions.
+
+**Specifically for `Absences`:**
+
+- **`store()`**: Create a new absence record with permission checks, input validation, and setting default values (company, branch, year).
+- **`update($id)`**: Update an existing record, reusing the same creation logic (function `onStoreUpdateAbsence`).
+
+#### 2. Multi-Level and Customizable Permission System
+
+A separate permission system was applied for each operation (list, create, update) and for each user type (backend, frontend). Control is available via `config.php` using environment variables:
+
+```php
+'absences' => [
+    'is_allow_list'            => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_LIST', true),
+    'is_allow_list_backend'    => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_LIST_BACKEND', true),
+    // ...
+    'is_allow_create'          => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE', true),
+    'is_allow_create_backend'  => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE_BACKEND', true),
+    'is_check_create_permission'=> env('NANO_ABSENCEAPI_ABSENCES_IS_CHECK_CREATE_PERMISSION', true),
+    // ...
+    'is_allow_update'          => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_UPDATE', true),
+    // ...
+],
+```
+
+Additionally, permissions can be linked to backend system permissions (e.g., `tss.absence.absences.add`).
+
+#### 3. Smart Default Values in Attendance Records
+
+When creating a new absence record, if the academic year ID (`year_id`), branch ID (`departments_id`), or company ID (`companys_id`) are not provided, the function automatically uses system default values (such as `Period::getPrimary()`), simplifying quick registration.
+
+**Example from `Absences::onStoreUpdateAbsence()`:**
+```php
+if (empty($data['companys_id'])) {
+    $data['companys_id'] = \Tss\Basic\Helpers\BasicHelper::getCompanysId(true);
+}
+if (empty($data['departments_id'])) {
+    $data['departments_id'] = \Tss\Basic\Helpers\BasicHelper::getMainDepartmentId(true);
+}
+if (empty($data['year_id'])) {
+    $primary = Period::getPrimary();
+    if ($primary) $data['year_id'] = $primary->id;
+}
+```
+
+#### 4. Integrated Data Transformers
+
+Four transformers were created:
+
+- **`AbsenceTransformer`**: Displays attendance record data with included relations (`company`, `department`, `file`, `student`, `record`).
+- **`FileTransformer`**: Displays sheet file data with included relations (`company`, `department`).
+- **`ClassTypeTransformer`**: Displays main classifications with relations (`company`).
+- **`ClassTypeCompanyTransformer`**: Displays company classifications with relations (`company`, `department`, `class_type`).
+
+All transformers support:
+- Formatting values to correct types.
+- `formatDate` function for dates.
+- Field filtering (`exclude`) to reduce data size.
+- `object_type` to identify the object type.
+- Error handling of relations via `try-catch`.
+
+#### 5. Unified Response for Create and Update Operations
+
+`Absences` `store` and `update` operations follow a unified response structure consistent with other Nano plugins. The response contains:
+- `code`, `status`, `message`
+- `error`, `errors`
+- `data` (transformed data via Transformer)
+- `model` (raw model)
+- `input_data`, `process_data`
+- `debug` (in development mode)
+
+This facilitates error handling in frontends.
+
+#### 6. Advanced Filtering and Search
+
+Numerous filters can be passed to `getRecords` depending on the resource:
+
+- **`Absences`**: `year_id`, `semster`, `month_num`, `class_id`, `group_id`, `student_id`, `record_id`, `absences_status`, `date_at`, `files_id`, `ref_type_class`, etc.
+- **`Files`**: `companys_id`, `departments_id`, `ref_type_class`.
+- **`ClassTypes`**: `ref_type`.
+- **`ClassTypeCompanies`**: `companys_id`, `departments_id`, `ref_type`.
+
+In addition to text search `q` across logical fields (name, code, notes, etc.) and sorting by any column.
+
+#### 7. `scopeExclude` Registration
+
+The dynamic scope `scopeExclude` was registered for all four models (`Absence`, `File`, `ClassType`, `ClassTypeCompany`), allowing the user to select only the required columns and reduce transmitted data.
+
+```php
+\Tss\Absence\Models\Absence::extend(function($model) {
+    $model->addDynamicMethod('scopeExclude', function($query, $columns) use($model) {
+        $getTable = $model->getConnection()->getSchemaBuilder()->getColumnListing($model->getTable());
+        return $query->select(array_diff($getTable, (array) $columns));
+    });
+});
+```
+
+#### 8. Full Translation Support
+
+All success and error messages and permissions are translatable via the `lang/en/lang.php` file, making Arabic or other language translations easy.
+
+---
+
+### Usage Examples
+
+#### Fetch a list of absence records for a specific day with student included
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/absences?date_at=2026-05-01&include=student" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Record a new student absence
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/absence/absences" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_id": "15",
+    "record_id": "8",
+    "year_id": "3",
+    "class_id": "2",
+    "semster": "semster2",
+    "month_num": "2",
+    "files_id": "5",
+    "ref_type_class": "day",
+    "absences_status": "absent",
+    "absences_bacuse": "Sick",
+    "date_at": "2026-05-05"
+  }'
+```
+
+#### Update absence status to "present"
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/absence/absences/42" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "absences_status": "present"
+  }'
+```
+
+#### Fetch active daily attendance sheets
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/files?ref_type_class=day&isActive=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### Fetch available classifications for the current company
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/class-type-companies" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+### Benefits and Added Value
+
+- **Attendance Automation**: External applications (mobile apps, notification systems) can record absence directly without using the dashboard.
+- **Integration with Reports**: Reporting tools can fetch raw data via API instead of manual CSV exports.
+- **High Permission Flexibility**: Allows teachers to record absence via API while delete permissions remain restricted to administrators.
+- **Reduced Input Errors**: Validation of input data via API prevents incomplete records.
+- **Excellent Performance**: Use of `scopeExclude` and caching ensures fast responses even with thousands of records.
+
+---
+
+### Upgrade Requirements
+
+1. **Install Plugin**: Copy the `nano/absenceapi` folder to `plugins/nano/absenceapi`.
+2. **Register Plugin**: Run `php artisan plugin:refresh Nano.AbsenceApi`.
+3. **Environment Settings**: Adjust required `env` variables (e.g., `NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE_FRONTEND=true`).
+4. **Permissions**: Ensure roles possess permissions like `tss.absence.absences.add` and `tss.absence.absences.edit` if `is_check_create_permission` and `is_check_update_permission` are enabled.
+5. **Clear Cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+6. **No database migrations** are required.
+
+---
+
+### Conclusion
+
+Version **1.0.0** of `Nano.AbsenceApi` represents a quantum leap in managing attendance and absence via API. With its unified and extensible design, developers can now build integrated applications directly and securely relying on attendance data. The plugin covers all basic needs of querying, recording, and updating, with a solid foundation for adding delete operations and advanced reports in future versions.
+
+---
+
+**Reference Documentation**:
+
+
+- [`Nano.StudyyearApi` Documentation](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
+- [`Nano.SchoolApi` Documentation](./docs/SchoolApi/Docs-SchoolApi-en.md)
+- [`Nano.StudentsApi` Documentation](./docs/StudentsApi/Docs-StudentsApi-en.md)
+- [`Nano.AbsenceApi` Documentation](./docs/AbsenceApi/Docs-AbsenceApi-en.md)
+
 

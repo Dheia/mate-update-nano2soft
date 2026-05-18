@@ -2129,3 +2129,246 @@ curl -X GET "https://yourdomain.com/api/v1/school/classes/3?include=stage" \
 - [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
 - [توثيق إضافة `Nano.SchoolApi`](./docs/SchoolApi/Docs-SchoolApi-ar.md)
 - [توثيق إضافة `Nano.StudentsApi`](./docs/StudentsApi/Docs-StudentsApi-ar.md)
+
+
+## 2026-05-11 - 2026-05-12
+
+**إضافة `Nano.AbsenceApi` – الإصدار 1.0.0**
+
+### إنشاء واجهة برمجة تطبيقات RESTful لإدارة الحضور والغياب والكشوفات وأنواعها
+
+---
+
+### ملخص التحديثات
+
+يقدم الإصدار الأول **1.0.0** من إضافة `Nano.AbsenceApi` واجهة برمجة تطبيقات متكاملة للتفاعل مع سجلات الحضور والغياب وكشوفات التحضير وتصنيفاتها. تم بناء الإضافة وفقاً لنمط `Nano.*Api` المعتمد، مع توفير نقاط نهاية محمية لاسترجاع وإدارة سجلات الغياب (`Absences`) وملفات الكشوفات (`Files`) والتصنيفات (`ClassTypes` و `ClassTypeCompanies`). يدعم هذا الإصدار أيضاً عمليات إنشاء وتحديث سجلات الحضور عبر API، مع نظام صلاحيات متعدد المستويات، ومحولات بيانات احترافية.
+
+---
+
+### أهداف الإصدار
+
+- **توفير API موحد** لجميع كيانات الحضور والغياب (السجلات، الكشوفات، التصنيفات).
+- **تطبيق نمط معماري متناسق** مع إضافات `Nano.*Api` الأخرى.
+- **تمكين التطبيقات الخارجية** من تسجيل الحضور وتعديله واستعلام التقارير عبر API.
+- **توفير تحكم دقيق في الصلاحيات** لكل مورد ولكل عملية (قراءة، إنشاء، تحديث).
+- **دعم التصفية المتقدمة** حسب السنة الدراسية والفصل والشهر والصف والشعبة والطالب وحالة الحضور وغيرها.
+- **تسهيل التوسع المستقبلي** لإضافة تقارير أو عمليات حذف جماعي.
+
+---
+
+### الميزات الجديدة والتحسينات
+
+#### 1. وحدات تحكم RESTful شاملة
+
+تم إنشاء أربع وحدات تحكم رئيسية تغطي كافة الكيانات:
+
+| المتحكم | النموذج المستهدف | العمليات المدعومة |
+|---------|-----------------|-------------------|
+| `Absences` | `Tss\Absence\Models\Absence` | قائمة، عرض، **إنشاء، تحديث** |
+| `Files` | `Tss\Absence\Models\File` | قائمة، عرض |
+| `ClassTypes` | `Tss\Absence\Models\ClassType` | قائمة، عرض |
+| `ClassTypeCompanies` | `Tss\Absence\Models\ClassTypeCompany` | قائمة، عرض |
+
+**كل متحكم يدعم:**
+
+- **`index()`**: جلب قائمة مسجلة مع تصفية متعددة وبحث وترتيب وتقسيم صفحات.
+- **`show($id)`**: عرض تفاصيل سجل واحد مع العلاقات.
+- **`getRecords(array $options)`**: دالة أساسية لبناء استعلامات معقدة.
+- **`activelystats()`**: نقطة نهاية لمراقبة آخر تحديث (للتخزين المؤقت).
+- **`validationList($user)`**: تحقق موحد من صلاحيات الوصول.
+
+**بالنسبة لـ `Absences` تحديداً:**
+
+- **`store()`**: إنشاء سجل غياب جديد مع تحقق من الصلاحيات والبيانات المدخلة وضبط القيم الافتراضية (الشركة، الفرع، السنة).
+- **`update($id)`**: تحديث سجل قائم مع إعادة استخدام نفس منطق الإنشاء (دالة `onStoreUpdateAbsence`).
+
+#### 2. نظام صلاحيات متعدد المستويات وقابل للتخصيص
+
+تم تطبيق نظام صلاحيات منفصل لكل عملية (list, create, update) ولكل نوع مستخدم (backend, frontend). يمكن التحكم عبر ملف `config.php` باستخدام متغيرات البيئة:
+
+```php
+'absences' => [
+    'is_allow_list'            => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_LIST', true),
+    'is_allow_list_backend'    => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_LIST_BACKEND', true),
+    // ...
+    'is_allow_create'          => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE', true),
+    'is_allow_create_backend'  => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE_BACKEND', true),
+    'is_check_create_permission'=> env('NANO_ABSENCEAPI_ABSENCES_IS_CHECK_CREATE_PERMISSION', true),
+    // ...
+    'is_allow_update'          => env('NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_UPDATE', true),
+    // ...
+],
+```
+
+بالإضافة إلى ذلك، يمكن ربط الصلاحيات بصلاحيات النظام الخلفي (مثل `tss.absence.absences.add`).
+
+#### 3. دعم ذكي للقيم الافتراضية في سجلات الحضور
+
+عند إنشاء سجل غياب جديد، إذا لم يتم تمرير معرف السنة الدراسية (`year_id`) أو الفرع (`departments_id`) أو الشركة (`companys_id`)، تقوم الدالة تلقائياً باستخدام القيم الافتراضية من النظام (مثل `Period::getPrimary()`)، مما يسهل عملية التسجيل السريع.
+
+**مثال من `Absences::onStoreUpdateAbsence()`:**
+```php
+if (empty($data['companys_id'])) {
+    $data['companys_id'] = \Tss\Basic\Helpers\BasicHelper::getCompanysId(true);
+}
+if (empty($data['departments_id'])) {
+    $data['departments_id'] = \Tss\Basic\Helpers\BasicHelper::getMainDepartmentId(true);
+}
+if (empty($data['year_id'])) {
+    $primary = Period::getPrimary();
+    if ($primary) $data['year_id'] = $primary->id;
+}
+```
+
+#### 4. محولات بيانات متكاملة (Transformers)
+
+تم إنشاء أربعة محولات:
+
+- **`AbsenceTransformer`**: يعرض بيانات سجل الحضور مع تضمين العلاقات (`company`, `department`, `file`, `student`, `record`).
+- **`FileTransformer`**: يعرض بيانات ملف الكشف مع تضمين العلاقات (`company`, `department`).
+- **`ClassTypeTransformer`**: يعرض التصنيفات الرئيسية مع العلاقات (`company`).
+- **`ClassTypeCompanyTransformer`**: يعرض تصنيفات الشركات مع العلاقات (`company`, `department`, `class_type`).
+
+كل المحولات تدعم:
+- تنسيق القيم إلى الأنواع الصحيحة.
+- دالة `formatDate` للتواريخ.
+- تصفية الحقول (`exclude`) لتقليل حجم البيانات.
+- `object_type` لمعرفة نوع الكائن.
+- معالجة أخطاء العلاقات عبر `try-catch`.
+
+#### 5. استجابة موحدة لعمليات الإنشاء والتحديث
+
+تتبع عمليات `store` و `update` في `Absences` هيكل استجابة موحد ومتناسق مع باقي إضافات Nano. يحتوي الرد على:
+- `code`, `status`, `message`
+- `error`, `errors`
+- `data` (البيانات المحولة عبر Transformer)
+- `model` (النموذج الخام)
+- `input_data`, `process_data`
+- `debug` (في وضع التطوير)
+
+مما يسهل معالجة الأخطاء في الواجهات الأمامية.
+
+#### 6. تصفية وبحث متقدم
+
+يمكن تمرير العديد من عوامل التصفية إلى `getRecords` حسب المورد:
+
+- **`Absences`**: `year_id`, `semster`, `month_num`, `class_id`, `group_id`, `student_id`, `record_id`, `absences_status`, `date_at`, `files_id`, `ref_type_class`, إلخ.
+- **`Files`**: `companys_id`, `departments_id`, `ref_type_class`.
+- **`ClassTypes`**: `ref_type`.
+- **`ClassTypeCompanies`**: `companys_id`, `departments_id`, `ref_type`.
+
+بالإضافة إلى البحث النصي `q` عبر الحقول المنطقية (الاسم، الكود، الملاحظات، إلخ) والترتيب حسب أي عمود.
+
+#### 7. تسجيل نطاق `scopeExclude`
+
+تم تسجيل النطاق الديناميكي `scopeExclude` لجميع النماذج الأربعة (`Absence`, `File`, `ClassType`, `ClassTypeCompany`) مما يسمح للمستخدم باختيار الأعمدة المطلوبة فقط وتقليل البيانات المنقولة.
+
+```php
+\Tss\Absence\Models\Absence::extend(function($model) {
+    $model->addDynamicMethod('scopeExclude', function($query, $columns) use($model) {
+        $getTable = $model->getConnection()->getSchemaBuilder()->getColumnListing($model->getTable());
+        return $query->select(array_diff($getTable, (array) $columns));
+    });
+});
+```
+
+#### 8. دعم كامل للترجمة
+
+جميع رسائل النجاح والخطأ والصلاحيات قابلة للترجمة عبر ملف `lang/en/lang.php`، مما يسهل تعريبها أو ترجمتها للغات أخرى.
+
+---
+
+### أمثلة على الاستخدام
+
+#### جلب قائمة سجلات الغياب ليوم محدد مع تضمين الطالب
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/absences?date_at=2026-05-01&include=student" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### تسجيل غياب جديد لطالب
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/absence/absences" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_id": "15",
+    "record_id": "8",
+    "year_id": "3",
+    "class_id": "2",
+    "semster": "semster2",
+    "month_num": "2",
+    "files_id": "5",
+    "ref_type_class": "day",
+    "absences_status": "absent",
+    "absences_bacuse": "مرض",
+    "date_at": "2026-05-05"
+  }'
+```
+
+#### تحديث حالة غياب إلى "حاضر"
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/absence/absences/42" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "absences_status": "present"
+  }'
+```
+
+#### جلب كشوفات التحضير اليومية النشطة
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/files?ref_type_class=day&isActive=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### جلب التصنيفات المتاحة للشركة الحالية
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/class-type-companies" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+### الفوائد والقيمة المضافة
+
+- **أتمتة الحضور والغياب**: يمكن للتطبيقات الخارجية (تطبيقات الجوال، أنظمة الإشعارات) تسجيل الغياب مباشرة دون الحاجة لاستخدام لوحة التحكم.
+- **تكامل مع التقارير**: يمكن لأدوات إعداد التقارير جلب البيانات الخام عبر API بدلاً من تصدير CSV يدوياً.
+- **مرونة عالية في الصلاحيات**: يمكن السماح للمعلمين بتسجيل الغياب عبر API بينما تبقى صلاحيات الحذف محصورة بالمسؤولين.
+- **تقليل أخطاء الإدخال**: التحقق من صحة البيانات المدخلة عبر API يمنع إدخال سجلات غير مكتملة.
+- **أداء ممتاز**: استخدام `scopeExclude` والتخزين المؤقت يضمن استجابات سريعة حتى مع آلاف السجلات.
+
+---
+
+### متطلبات الترقية
+
+1. **تثبيت الإضافة**: انسخ مجلد `nano/absenceapi` إلى `plugins/nano/absenceapi`.
+2. **تسجيل الإضافة**: شغّل `php artisan plugin:refresh Nano.AbsenceApi`.
+3. **إعدادات البيئة**: اضبط متغيرات `env` المطلوبة (مثل `NANO_ABSENCEAPI_ABSENCES_IS_ALLOW_CREATE_FRONTEND=true`).
+4. **الصلاحيات**: تأكد من أن الأدوار تمتلك صلاحيات مثل `tss.absence.absences.add` و `tss.absence.absences.edit` إذا تم تفعيل `is_check_create_permission` و `is_check_update_permission`.
+5. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+6. **لا توجد هجرات قاعدة بيانات** مطلوبة.
+
+---
+
+### الخاتمة
+
+يمثل الإصدار **1.0.0** من `Nano.AbsenceApi` نقلة نوعية في إدارة الحضور والغياب عبر API. بفضل التصميم الموحد والقابل للتوسع، يمكن للمطورين الآن بناء تطبيقات متكاملة تعتمد على بيانات الحضور بشكل مباشر وآمن. تغطي الإضافة جميع الاحتياجات الأساسية من استعلام وتسجيل وتحديث، مع أساس متين لإضافة عمليات الحذف والتقارير المتقدمة في الإصدارات المستقبلية.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
+- [توثيق إضافة `Nano.SchoolApi`](./docs/SchoolApi/Docs-SchoolApi-ar.md)
+- [توثيق إضافة `Nano.StudentsApi`](./docs/StudentsApi/Docs-StudentsApi-ar.md)
+- [توثيق إضافة `Nano.AbsenceApi`](./docs/AbsenceApi/Docs-AbsenceApi-ar.md)
+
