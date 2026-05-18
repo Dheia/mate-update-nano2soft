@@ -290,14 +290,77 @@ if (!$callbackUrl) {
 
 **ملاحظة:** يجب إضافة مسارات `success` و `cancel` في `routes.php` لاستقبال العودة من البوابة الخارجية، ثم استخدام `RedirectHelper` داخلها كما في `thawanipay/success`.
 
-### 6. التعامل مع `PaymentResult`
+### 6. التعامل مع `PaymentResult` وتأثيره على حالة الطلب والتكامل مع النظام
 
-| الدالة | التأثير |
-|--------|---------|
-| `$result->success($data, $response)` | يحدد `successful = true`، يسجل الدفع الناجح، ويحدث حالة الطلب إلى `PaidState`. |
-| `$result->fail($data, $response)` | يحدد `successful = false`، يسجل الدفع الفاشل، ويحدث الحالة إلى `FailedState`. |
-| `$result->redirect($url)` | يطلب من `PaymentRedirector` إعادة توجيه المستخدم إلى `$url`. |
-| `$result->pending($data, $response)` | يحدد `successful = true` لكن حالة الطلب تبقى `PendingState` (نادر الاستخدام). |
+**هذا القسم يشرح العلاقة الدقيقة بين البوابة وحالة الطلب، وكيفية انسجامها مع `OrderManager` و`Checkout2`.**
+
+#### 6.1 دوال `PaymentResult` وتأثيرها الكامل
+
+| الدالة | متى تُستخدم | التأثير الكامل |
+|--------|--------------|----------------|
+| `$result->success($data, $response)` | **فقط** عندما تتأكد البوابة أن عملية الدفع قد تمت بشكل نهائي ولا رجعة فيه. | 1. يعين `successful = true`.<br>2. **يغير حالة الطلب إلى `PaidState`**.<br>3. يضع `processed = true`.<br>4. يسجل `PaymentLog` ناجحاً.<br>5. **يُشغل حدث `nano.orders.paymentProcessed`** (إرسال الإيميلات، تحديث المخزون، إلخ).<br>6. **يُفرغ سلة المستخدم** تلقائياً. |
+| `$result->fail($data, $response)` | عند فشل العملية. | 1. يعين `successful = false`.<br>2. **يغير حالة الطلب إلى `FailedState`**.<br>3. يسجل `PaymentLog` فاشلاً.<br>4. لا يتم تفريغ السلة. |
+| `$result->redirect($url)` | لإعادة التوجيه إلى بوابة خارجية. | 1. يعين `redirect = true` و `redirectUrl`.<br>2. **لا يغير حالة الطلب**. |
+| `$result->pending($data, $response)` | عندما تكون المعاملة معلقة وغير مكتملة (مثلاً في انتظار تأكيد خارجي). | 1. يعين `successful = true`.<br>2. **يغير حالة الطلب إلى `PendingState`** (لا يصبح مدفوعاً).<br>3. يضع `processed = true` لكن الحالة ليست مدفوعة.<br>4. يسجل `PaymentLog` ناجحاً.<br>5. **لا يُشغل حدث `paymentProcessed`**.<br>6. **يُفرغ السلة** رغم أن الطلب لم يُدفع. |
+
+> ⚠️ **قاعدة ذهبية:** لا تستدعي `$result->success()` داخل `process()` إذا كانت البوابة من النوع **Two‑Step**. استخدمها فقط داخل `complete()` بعد التحقق من نجاح الدفع. أما في النوع **Direct**، فيمكن استخدام `$result->success()` مباشرةً في `process()` لأن الدفع فوري.
+
+#### 6.2 تفاعل البوابة مع `OrderManager` و `Checkout2` (انسجام الكلاس مع باقي النظام)
+
+عندما يصل المستخدم لخطوة الدفع (`step=pay`) في تطبيق العميل، يكون تدفق الاستدعاء كالتالي:
+- `Checkout2` يستدعي `$this->orderManager->setStepPayments($data)`.
+- `OrderManager` بدوره:
+  1. يتحقق من صحة الخطوات السابقة (العناوين، الشحن، الكوبونات).
+  2. ينشئ `PaymentGateway` و `PaymentService`.
+  3. يستدعي `$paymentService->process()` الذي بدوره يستدعي `$gateway->process($order)` الذي يمرر الاستدعاء إلى `BasPay->process()` (أو أي بوابة أخرى).
+  4. **بعد عودة `PaymentResult` من البوابة**، يتصرف `OrderManager` بناءً على حالته:
+     - إذا كانت `$order->isPaymentProcessed()` ترجع `true` (أي أن الطلب انتقل إلى `PaidState`) → يعتبر الدفع مكتملاً.
+     - إذا كانت ترجع `false` (كما في حالة BasPay بعد `process` فقط) → يعرض رسالة للمستخدم بضرورة إكمال الدفع (مثل "يرجى تأكيد الدفع من تطبيق بس").
+
+**النتيجة:** في البوابات Two‑Step، بعد `process()` مباشرةً، يكون `processed = false` والطلب **ليس** مدفوعاً، مما يسمح للمستخدم بإكمال الخطوة التالية. عدم استدعاء `$result->success()` داخل `process()` هو ما يمنع تحويل الطلب إلى `PaidState` قبل الأوان.
+
+#### 6.3 إكمال الدفع في البوابات Two‑Step: `complete()` و `checkAndCompletePay`
+
+لإتمام الدفع، يجب استدعاء `complete()` عند عودة المستخدم من التأكيد. الطريقة المثلى هي توفير **دالة `static` عامة** باسم `checkAndCompletePay` تُستخدم في مسار `success`. مثال:
+
+```php
+public static function checkAndCompletePay(array $options): array
+{
+    $orderId = $options['order_id'] ?? null;
+    $order = Order::find($orderId);
+    if (!$order) return ['success' => false, 'message' => 'Order not found'];
+    
+    $bas = new self($order);
+    $result = new PaymentResult($bas, $order);
+    $completeResult = $bas->complete($result);
+
+    return [
+        'success'  => $completeResult->successful,
+        'message'  => $completeResult->message,
+        'data'     => $completeResult->api_data,
+        'order_id' => $orderId,
+    ];
+}
+```
+
+ثم في `routes.php`:
+
+```php
+Route::get('baspay/success', function () {
+    $options = Input::get();
+    $result = BasPay::checkAndCompletePay($options);
+    $order_id = $result['order_id'] ?? null;
+    if ($order_id) {
+        $callbackUrl = RedirectHelper::getCallbackSuccessUrlByOrder($order_id, ['callback_success_url', 'baspay.callback_success_url']);
+        if ($callbackUrl) {
+            return RedirectHelper::redirectToApp($callbackUrl, $result, false, ['order_id', 'payment_method_id'], ['*'], false);
+        }
+    }
+    return response()->json($result);
+});
+```
+
+> **ملاحظة:** `complete()` يجب أن تستدعي `$result->success()` فقط عندما تكون المعاملة ناجحة، وإلا تستخدم `$result->pending()` أو `$result->fail()` حسب الحالة.
 
 ---
 
@@ -549,6 +612,13 @@ public function isAvailable(): bool
 ### 8. دالة `checkAndCompletePay` (لنوع redirect)
 أضف دالة static في كلاس البوابة لتوحيد منطق التحقق وإتمام الدفع بعد العودة من البوابة الخارجية. يمكن الاستفادة من `RedirectHelper` داخلها.
 
+### 9. التعامل مع جلسة الدفع وسجل العمليات (Payment Lifecycle)
+
+- **تسجيل محاولة الدفع في `process`:** حتى لو لم يكتمل الدفع بعد (في النوع Two‑Step)، يجب استدعاء `$result->logSuccessfulPayment()` لحفظ السجل الأولي. هذا ما يفعله `YottaPay` و `BasPay`.
+- **استخدام `complete` في `PaymentRedirector`:** عند العودة من بوابة خارجية (أو من تطبيق الجوال)، يستدعي `PaymentRedirector::handleOffSiteReturn` دالة `complete` تلقائياً إذا كانت الجلسة (session) تحتوي على callback. تأكد من أن `complete` جاهزة لهذا السيناريو.
+- **تخزين `callback_success_url`:** في البوابات التي تحتاج إلى دعم الجوال، قم بتخزين الروابط في `order->other_data` كما في `BasPay` و `ThawaniPay`، واستخدم `RedirectHelper` لاستخراجها وإعادة التوجيه إليها بعد اكتمال الدفع.
+- **معالجة `processed`:** متغير `processed` في الطلب يتحول إلى `true` فقط عندما يتم استدعاء `$result->success()` (الذي يعيّن الحالة إلى `PaidState`). في حالة استخدام `$result->pending()`، يكون `processed = true` لكن الحالة `PendingState` وليست `PaidState`. اعتمد على `isPaymentProcessed()` للتحقق من اكتمال الدفع الفعلي.
+
 ---
 
 ## ✅ قائمة مراجعة (Checklist) لإنشاء بوابة جديدة
@@ -566,26 +636,34 @@ public function isAvailable(): bool
 - [ ] إضافة مفاتيح الترجمة في `lang/ar/lang.php` و `lang/en/lang.php`.
 - [ ] اختبار البوابة عبر `/api/v1/yepayment/xxxpay/test-ui`.
 - [ ] توثيق أي سلوك خاص (Webhooks, إلخ) في `_info.htm` أو ملف منفصل.
+- [ ] **تأكد من أن `process()` في النوع Two‑Step لا تستدعي `$result->success()`**، بل تعيد نجاحاً مع رسالة تأكيد.
+- [ ] **تأكد من أن `complete()` تستدعي `$result->success()` فقط بعد التحقق من نجاح العملية**.
+- [ ] **وفر دالة `static checkAndCompletePay`** لاستخدامها في مسار `success` (خاصة لبوابات Two‑Step و Redirect).
+- [ ] **تأكد من تخزين روابط العودة** (`callback_success_url` و `callback_error_url`) في `other_data` إذا تم تمريرها.
+- [ ] **اختبر أن `OrderManager` يُبقي `processed = false`** بعد `process()` مباشرة في البوابات Two‑Step.
+- [ ] **تحقق من أن `PaymentResult::success` يؤدي إلى `PaidState`** وتفعيل الأحداث وتفريغ السلة.
 
 ---
 
 ## 📚 أمثلة مرجعية (من الكود المرفق)
 
-- **YottaPay**: مثال على النوع Two-Step (OTP).  
-  يُظهر استخدام `HttpHelper` في طلبات JSON و PATCH، وتخزين التوكن.
-- **QasemiPay**: مثال على النوع المباشر مع تأكيد لاحق (concurrencyStamp).  
-  يُظهر استخدام `HttpHelper::sendForm` للحصول على توكن OAuth.
-- **ThawaniPay**: مثال على النوع Redirect مع إعادة توجيه إلى بوابة خارجية.  
-  يُظهر استخدام `RedirectHelper` في مسارات `success`/`cancel`، ودالة `checkAndCompletePay`.
+- **YottaPay**: Two‑Step (OTP). `process()` تعيد `successful=true` مع `requires_confirmation`، و `complete()` تستخدم OTP المرسل. يُظهر استخدام `HttpHelper` في طلبات JSON و PATCH، وتخزين التوكن.
+- **BasPay**: Two‑Step (تأكيد عبر تطبيق منفصل). `process()` تنشئ معاملة وتُعيد `trxToken`، و `complete()` تتحقق من حالة المعاملة وتُحدّث الطلب إلى `PaidState` فقط عند النجاح. يُظهر استخدام `HttpHelper::sendForm` للحصول على توكن OAuth، ودالة `checkAndCompletePay` الثابتة للتأكيد عبر مسار `success`.
+- **QasemiPay**: Direct مع تأكيد اختياري (concurrencyStamp). `process()` و `complete()` يتبعان نمطاً مشابهاً، ويُظهر استخدام `HttpHelper::sendForm` للحصول على توكن OAuth.
+- **ThawaniPay**: Redirect مع إعادة توجيه إلى بوابة خارجية. `process()` تعيد توجيه، و `complete()` تُستدعى بعد العودة. يُظهر استخدام `RedirectHelper` في مسارات `success`/`cancel`، ودالة `checkAndCompletePay` للتأكيد.
 
 ---
 
 ## 🏁 الخلاصة
 
-باتباع هذا الدليل يمكنك إنشاء أي طريقة دفع جديدة في نظام `Nano.Yepayment` بغض النظر عن تعقيد API الخاص بها. استخدم النمط المناسب (Redirect, Two-Step, Direct) وفقاً لتدفق الدفع، ولا تنسَ:
+باتباع هذا الدليل يمكنك إنشاء أي طريقة دفع جديدة في نظام `Nano.Yepayment` بغض النظر عن تعقيد API الخاص بها. استخدم النمط المناسب (Redirect, Two‑Step, Direct) وفقاً لتدفق الدفع، ولا تنسَ:
 
 - استخدام `HttpHelper` لجميع طلبات API.
-- استخدام `RedirectHelper` لجميع عمليات إعادة التوجيه بعد الدفع.
+- استخدام `RedirectHelper` لإعادة التوجيه بعد الدفع (حتى في البوابات غير المباشرة التي تدعم الجوال).
+- فهم تأثير دوال `PaymentResult` (`success`, `pending`, `fail`) على حالة الطلب وتفريغ السلة والأحداث.
+- توفير دالة `static checkAndCompletePay` لتسهيل التأكيد من مسارات العودة.
+- تخزين روابط العودة (`callback_success_url`) في `other_data`.
+- تذكر أن `OrderManager` و `Checkout2` يعتمدان على حالة `isPaymentProcessed()` لتحديد الخطوة التالية، فلا تستعجل في استدعاء `$result->success()`.
 - توفير أدوات الاختبار اللازمة (`_test_info.htm` و `xxxpay-ui.htm`) لتسهيل التطوير والصيانة.
 
 🚀 **ابدأ الآن في إضافة بوابتك الجديدة!**
