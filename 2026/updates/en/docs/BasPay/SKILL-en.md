@@ -2,19 +2,19 @@
 
 ## 📖 Overview
 
-The `Nano.Yepayment` system allows adding new payment gateways by following a standardized pattern that ensures seamless integration with `Nano.MicroCart` and `Nano.Orders`. This skill enables developers to create any payment provider by following the specified steps and standards, with support for three main types of payment flows.
+The `Nano.Yepayment` system allows adding new payment gateways following a unified pattern that ensures seamless integration with `Nano.MicroCart` and `Nano.Orders`. This skill enables a developer to create any payment provider by following the specified steps and standards, with support for three main types of payment flows.
 
 ---
 
-## 🧩 Types of Payment Methods (Payment Flows)
+## 🧩 Payment Flow Types
 
-| Type | Description | Example | Key Methods |
-|------|-------------|---------|--------------|
+| Type | Description | Example | Main Functions |
+|------|-------------|---------|----------------|
 | **Redirect Type** | Redirects the user to an external gateway (bank, PayPal, etc.) to complete payment, then returns to `success_url` or `cancel_url`. | `ThawaniPay` | `process()` → `$result->redirect()`<br>`success` route completes payment. |
-| **Two-Step Type** | Creates a transaction first (`process`), then requires later confirmation (`complete`) via OTP or code from the customer. | `YottaPay` | `process()` returns `successful = true` and message "Enter OTP".<br>`complete()` confirms the payment. |
-| **Direct Type (Immediate)** | Payment is completed immediately via API without need for redirection or additional confirmation. | `QasemiPay` (if confirmation is automatic) | `process()` executes payment and returns `$result->success()` directly. |
+| **Two-Step Type** | Creates a transaction first (process), then requires a later confirmation (complete) via OTP or a code from the customer. | `YottaPay` | `process()` returns `successful = true` and message "Enter OTP".<br>`complete()` confirms payment. |
+| **Direct Type (Instant)** | Payment is done instantly via API without the need for redirect or additional confirmation. | `QasemiPay` (if confirmation is automatic) | `process()` executes payment and returns `$result->success()` directly. |
 
-> **Note:** A single gateway can combine more than one pattern (e.g., create transaction then redirect, or confirm later). Choose the appropriate pattern according to the gateway's API documentation.
+> **Note:** A single gateway can combine more than one pattern (e.g., create a transaction then redirect, or later confirmation). Choose the appropriate pattern based on the gateway's API documentation.
 
 ---
 
@@ -29,17 +29,17 @@ use Nano\MicroCart\Classes\Payments\PaymentProvider;
 use Nano\MicroCart\Classes\Payments\PaymentResult;
 use Nano\MicroCart\Models\PaymentGatewaySettings;
 use Nano\Helpers\Classes\Helpers\HttpHelper;
-use Nano\Yepayment\Classes\RedirectHelper; // when redirection is needed
+use Nano\Yepayment\Classes\RedirectHelper; // When redirection is needed
 use Config, Request, Validator, Throwable, ApplicationException;
 
 class NewPay extends PaymentProvider
 {
-    // Required properties
+    // Mandatory properties
     public $success_url = 'api/v1/yepayment/newpay/success';
     public $cancel_url  = 'api/v1/yepayment/newpay/cancel';
     public $is_test_mod = false;
 
-    // Abstract methods to implement
+    // Abstract methods that must be implemented
     public function name(): string { return 'New Payment Gateway'; }
     public function identifier(): string { return 'newpay'; }
     public function validate(): bool { return true; }
@@ -68,16 +68,16 @@ class NewPay extends PaymentProvider
 
 - Create a new PHP file in `paymenttypes/`.
 - Ensure the class extends `PaymentProvider`.
-- Define `$success_url` and `$cancel_url` according to the route group used (`yepayment` or `ompayment`).
+- Define `$success_url` and `$cancel_url` based on the route group used (`yepayment` or `ompayment`).
 - Define `$is_test_mod` to switch between test and production environments.
 
-### 2. Implement Abstract Methods
+### 2. Implement the Abstract Methods
 
 #### `name(): string`
-- Return the trade name of the gateway as it will appear to the user.
+- Return the commercial name of the gateway as it will appear to the user.
 
 #### `identifier(): string`
-- Return a unique identifier (lowercase Latin letters, no spaces). Used for storing records and identifying the gateway.
+- Return a unique identifier (lowercase Latin letters, no spaces). Used for storing records and distinguishing the gateway.
 
 #### `validate(): bool`
 - Can return `true` and use `defineValidationRules()` separately, or implement validation manually.
@@ -88,7 +88,7 @@ class NewPay extends PaymentProvider
 - Use `type => 'password'` for sensitive fields, and add them to `encryptedSettings()`.
 
 #### `process(PaymentResult $result): PaymentResult`
-This is the core payment logic. Typical steps:
+This is the heart of the payment logic. Typical steps:
 
 ```php
 public function process(PaymentResult $result): PaymentResult
@@ -98,7 +98,7 @@ public function process(PaymentResult $result): PaymentResult
         $validator = Validator::make($this->data, $this->defineValidationRules());
         if ($validator->fails()) throw new ValidationException($validator);
 
-        // 2. Ensure order is not already paid
+        // 2. Ensure the order is not already paid
         if ($this->order->payment_state == PaidState::class) {
             $result->successful = false;
             $result->message = trans('nano.yepayment::lang.public.newpay.errors.order_already_paid');
@@ -117,7 +117,7 @@ public function process(PaymentResult $result): PaymentResult
         $this->order->payment_first_trans_id = $paymentResult['transaction_id'];
         $this->order->payment_trans_id = $paymentResult['ref_no'] ?? null;
         $other = $this->order->other_data;
-        $other['newpay'] = [ /* additional data */ ];
+        $other['newpay'] = [ /* Additional data */ ];
         $this->order->other_data = $other;
         $this->order->save();
 
@@ -126,11 +126,11 @@ public function process(PaymentResult $result): PaymentResult
             return $result->redirect($paymentResult['redirect_url']);
         } elseif ($paymentResult['requires_confirmation'] ?? false) {
             $result->successful = true;
-            $result->message = 'Please enter confirmation code';
+            $result->message = 'Please enter the confirmation code';
             $result->api_data = $paymentResult;
             return $result;
         } else {
-            // Immediate payment
+            // Instant payment
             $this->order->payment_state = PaidState::class;
             $this->order->save();
             return $result->success($paymentResult, null);
@@ -142,13 +142,13 @@ public function process(PaymentResult $result): PaymentResult
 ```
 
 #### `complete(PaymentResult $result): PaymentResult`
-- Used for **Two-Step** type or when additional confirmation is needed after user returns from an external gateway.
-- Should retrieve `transaction_id` from `payment_first_trans_id` or `other_data`.
-- Request payment confirmation from API, then update order status to `PaidState` via `$result->success()`.
+- Used for **Two‑Step** type or when additional confirmation is needed after the user returns from an external gateway.
+- Must retrieve `transaction_id` from `payment_first_trans_id` or from `other_data`.
+- Request payment confirmation from the API, then update the order status to `PaidState` via `$result->success()`.
 
 ### 3. Using `HttpHelper` for API Requests
 
-All HTTP requests (GET, POST, PUT, PATCH, DELETE) must use the class `Nano\Helpers\Classes\Helpers\HttpHelper`. This class provides a unified interface for Guzzle and supports JSON, Form Data, and Multipart.
+The `Nano\Helpers\Classes\Helpers\HttpHelper` class must be used for all HTTP requests (GET, POST, PUT, PATCH, DELETE). This class provides a unified interface for Guzzle and supports JSON, Form Data, Multipart.
 
 **Import the class:**
 ```php
@@ -157,7 +157,7 @@ use Nano\Helpers\Classes\Helpers\HttpHelper;
 
 **Practical examples from existing gateways:**
 
-#### a. JSON request (e.g., YottaPay – create transaction):
+#### A. JSON Request (like YottaPay – create transaction):
 ```php
 $response = HttpHelper::sendJson([
     'method' => 'POST',
@@ -166,22 +166,22 @@ $response = HttpHelper::sendJson([
     'options' => [
         'headers' => [
             'Authorization' => 'Bearer ' . $token,
-            'Content-Type' => 'application/json',
+            'Content-Type'  => 'application/json',
         ],
         'timeout' => 30,
     ],
 ]);
 ```
 
-#### b. Form Data request (e.g., QasemiPay – get token):
+#### B. Form Data Request (like QasemiPay – get token):
 ```php
 $response = HttpHelper::sendForm([
     'method' => 'POST',
     'url' => $this->getApiUrl('token'),
     'form_params' => [
-        'client_id' => $clientId,
+        'client_id'     => $clientId,
         'client_secret' => $clientSecret,
-        'grant_type' => 'password',
+        'grant_type'    => 'password',
         // ...
     ],
     'options' => [
@@ -192,7 +192,7 @@ $response = HttpHelper::sendForm([
 ]);
 ```
 
-#### c. GET request with Query Parameters:
+#### C. GET Request with Query Parameters:
 ```php
 $response = HttpHelper::get([
     'url' => $this->getApiUrl('check_status') . '/' . $refId,
@@ -203,7 +203,7 @@ $response = HttpHelper::get([
 ]);
 ```
 
-#### d. PATCH request (e.g., YottaPay – confirm payment):
+#### D. PATCH Request (like YottaPay – confirm payment):
 ```php
 $response = HttpHelper::sendJson([
     'method' => 'PATCH',
@@ -213,7 +213,7 @@ $response = HttpHelper::sendJson([
 ]);
 ```
 
-**Response handling:**  
+**Handling the response:**  
 After executing the request, use the helper function `parseResponse()` to convert the response to an array (as in `YottaPay`, `QasemiPay`, `ThawaniPay`):
 
 ```php
@@ -246,14 +246,14 @@ private function getAuthToken(): ?string
 }
 ```
 
-### 5. Handling Redirection and `RedirectHelper`
+### 5. Handling Redirects and `RedirectHelper`
 
-For **Redirect** type gateways (like `ThawaniPay`), you must use the class `Nano\Yepayment\Classes\RedirectHelper` to redirect to applications or websites after payment. This class:
+For **Redirect** type gateways (like `ThawaniPay`), you must use the `Nano\Yepayment\Classes\RedirectHelper` class to redirect to apps or websites after payment. This class:
 
 - Extracts `callback_success_url` and `callback_error_url` from `order->other_data`.
-- Supports Deep Links (e.g., `myapp://`) and regular web URLs.
-- Handles large data by storing it in Cache using a token.
-- Ensures security by checking allowed domains and filtering sensitive data.
+- Supports Deep Links (like `myapp://`) and regular URLs.
+- Handles large data by storing it in Cache using a Token.
+- Ensures security by verifying allowed domains and filtering sensitive data.
 
 **Import the class:**
 ```php
@@ -262,67 +262,130 @@ use Nano\Yepayment\Classes\RedirectHelper;
 
 **Practical examples from `routes.php` (ThawaniPay):**
 
-#### a. Extract redirect URL from order data:
+#### A. Extracting the redirect URL from order data:
 ```php
 $callbackUrl = RedirectHelper::getCallbackSuccessUrlByOrder($order_id, ['callback_success_url', 'thawani.callback_success_url']);
 ```
 
-#### b. Redirect to app or web:
+#### B. Redirecting to app or web:
 ```php
 return RedirectHelper::redirectToApp($callbackUrl, $data, $forceJson, $queryParams, $deepLinkSchemes, $is_force_deep_list);
 ```
 - `$callbackUrl`: The extracted URL (may be `https://...` or `myapp://...`).
-- `$data`: Data to send (payment status, order ID, etc.).
-- `$forceJson`: If `true`, returns JSON instead of redirect.
+- `$data`: Data you want to send (payment status, order number, etc.).
+- `$forceJson`: If `true`, returns JSON instead of redirecting.
 - `$queryParams`: Array of field names to add as query parameters (e.g., `['order_id', 'payment_method_id']`).
-- `$deepLinkSchemes`: List of allowed schemes for apps (e.g., `['myapp', 'app', '*']`). `'*'` means any scheme not http/https.
-- `$is_force_deep_list`: If `true`, forces using only the specified list.
+- `$deepLinkSchemes`: List of allowed schemes for apps (example `['myapp', 'app', '*']`). `'*'` means any scheme that is not http/https.
+- `$is_force_deep_list`: If `true`, forces use of the specified list only.
 
-#### c. Alternative cases when no URL is available:
+#### C. Alternative cases when no URL exists:
 ```php
 if (!$callbackUrl) {
     return Response::make('Payment successful. You can return to the app.', 200);
 }
 ```
 
-#### d. General function to verify and complete payment (like `checkAndCompletePay` in ThawaniPay):
-You can create a `static` function in the gateway class that internally uses `RedirectHelper` to unify the logic.
+#### D. Public function to verify and complete payment (like `checkAndCompletePay` in ThawaniPay):
+You can create a `static` function in the gateway class that uses `RedirectHelper` internally to unify the logic.
 
 **Note:** You must add `success` and `cancel` routes in `routes.php` to receive the return from the external gateway, then use `RedirectHelper` inside them as in `thawanipay/success`.
 
-### 6. Handling `PaymentResult`
+### 6. Dealing with `PaymentResult` and Its Impact on Order Status and System Integration
 
-| Method | Effect |
-|--------|--------|
-| `$result->success($data, $response)` | Sets `successful = true`, logs successful payment, updates order status to `PaidState`. |
-| `$result->fail($data, $response)` | Sets `successful = false`, logs failed payment, updates status to `FailedState`. |
-| `$result->redirect($url)` | Requests `PaymentRedirector` to redirect the user to `$url`. |
-| `$result->pending($data, $response)` | Sets `successful = true` but order status remains `PendingState` (rarely used). |
+**This section explains the precise relationship between the gateway and order status, and how it aligns with `OrderManager` and `Checkout2`.**
+
+#### 6.1 `PaymentResult` Functions and Their Full Impact
+
+| Function | When to Use | Full Impact |
+|----------|--------------|-------------|
+| `$result->success($data, $response)` | **Only** when the gateway is sure that the payment process has been final and irreversible. | 1. Sets `successful = true`.<br>2. **Changes order status to `PaidState`**.<br>3. Sets `processed = true`.<br>4. Logs successful `PaymentLog`.<br>5. **Triggers `nano.orders.paymentProcessed` event** (sending emails, updating stock, etc.).<br>6. **Automatically empties the user's cart**. |
+| `$result->fail($data, $response)` | When the process fails. | 1. Sets `successful = false`.<br>2. **Changes order status to `FailedState`**.<br>3. Logs failed `PaymentLog`.<br>4. Does not empty the cart. |
+| `$result->redirect($url)` | To redirect to an external gateway. | 1. Sets `redirect = true` and `redirectUrl`.<br>2. **Does not change order status**. |
+| `$result->pending($data, $response)` | When the transaction is pending and not yet complete (e.g., waiting for external confirmation). | 1. Sets `successful = true`.<br>2. **Changes order status to `PendingState`** (does not become paid).<br>3. Sets `processed = true` but status is not paid.<br>4. Logs successful `PaymentLog`.<br>5. **Does not trigger `paymentProcessed` event**.<br>6. **Empties the cart** even though the order is not paid. |
+
+> ⚠️ **Golden Rule:** Do not call `$result->success()` inside `process()` if the gateway is of the **Two‑Step** type. Use it only inside `complete()` after verifying payment success. For the **Direct** type, you can use `$result->success()` directly in `process()` because payment is instant.
+
+#### 6.2 Gateway Interaction with `OrderManager` and `Checkout2` (Class Harmony with the Rest of the System)
+
+When the user reaches the payment step (`step=pay`) in the client application, the call flow is as follows:
+- `Checkout2` calls `$this->orderManager->setStepPayments($data)`.
+- `OrderManager` in turn:
+  1. Validates previous steps (addresses, shipping, coupons).
+  2. Creates `PaymentGateway` and `PaymentService`.
+  3. Calls `$paymentService->process()` which in turn calls `$gateway->process($order)` that passes the call to `BasPay->process()` (or any other gateway).
+  4. **After `PaymentResult` returns from the gateway**, `OrderManager` acts based on its state:
+     - If `$order->isPaymentProcessed()` returns `true` (meaning the order has moved to `PaidState`) → payment is considered complete.
+     - If it returns `false` (as in the case of BasPay after `process` only) → displays a message to the user to complete payment (like "Please confirm payment via BAS app").
+
+**Result:** In Two‑Step gateways, immediately after `process()`, `processed = false` and the order is **not** paid, allowing the user to complete the next step. Not calling `$result->success()` inside `process()` is what prevents the order from moving to `PaidState` prematurely.
+
+#### 6.3 Completing Payment in Two‑Step Gateways: `complete()` and `checkAndCompletePay`
+
+To finalize payment, `complete()` must be called when the user returns from confirmation. The optimal way is to provide a **public `static` function** named `checkAndCompletePay` that is used in the `success` route. Example:
+
+```php
+public static function checkAndCompletePay(array $options): array
+{
+    $orderId = $options['order_id'] ?? null;
+    $order = Order::find($orderId);
+    if (!$order) return ['success' => false, 'message' => 'Order not found'];
+    
+    $bas = new self($order);
+    $result = new PaymentResult($bas, $order);
+    $completeResult = $bas->complete($result);
+
+    return [
+        'success'  => $completeResult->successful,
+        'message'  => $completeResult->message,
+        'data'     => $completeResult->api_data,
+        'order_id' => $orderId,
+    ];
+}
+```
+
+Then in `routes.php`:
+
+```php
+Route::get('baspay/success', function () {
+    $options = Input::get();
+    $result = BasPay::checkAndCompletePay($options);
+    $order_id = $result['order_id'] ?? null;
+    if ($order_id) {
+        $callbackUrl = RedirectHelper::getCallbackSuccessUrlByOrder($order_id, ['callback_success_url', 'baspay.callback_success_url']);
+        if ($callbackUrl) {
+            return RedirectHelper::redirectToApp($callbackUrl, $result, false, ['order_id', 'payment_method_id'], ['*'], false);
+        }
+    }
+    return response()->json($result);
+});
+```
+
+> **Note:** `complete()` should call `$result->success()` only when the transaction is successful; otherwise, use `$result->pending()` or `$result->fail()` depending on the status.
 
 ---
 
-## 🧩 Creating Partial Files
+## 🧩 Creating Partial Files (Partials)
 
 ### 1. `_info.htm`
 **Path:** `paymenttypes/newpay/_info.htm`  
-Displays introductory information about the gateway in the settings page.
+Displays introductory information about the gateway on the settings page.
 
 ```html
 <div class="callout callout-info">
     <h4>New Payment Gateway</h4>
-    <p>Integrated payment gateway that accepts online payments.</p>
+    <p>An integrated payment gateway that enables accepting online payments.</p>
     <hr>
     <strong>Setup Requirements:</strong>
     <ol>
         <li>Obtain API Key from the payment gateway.</li>
-        <li>Specify the Base API URL (Live/Sandbox).</li>
+        <li>Specify the base API URL (Live/Sandbox).</li>
     </ol>
 </div>
 ```
 
 ### 2. `_test_info.htm`
 **Path:** `paymenttypes/newpay/_test_info.htm`  
-Provides a quick testing tool within the settings page.
+Provides a quick test tool on the settings page.
 
 **Important Notes:**
 - All IDs and function names must be unique using the gateway prefix (e.g., `newpay-`) to avoid conflicts with other gateways.
@@ -352,7 +415,7 @@ Provides a quick testing tool within the settings page.
         </div>
     </div>
     <div class="text-center">
-        <button id="newpay-btn-auth" class="btn btn-info">Test Auth</button>
+        <button id="newpay-btn-auth" class="btn btn-info">Test Authentication</button>
         <button id="newpay-btn-create" class="btn btn-primary">Create Transaction</button>
         <button id="newpay-btn-confirm" class="btn btn-success">Confirm Payment</button>
         <button id="newpay-btn-status" class="btn btn-warning">Check Status</button>
@@ -374,7 +437,7 @@ Provides a quick testing tool within the settings page.
         div.style.display = 'block';
         document.getElementById('newpay-test-details').textContent = JSON.stringify(data, null, 2);
     }
-    // Remaining functions follow the same pattern with newpay- prefix
+    // Remaining functions with the same pattern using the newpay- prefix
 </script>
 ```
 
@@ -385,47 +448,47 @@ Provides a quick testing tool within the settings page.
 **Path:** `views/newpay-ui.htm`
 
 - Use the same structure as `yottapay-ui.htm` or `thawanipay-ui.htm`.
-- Change all `yottapay` to `newpay` in IDs, function names, and endpoints.
-- Ensure there are tabs (manual, automatic, statistics, logs).
+- Change every `yottapay` to `newpay` in IDs, function names, and endpoints.
+- Ensure there are tabs (Manual, Automatic, Statistics, Logs).
 - Add local logs using `localStorage` with a unique key (`newpay_test_logs`).
 
-**Basic snippets:**
+**Key snippets:**
 
 - Display current settings: `{{ apiBaseUrl }}`, `{{ settings.url }}`, etc.
-- Input form (order ID, amount, purchase code, etc.).
-- Buttons: Create transaction, Confirm, Query, Full test, Automated test.
-- Display results in JSON format.
-- Statistics (order count, success rate, recent logs) via `/stats` endpoint.
+- Data entry form (order ID, amount, purchase code, etc.).
+- Buttons: Create Transaction, Confirm, Query, Full Test, Automated Test.
+- Show results in JSON format.
+- Statistics (number of requests, success rate, latest logs) via the `/stats` endpoint.
 
 ---
 
 ## 🛣️ Adding Routes in `routes.php`
 
-Routes must be added within the appropriate main group (`yepayment` or `ompayment`). Required routes:
+Routes must be added inside the appropriate main group (`yepayment` or `ompayment`). Required routes:
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/newpay/test-auth` | Test authentication |
 | `POST` | `/newpay/test-create-payment` | Create a test transaction |
-| `POST` | `/newpay/test-confirm-payment` | Confirm transaction (if needed) |
-| `GET` | `/newpay/test-check-status` | Query transaction status |
+| `POST` | `/newpay/test-confirm-payment` | Confirm the transaction (if needed) |
+| `GET` | `/newpay/test-check-status` | Query a transaction's status |
 | `POST` | `/newpay/test-full-payment` | Full test |
 | `GET` | `/newpay/stats` | Gateway statistics |
 | `GET` | `/newpay/test-ui` | Display test page |
-| `GET` | `/newpay/success` | (for redirect type) Success route |
-| `GET` | `/newpay/cancel` | (for redirect type) Cancel route |
+| `GET` | `/newpay/success` | (For redirect type) Success route |
+| `GET` | `/newpay/cancel` | (For redirect type) Cancel route |
 
 **Important Notes:**
 
 - All test routes are protected with `if(!BackendAuth::getUser())` to prevent unauthorized access.
-- Use `HttpHelper` inside routes (if needed) or call gateway methods directly.
+- Use `HttpHelper` inside the routes (if needed) or call class functions directly.
 - In `success`/`cancel` routes, use `RedirectHelper` to redirect to the app (as in `thawanipay/success`).
 
-**Example `success` route:**
+**Example of `success` route:**
 ```php
 Route::get('newpay/success', function () {
     $options = Input::get();
-    $result = NewPay::checkAndCompletePay($options); // general verification function
+    $result = NewPay::checkAndCompletePay($options); // Public verification function
     $order_id = $result['data']['order_id'] ?? null;
     if ($order_id) {
         $callbackUrl = RedirectHelper::getCallbackSuccessUrlByOrder($order_id, ['callback_success_url', 'newpay.callback_success_url']);
@@ -437,7 +500,7 @@ Route::get('newpay/success', function () {
 });
 ```
 
-**Example `test-create-payment` route:**
+**Example of `test-create-payment` route:**
 ```php
 Route::post('newpay/test-create-payment', function (Request $request) {
     if (!BackendAuth::getUser()) return Response::make('Access Denied', 404);
@@ -466,42 +529,42 @@ public function registerPaymentProviders()
 }
 ```
 
-Place it in the appropriate geographic section (`allow_yemen_payment` or `allow_oman_payment`).
+Place it in the appropriate geographical section (`allow_yemen_payment` or `allow_oman_payment`).
 
 ---
 
 ## 🌐 Adding Translation Keys
 
-**Files:** `lang/ar/lang.php` and `lang/en/lang.php`
+**File:** `lang/ar/lang.php` and `lang/en/lang.php`
 
 ```php
 return [
     'payment_gateway_settings' => [
         'newpay' => [
-            'url' => 'Base API URL',
-            'test_url' => 'Test API URL',
-            'api_key' => 'API Key',
-            'secret_key' => 'Secret Key',
-            'username' => 'Username',
-            'password' => 'Password',
-            'default_currency' => 'Default Currency',
+            'url'               => 'Base API URL',
+            'test_url'          => 'Test API URL',
+            'api_key'           => 'API Key',
+            'secret_key'        => 'Secret Key',
+            'username'          => 'Username',
+            'password'          => 'Password',
+            'default_currency'  => 'Default Currency',
         ],
     ],
     'public' => [
         'newpay' => [
-            'payment_success' => 'Payment successful',
-            'confirmation_required' => 'Please enter confirmation code',
-            'transaction_created' => 'Transaction created',
-            'default_note' => 'Confirm payment',
-            'yes' => 'Yes',
-            'no' => 'No',
+            'payment_success'          => 'Payment Successful',
+            'confirmation_required'    => 'Please enter the confirmation code',
+            'transaction_created'      => 'Transaction Created',
+            'default_note'             => 'Payment Confirmation',
+            'yes'                      => 'Yes',
+            'no'                       => 'No',
             'errors' => [
-                'auth_failed' => 'Authentication failed',
-                'order_already_paid' => 'Order already paid',
-                'missing_credentials' => 'Incomplete credentials',
-                'payment_creation_failed' => 'Payment transaction creation failed',
-                'payment_confirmation_failed' => 'Payment confirmation failed',
-                'incomplete_payment_data' => 'Incomplete payment data',
+                'auth_failed'                => 'Authentication Failed',
+                'order_already_paid'         => 'Order already paid',
+                'missing_credentials'        => 'Incomplete credentials',
+                'payment_creation_failed'    => 'Payment transaction creation failed',
+                'payment_confirmation_failed'=> 'Payment confirmation failed',
+                'incomplete_payment_data'    => 'Incomplete payment data',
             ],
         ],
     ],
@@ -513,22 +576,22 @@ return [
 ## 🧪 Additional Tips for Professional Gateway Development
 
 ### 1. Mandatory Use of `HttpHelper` and `RedirectHelper`
-- **All API requests** must be made via `HttpHelper`, not direct `curl` or un-wrapped Guzzle.
-- **All redirections after payment** (especially for Redirect type gateways) must use `RedirectHelper` to ensure compatibility with apps and web.
+- **All API requests** must go through `HttpHelper`, not direct `curl` or unwrapped `Guzzle`.
+- **All post-payment redirections** (especially for Redirect type gateways) must use `RedirectHelper` to ensure compatibility with apps and web.
 
 ### 2. Webhook Support
 - Add a route to receive notifications from the gateway (POST).
-- Verify signature if present.
-- Update order status automatically.
+- Verify the signature if present.
+- Automatically update the order status.
 
-### 3. Retry Failed Requests
-- Add a `for` loop with `try-catch` to execute the request multiple times before failing.
+### 3. Retry Failed Requests (Retry)
+- Add a `for` loop with `try-catch` to execute the request several times before failing.
 
 ### 4. Idempotency Support
-- Send a unique `Idempotency-Key` (e.g., `order_id_uuid`) in create transaction requests.
+- Send a unique `Idempotency-Key` (e.g., `order_id_uuid`) in transaction creation requests.
 
-### 5. General `checkTransactionStatus` Function
-- Can be called from `stats` or from the UI to display transaction status.
+### 5. Public `checkTransactionStatus` Function
+- It can be called from `stats` or the UI to display the transaction status.
 
 ### 6. `isAvailable()` Function to Validate Settings
 ```php
@@ -547,7 +610,14 @@ public function isAvailable(): bool
 - Use `trace_log()` or `logger()` to log requests and responses when errors occur.
 
 ### 8. `checkAndCompletePay` Function (for Redirect Type)
-Add a static function in the gateway class to unify the logic for verification and completing payment after returning from the external gateway. You can leverage `RedirectHelper` inside it.
+Add a static function in the gateway class to unify the verification and payment completion logic after returning from the external gateway. `RedirectHelper` can be used inside it.
+
+### 9. Dealing with Payment Session and Log Lifecycle (Payment Lifecycle)
+
+- **Log payment attempt in `process`:** Even if payment is not yet complete (in Two‑Step type), you should call `$result->logSuccessfulPayment()` to save the initial log. This is what `YottaPay` and `BasPay` do.
+- **Using `complete` in `PaymentRedirector`:** When returning from an external gateway (or mobile app), `PaymentRedirector::handleOffSiteReturn` calls `complete` automatically if the session contains a callback. Ensure `complete` is ready for this scenario.
+- **Storing `callback_success_url`:** In gateways that need mobile support, store the URLs in `order->other_data` as in `BasPay` and `ThawaniPay`, and use `RedirectHelper` to extract and redirect to them after payment completion.
+- **Handling `processed`:** The `processed` variable on the order turns `true` only when `$result->success()` is called (which sets the status to `PaidState`). When using `$result->pending()`, `processed = true` but the status is `PendingState` not `PaidState`. Rely on `isPaymentProcessed()` to check actual payment completion.
 
 ---
 
@@ -555,7 +625,7 @@ Add a static function in the gateway class to unify the logic for verification a
 
 - [ ] Create `XxxPay.php` class extending `PaymentProvider`.
 - [ ] Implement methods: `name`, `identifier`, `validate`, `settings`, `process`, `complete`.
-- [ ] Add helper methods: `getAuthToken`, `createPayment`, `confirmPayment`, `checkTransactionStatus`, `getApiUrl`, `parseResponse`.
+- [ ] Add helper functions: `getAuthToken`, `createPayment`, `confirmPayment`, `checkTransactionStatus`, `getApiUrl`, `parseResponse`.
 - [ ] Define `defineValidationRules` and `getFieldNames`.
 - [ ] Add properties `$success_url`, `$cancel_url`, `$is_test_mod`.
 - [ ] Create `_info.htm` and `_test_info.htm` (with unique IDs).
@@ -566,28 +636,34 @@ Add a static function in the gateway class to unify the logic for verification a
 - [ ] Add translation keys in `lang/ar/lang.php` and `lang/en/lang.php`.
 - [ ] Test the gateway via `/api/v1/yepayment/xxxpay/test-ui`.
 - [ ] Document any special behavior (Webhooks, etc.) in `_info.htm` or a separate file.
+- [ ] **Ensure that `process()` in Two‑Step type does not call `$result->success()`**, but returns success with a confirmation message.
+- [ ] **Ensure that `complete()` calls `$result->success()` only after verifying process success**.
+- [ ] **Provide a `static checkAndCompletePay` function** for use in the `success` route (especially for Two‑Step and Redirect gateways).
+- [ ] **Ensure return URLs** (`callback_success_url` and `callback_error_url`) are stored in `other_data` if passed.
+- [ ] **Test that `OrderManager` keeps `processed = false`** immediately after `process()` in Two‑Step gateways.
+- [ ] **Verify that `PaymentResult::success` leads to `PaidState`** and triggers events and empties the cart.
 
 ---
 
-## 📚 Reference Examples (from provided code)
+## 📚 Reference Examples (from Attached Code)
 
-- **YottaPay**: Example of Two-Step type (OTP).  
-  Demonstrates using `HttpHelper` for JSON and PATCH requests, and token storage.
-- **QasemiPay**: Example of direct type with later confirmation (concurrencyStamp).  
-  Demonstrates using `HttpHelper::sendForm` to obtain OAuth token.
-- **ThawaniPay**: Example of Redirect type with redirection to external gateway.  
-  Demonstrates using `RedirectHelper` in `success`/`cancel` routes, and a `checkAndCompletePay` function.
+- **YottaPay**: Two‑Step (OTP). `process()` returns `successful=true` with `requires_confirmation`, and `complete()` uses the sent OTP. Shows use of `HttpHelper` in JSON and PATCH requests, and token storage.
+- **BasPay**: Two‑Step (confirmation via separate app). `process()` creates a transaction and returns `trxToken`, and `complete()` checks transaction status and updates the order to `PaidState` only upon success. Shows use of `HttpHelper::sendForm` for OAuth token, and static `checkAndCompletePay` for confirmation via `success` route.
+- **QasemiPay**: Direct with optional confirmation (concurrencyStamp). `process()` and `complete()` follow a similar pattern, and shows use of `HttpHelper::sendForm` for OAuth token.
+- **ThawaniPay**: Redirect with redirect to external gateway. `process()` redirects, and `complete()` is called after return. Shows use of `RedirectHelper` in `success`/`cancel` routes, and `checkAndCompletePay` for confirmation.
 
 ---
 
 ## 🏁 Conclusion
 
-By following this guide, you can create any new payment method in the `Nano.Yepayment` system regardless of the complexity of its API. Use the appropriate pattern (Redirect, Two-Step, Direct) according to the payment flow, and do not forget to:
+By following this guide, you can create any new payment method in the `Nano.Yepayment` system regardless of its API complexity. Use the appropriate pattern (Redirect, Two‑Step, Direct) according to the payment flow, and do not forget:
 
 - Use `HttpHelper` for all API requests.
-- Use `RedirectHelper` for all redirections after payment.
-- Provide the necessary testing tools (`_test_info.htm` and `xxxpay-ui.htm`) to facilitate development and maintenance.
+- Use `RedirectHelper` for post-payment redirection (even in indirect gateways that support mobile).
+- Understand the impact of `PaymentResult` functions (`success`, `pending`, `fail`) on order status, cart emptying, and events.
+- Provide a `static checkAndCompletePay` function to simplify confirmation from return routes.
+- Store return URLs (`callback_success_url`) in `other_data`.
+- Remember that `OrderManager` and `Checkout2` rely on `isPaymentProcessed()` to determine the next step, so do not rush calling `$result->success()`.
+- Provide necessary test tools (`_test_info.htm` and `xxxpay-ui.htm`) to ease development and maintenance.
 
 🚀 **Start adding your new gateway now!**
-
----
