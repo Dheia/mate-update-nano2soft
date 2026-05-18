@@ -2793,3 +2793,205 @@ The BasPay gateway was fully developed and integrated into the `Nano.Yepayment` 
 Nanosoft Development Team – Electronic Payments Department  
 **Reviewer:** Dheia Ali, Nano2Soft
 
+## 2026-05-15 - 2026-05-16
+
+**Updates for `Nano.AuthApi` Plugin – version 1.0.19**
+
+### Summary of Updates
+
+After providing comprehensive management for user profiles and login, version 1.0.19 arrives to enhance the developer experience by **extending the API with a set of new endpoints** that enable:
+
+- **Fetching ready field options** (such as gender, account type, language, nationality...) dynamically.
+- **Managing user group lists** with support for advanced filters including default status and ordering.
+- **Full support for new columns** (`is_new_user_default`, `is_active`, `sort_order`) in the `user_groups` table.
+
+This release aims to empower frontend applications to build dynamic registration and search forms without multiple requests, and to unify the mechanism for accessing system options via a professional API.
+
+---
+
+### Version 1.0.19 – Field Options, User Group Endpoints, and Structural Expansion
+
+#### Release Goals
+
+- **Provide endpoints to fetch field options** (`/user/options`, `/user/frontend-options`, `/user/backend-options`).
+- **Launch the `UserGroups` controller** to manage user groups via API with filters compatible with the new columns.
+- **Update `UserGroupTransformer`** to include new fields (`is_active`, `is_new_user_default`, `sort_order`).
+- **Execute a migration** to add these columns to the `user_groups` table.
+- **Update config file** (`config.php`) to add settings specific to user groups (`user_groups`).
+
+#### New Features
+
+##### 1. Field Options Endpoints
+
+The `Profiles` controller was extended with new functions to extract all necessary options for building user forms:
+
+| Path | Description |
+| :--- | :--- |
+| `GET /api/v1/user/options` | Fetch general options (fields can be specified via `fields`). |
+| `GET /api/v1/user/frontend-options` | Same options but dedicated to the frontend. |
+| `GET /api/v1/user/backend-options` | Options dedicated to the backend panel (backend users). |
+
+**Responsible functions:**
+- `getOptions($data)`: the main function that extracts options based on the `fields` parameter (e.g., `gender`, `ref_type`, `language`, `nationality`, `passport_type`...).
+- `getAutoptions()`, `getFrontendOptions()`, `getBackendOptions()`: wrapper functions to automatically determine the `provider`.
+- `getCollectionItem($items)`: converts associative arrays to a collection of objects `{id, name}` for uniform formatting.
+
+**Currently supported field options:**
+
+| Field | Description |
+| :--- | :--- |
+| `gender_type` | Additional gender types (if any) |
+| `gender` | Gender options (male/female) |
+| `ref_type` | Available account types (regular user, delivery worker...) |
+| `language` | List of supported languages |
+| `nationality` | List of nationalities |
+| `passport_type` | Passport types |
+| `marital_status` | Marital status |
+| `fuel_type` | Fuel types |
+| `website_type` | Website types (website, facebook) |
+| `phone_type` | Phone types (mobile, home, work...) |
+
+##### 2. `UserGroups` Controller for Managing User Groups
+
+`Nano\AuthApi\Controllers\UserGroups` was created to provide:
+
+- **`index()`**: fetch list of groups with support for filters (code, status, default group, text search), ordering, and pagination.
+- **`show($id)`**: fetch details of a single group.
+- **`activelystats()`**: statistics about the last update (for caching purposes).
+
+**Key features of `getRecords()`:**
+- Support for `provider` (frontend/backend) to choose the appropriate group model.
+- Filter `is_new_user_default` to limit results to the default group for new users.
+- Filter `code`, `status`, and `q` (search in name, description, and code).
+- Support for direct return options: `is_collection`, `is_paginator`, `is_query`.
+- Events `api.list.extendQueryBefore` and `api.list.extendQuery` to allow developers to customize the query.
+- Use of `UserGroupTransformer` for output formatting.
+
+##### 3. Support for New Columns in `user_groups`
+
+The following columns were added via the migration `builder_table_add_is_active_columns_to_frontend_user_groups_table.php`:
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `is_new_user_default` | boolean | Set the group as the default for new users. |
+| `is_active` | boolean | Enable/Disable the group. |
+| `sort_order` | integer | Order of the group in lists. |
+
+**Duplicate prevention**: uses the condition `if(!Schema::hasColumn(...))` to avoid errors when running the update on databases that already contain the columns.
+
+##### 4. Updates in `UserGroupTransformer`
+
+The new fields were added to the JSON response to include `is_active`, `is_new_user_default`, `sort_order` alongside the basic fields (`id`, `name`, `code`, `description`, dates). This ensures all group endpoints are compatible with this data.
+
+##### 5. New Settings in `config.php`
+
+A key `user_groups` was added to the `config.php` file:
+
+```php
+'user_groups' => [
+    'is_allow_list' => true,
+    'is_allow_list_backend' => true,
+    'is_allow_list_frontend' => true,
+    'is_check_access_list' => false,
+    'is_check_list_permission' => false,
+    'order_by' => 'code',
+    'order_dir' => 'asc',
+    'per_page' => 15,
+    'exclude' => '',
+],
+```
+
+These settings allow controlling the behavior of endpoints and their access privileges.
+
+---
+
+### Practical Examples
+
+#### 1. Fetching Gender and Account Type Options
+
+**Request:**
+```http
+GET /api/v1/user/options?fields=gender,ref_type HTTP/1.1
+Authorization: Bearer ...
+```
+
+**Response:**
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "Options fetched successfully",
+    "data": {
+        "gender": [
+            {"id": "male", "name": "Male"},
+            {"id": "female", "name": "Female"}
+        ],
+        "ref_type": [
+            {"id": "user", "name": "Regular User"},
+            {"id": "department", "name": "Facility or Company"},
+            ...
+        ]
+    }
+}
+```
+
+#### 2. Fetching Only Active Groups Ordered by `sort_order`
+
+```http
+GET /api/v1/user/groups?is_active=1&orderBy=sort_order&orderDirection=asc HTTP/1.1
+```
+
+#### 3. Fetching the Default Group for New Users
+
+```http
+GET /api/v1/user/groups?is_new_user_default=1 HTTP/1.1
+```
+
+#### 4. Fetching Details of a Specific Group
+
+```http
+GET /api/v1/user/groups/1 HTTP/1.1
+```
+
+---
+
+### Version Summary (1.0.18 – 1.0.19)
+
+| Version | Key Features |
+| :--- | :--- |
+| 1.0.18 | Support `bio`, `website`, `links` fields in the profile. |
+| 1.0.19 | Field options endpoints (`/user/options`), `UserGroups` controller for managing groups, support for `is_new_user_default`, `is_active`, `sort_order` columns, and updates to transformers and settings. |
+
+---
+
+### Upgrade Requirements
+
+1. **Update code**:
+   - Add the new `UserGroups.php` controller in the specified path.
+   - Add the new functions in `Profiles.php` (if not already present).
+   - Update `UserGroupTransformer.php` to include the new fields.
+   - Update `routes.php` file to add the new routes.
+
+2. **Execute migration**:
+   - Run the migration `builder_table_add_is_active_columns_to_frontend_user_groups_table.php` to add the new columns. You can use `php artisan october:up` or upgrade the plugin from the backend.
+
+3. **Review settings**:
+   - Update the `config.php` file to include the `user_groups` key with appropriate default settings.
+
+4. **Test new endpoints**:
+   - Try `GET /api/v1/user/options?fields=gender,ref_type,language`.
+   - Try `GET /api/v1/user/groups` with different filter parameters.
+
+5. **Clear cache** (optional):
+   - `php artisan cache:clear` to ensure new settings are loaded.
+
+---
+
+### Conclusion
+
+With version 1.0.19, we have taken an important step towards making `Nano.AuthApi` a comprehensive API for managing users and their groups. The new endpoints for providing options reduce dependence on separate interfaces, while `UserGroups` provides powerful search and filtering tools suited for modern applications.
+
+This integration opens the door to building fully dynamic registration and preference experiences, and makes it easier for developers to create flexible dashboards that rely completely on APIs.
+
+We look forward to your feedback and suggestions to continue developing this vital plugin.
+
