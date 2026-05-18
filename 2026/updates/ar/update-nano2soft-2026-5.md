@@ -3012,3 +3012,277 @@ https://yourdomain.com/api/v1/yepayment/baspay/test-ui
 **تم إعداد هذا التحديث بواسطة:**  
 فريق تطوير نانوسوفت – قسم المدفوعات الإلكترونية  
 **المراجع:** Dheia Ali, Nano2Soft
+
+## 2026-05-18 - 2026-05-19
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `ProposalModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano2.Proposals`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام المقترحات والشكاوى والبلاغات (Proposals/Reports/Complaints) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد البلاغات** (مع إمكانية تمييز أنواع البلاغات: `proposals`, `reports`, `complaints`).
+- الترتيب حسب **أحدث تاريخ بلاغ** (الأحدث).
+- الترتيب حسب **أقدم تاريخ بلاغ** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `proposals_count`, `latest_proposal_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي أرسل لها المستخدم بلاغاً (كـ `target`).
+- تصفية الكائنات التي أرسلت بلاغاً (كـ `user`).
+- تصفية الكائنات التي لديها بلاغات (مع حد أدنى للعدد) أو التي لا بلاغات لها.
+- إضافة عمود `is_proposed_by_user` (هل أرسل المستخدم بلاغاً للكائن) و `is_proposed_to_user` (هل الكائن هو هدف بلاغ أرسله المستخدم).
+- نطاق متقدم (`scopeWhereHasProposalAdvanced`) يدعم الجانبين (`target` و `user`) بمرونة كاملة، مع التحكم في شروط `user_id`/`user_type` و `target_id`/`target_type`، واستخدام `has`/`orHas`/`doesntHave`/`orDoesntHave`، ودعم `withTrashed`/`onlyTrashed` ككلمات مفتاحية خاصة.
+- دوال إحصائية متقدمة للحصول على إجمالي البلاغات، توزيعها حسب نوع المستخدم، وقائمة المستخدمين المبلّغين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `ProposalScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `ProposalModel` | `ProposalScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام البلاغات. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد البلاغات** | `scopeAddCountProposals` | إضافة عمود عدد البلاغات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountProposals` | ترتيب النتائج حسب عدد البلاغات (دون إضافة العمود). |
+| | `scopeWithCountProposals` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ بلاغ** | `scopeAddLatestProposal` | إضافة عمود بأحدث تاريخ بلاغ. |
+| | `scopeSortByLatestProposal` | ترتيب حسب أحدث تاريخ بلاغ. |
+| | `scopeWithLatestProposal` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ بلاغ** | `scopeAddEarliestProposal` | إضافة عمود بأقدم تاريخ بلاغ. |
+| | `scopeSortByEarliestProposal` | ترتيب حسب أقدم تاريخ بلاغ. |
+| | `scopeWithEarliestProposal` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم (كهدف)** | `scopeProposedByUser` | تصفية الكائنات التي أرسل لها المستخدم بلاغاً. |
+| | `scopeNotProposedByUser` | تصفية الكائنات التي لم يرسل لها المستخدم بلاغاً. |
+| **التصفية حسب المستخدم (كمرسل)** | `scopeProposedToUser` | تصفية الكائنات التي أرسلها المستخدم بلاغاً (أي الكائن هو المرسل). |
+| | `scopeNotProposedToUser` | تصفية الكائنات التي لم يرسلها المستخدم بلاغاً. |
+| **التصفية حسب وجود بلاغات** | `scopeHasProposals` | تصفية الكائنات التي لديها بلاغات (مع حد أدنى). |
+| | `scopeHasNoProposals` | تصفية الكائنات التي لا بلاغات لها. |
+| **عمود الحالة للمستخدم** | `scopeWithIsProposedByUser` | إضافة عمود `is_proposed_by_user`. |
+| | `scopeWithIsProposedToUser` | إضافة عمود `is_proposed_to_user`. |
+| **نطاق متقدم** | `scopeWhereHasProposalAdvanced` | نطاق مرن للتصفية حسب البلاغات مع دعم كامل للجانبين (target/user)، شروط متقدمة، أنواع علاقات متعددة (`has`, `orHas`, `doesntHave`, `orDoesntHave`). |
+| **نطاقات خاصة** | `scopeTopProposed` | جلب الكائنات الأكثر بلاغاً (بعدد البلاغات). |
+
+#### الدوال الإحصائية المساعدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalProposals` | إجمالي عدد البلاغات (مجموع `COUNT`) مع خيارات التصفية. |
+| `getProposalsCountByType` | توزيع البلاغات حسب نوع المستخدم (`user_type`). |
+| `getProposersUsers` | قائمة المستخدمين الذين أرسلوا بلاغات للكائن. |
+
+جميع الدوال والنطاقات تدعم خيارات التصفية: `$type` (نوع البلاغ), `$onlyActive`, `$withTrashed`.
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `type`, `is_active`) عبر `where` داخل الاستعلام الفرعي.
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `proposals_count`, `latest_proposal_at`).
+- `$type`: تصفية حسب نوع البلاغ (`proposals`, `reports`, `complaints`).
+- `$onlyActive`: تصفية حسب `is_active`.
+- `$withTrashed`: تضمين السجلات المحذوفة (Soft Deletes).
+
+#### 2.3 إضافة النطاق المتقدم `scopeWhereHasProposalAdvanced`
+هذا النطاق هو القلب الجديد للتصفية حسب البلاغات، ويدعم:
+- **الجانب المطلوب** (`side`): `target` (بلاغات واردة إلى الكائن) أو `user` (بلاغات صادرة من الكائن).
+- **نوع العلاقة** (`type`): `has`, `orHas`, `doesntHave`, `orDoesntHave`.
+- **شروط مرنة** (`conditions`): يمكن أن تكون مصفوفة من الحقول والقيم، أو دالة إغلاق، أو مصفوفة تدعم الاستعلامات المتقدمة (مثل `['whereIn', [1,2,3]]`).
+- **التحكم في تطبيق شروط المستخدم/الهدف** (`useUserConditions`, `useTargetConditions`): يمكن ضبطها على `true` (تطبيق الكل)، `false` (لا تطبيق)، أو مصفوفة تحتوي على أسماء الحقول المطلوبة (مثل `['user_type']`).
+- **التحكم في فرض الشروط عند عدم وجود كيان** (`isForceUser`, `isForceTarget`): إذا كان `true` ولم يوجد المستخدم (أو الهدف) وكانت شروطه مطلوبة، يضاف شرط مستحيل (`whereRaw('1 = 0')`) لعدم إرجاع نتائج. إذا كان `false`، لا يضاف شرط.
+- **مصدر الحصول على المستخدم/الهدف** (`userSource`, `targetSource`): يمكن أن يكون `'current_user'` (جلب من AuthHelpers) أو `'current_model'` (استخدام الموديل الحالي). يقرأ من الإعدادات أو يمكن تمريره.
+- **دعم `withTrashed` و `onlyTrashed`**: يتم معالجتهما ككلمات مفتاحية خاصة داخل `conditions`، ويُستدعى النطاق المناسب على الاستعلام الفرعي.
+
+#### 2.4 دعم `withTrashed` و `onlyTrashed` ككلمات مفتاحية
+في `$conditions`، عند تمرير `'withTrashed' => true` أو `'onlyTrashed' => true`، يتم استدعاء الدالة المناسبة (`withTrashed()` أو `onlyTrashed()`) على الاستعلام الفرعي بدلاً من معاملتها كشرط `where`.
+
+#### 2.5 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano2\Proposals\Behaviors\ProposalModel\ProposalScopesAndHelpers`
+
+#### 2.6 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated`. كما تم توفير دوال `scopeWhereHasProposal`, `scopeWhereHasProposals`, `scopeWhereHasUserProposal`, `scopeWhereHasUserProposals` التي تُعيد توجيه المستخدمين إلى النطاق المتقدم.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountProposalsOld` → `scopeSortByCountProposals`
+- `scopeWithSortByCountProposals` → `scopeWithCountProposals`
+- `scopeAddSortByCountProposals` → `scopeAddCountProposals`
+- `scopeSortByCreatedAtProposals` → `scopeSortByLatestProposal`
+- `scopeAddSortByCreatedAtProposals` → `scopeAddLatestProposal`
+- `scopeWithSortByCreatedAtProposals` → `scopeWithLatestProposal`
+- `scopeWhereHasProposal` → `scopeWhereHasProposalAdvanced` (جانب target)
+- `scopeWhereHasProposals` → `scopeWhereHasProposalAdvanced`
+- `scopeWhereHasUserProposal` → `scopeWhereHasProposalAdvanced` (جانب user)
+- `scopeWhereHasUserProposals` → `scopeWhereHasProposalAdvanced`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد البلاغات
+```php
+// المنتجات الأكثر بلاغاً (جميع الأنواع)
+$products = Product::sortByCountProposals('DESC')->get();
+
+// المنتجات الأكثر بلاغاً من نوع 'complaints'
+$products = Product::sortByCountProposals('DESC', 'complaints')->get();
+
+// إضافة عمود عدد البلاغات مع الترتيب
+$products = Product::withCountProposals('DESC', 'proposals_count', 'reports')->get();
+```
+
+#### 3.2 الترتيب حسب التاريخ
+```php
+// المنتجات الأحدث بلاغاً (جميع الأنواع)
+$products = Product::sortByLatestProposal('DESC')->get();
+
+// المنتجات الأحدث بلاغاً من نوع 'reports'
+$products = Product::sortByLatestProposal('DESC', 'latest_report_at', 'reports')->get();
+
+// إضافة عمود آخر تاريخ بلاغ مع الترتيب
+$products = Product::withLatestProposal('DESC', 'last_proposal_date')->get();
+```
+
+#### 3.3 التصفية حسب المستخدم (جانب target)
+```php
+// المنتجات التي أرسل لها المستخدم الحالي بلاغاً
+$products = Product::proposedByUser()->get();
+
+// المنتجات التي أرسل لها مستخدم محدد بلاغاً من نوع 'complaints'
+$user = User::find(1);
+$products = Product::proposedByUser($user, 'complaints')->get();
+
+// المنتجات التي لم يرسل لها المستخدم الحالي بلاغاً
+$products = Product::notProposedByUser()->get();
+```
+
+#### 3.4 التصفية حسب المستخدم (جانب user – الكائن هو المرسل)
+```php
+// المستخدمون الذين أرسلوا بلاغات (كمرسلين)
+$users = User::proposedToUser()->get();
+
+// المستخدمون الذين أرسلوا بلاغات من نوع 'reports'
+$users = User::proposedToUser(null, 'reports')->get();
+```
+
+#### 3.5 التصفية حسب وجود بلاغات
+```php
+// المنتجات التي لها أكثر من 5 بلاغات من نوع 'complaints'
+$products = Product::hasProposals(5, 'complaints')->get();
+
+// المنتجات التي لا بلاغات لها
+$products = Product::hasNoProposals()->get();
+```
+
+#### 3.6 إضافة عمود حالة للمستخدم الحالي
+```php
+$products = Product::withIsProposedByUser()->get();
+foreach ($products as $product) {
+    echo $product->is_proposed_by_user ? 'أرسلت بلاغاً' : 'لم ترسل بلاغاً';
+}
+```
+
+#### 3.7 الاستخدام المتقدم للنطاق `scopeWhereHasProposalAdvanced`
+
+```php
+// المنتجات التي لديها بلاغات من نوع 'reports' (أي مستخدم)
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => ['type' => 'reports']
+])->get();
+
+// المنتجات التي لديها بلاغات نشطة من نوع 'complaints' للمستخدم الحالي
+$products = Product::whereHasProposalAdvanced([
+    'side' => 'target',
+    'conditions' => ['type' => 'complaints', 'is_active' => true],
+])->get();
+
+// المنتجات التي ليس لها بلاغات من نوع 'proposals'
+$products = Product::whereHasProposalAdvanced([
+    'type' => 'doesntHave',
+    'conditions' => ['type' => 'proposals']
+])->get();
+
+// استخدام دالة إغلاق لشروط معقدة
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => function($q) {
+        $q->where('type', 'reports')
+          ->where('created_at', '>=', Carbon::now()->subWeek());
+    }
+])->get();
+
+// استخدام whereIn على نوع البلاغ
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => [
+        'type' => ['whereIn', ['reports', 'complaints']],
+        'is_active' => true,
+    ]
+])->get();
+
+// التحكم في تطبيق شروط المستخدم (جانب target)
+$products = Product::whereHasProposalAdvanced([
+    'useUserConditions' => false, // لا نطبق user_id/user_type
+    'conditions' => ['type' => 'reports']
+])->get();
+
+// البحث عن بلاغات من نوع معين مع تضمين المحذوفة
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => [
+        'type' => 'complaints',
+        'withTrashed' => true,
+    ]
+])->get();
+
+// التحكم في مصدر المستخدم عند side=user
+$users = User::whereHasProposalAdvanced([
+    'side' => 'user',
+    'userSource' => 'current_model', // نستخدم الموديل الحالي كمستخدم
+])->get();
+```
+
+#### 3.8 الدوال الإحصائية
+```php
+$product = Product::find(1);
+echo "إجمالي البلاغات من نوع 'reports': " . $product->getTotalProposals('reports');
+print_r($product->getProposalsCountByType('reports')->toArray());
+$users = $product->getProposersUsers('reports');
+foreach ($users as $user) {
+    echo $user->name . "\n";
+}
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. الواجهة الموحدة تسهل التعلم والاستخدام. النطاق المتقدم `scopeWhereHasProposalAdvanced` يلبي جميع حالات الاستخدام المعقدة.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر بلاغاً، الأحدث بلاغاً) مما يحسن تجربة المستخدم.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب نوع البلاغ، والنشاط، والمستخدم، والجانب (target/user)، مع التحكم الكامل في شروط المستخدم/الهدف.
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات البلاغات والمقترحات والشكاوى داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة بلاغات متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `ProposalModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/ProposalModel/Docs-ProposalModel-ar.md](./docs/ProposalModel/Docs-ProposalModel-ar.md)
+
+See [docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-ar.md](./docs/ProposalModel/Docs-ProposalModel-ar.md)

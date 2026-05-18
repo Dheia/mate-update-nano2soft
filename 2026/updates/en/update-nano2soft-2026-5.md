@@ -3011,3 +3011,277 @@ The BasPay gateway was initially developed as a direct payment, then **updated**
 **This update was prepared by:**  
 NanoSoft Development Team – Electronic Payments Department  
 **Reviewer:** Dheia Ali, Nano2Soft
+
+## 2026-05-18 - 2026-05-19
+
+### Comprehensive Update for Query Scopes in `ProposalModel` Behavior
+
+**Complete Development of Query Scopes and Helper Functions within the `Nano2.Proposals` Package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the Proposals/Reports/Complaints system in NanoSoft applications. Developers no longer need to write complex queries or incorrectly rely on `GROUP BY` and `LIMIT` within subqueries. Instead, they now have a set of ready-made scopes that enable:
+
+- Ordering by **report count** (with the ability to distinguish report types: `proposals`, `reports`, `complaints`).
+- Ordering by **latest report date** (most recent).
+- Ordering by **earliest report date** (oldest).
+- Adding calculated columns to `SELECT` (e.g., `proposals_count`, `latest_proposal_at`) without affecting the ordering.
+- Filtering objects that the user has reported (as `target`).
+- Filtering objects that have sent a report (as `user`).
+- Filtering objects that have reports (with a minimum count) or that have no reports.
+- Adding the column `is_proposed_by_user` (did the user send a report for the object) and `is_proposed_to_user` (is the object the target of a report sent by the user).
+- An advanced scope (`scopeWhereHasProposalAdvanced`) supporting both sides (`target` and `user`) with full flexibility, control over `user_id`/`user_type` and `target_id`/`target_type` conditions, use of `has`/`orHas`/`doesntHave`/`orDoesntHave`, and support for `withTrashed`/`onlyTrashed` as special keywords.
+- Advanced statistical functions to get total reports, distribution by user type, and the list of reporting users.
+
+Existing scopes have been restructured and new scopes added, while maintaining backward compatibility via wrapper functions marked as `@deprecated`. All scopes and helper functions have been moved to an independent trait `ProposalScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `ProposalModel` | `ProposalScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the reporting system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Report Count** | `scopeAddCountProposals` | Add a report count column to `SELECT` (without ordering). |
+| | `scopeSortByCountProposals` | Order results by report count (without adding the column). |
+| | `scopeWithCountProposals` | Add the column and ordering together. |
+| **Latest Report Date** | `scopeAddLatestProposal` | Add a column with the latest report date. |
+| | `scopeSortByLatestProposal` | Order by the latest report date. |
+| | `scopeWithLatestProposal` | Add the column and ordering together. |
+| **Earliest Report Date** | `scopeAddEarliestProposal` | Add a column with the earliest report date. |
+| | `scopeSortByEarliestProposal` | Order by the earliest report date. |
+| | `scopeWithEarliestProposal` | Add the column and ordering together. |
+| **Filtering by User (as Target)** | `scopeProposedByUser` | Filter objects that the user has reported. |
+| | `scopeNotProposedByUser` | Filter objects that the user has not reported. |
+| **Filtering by User (as Sender)** | `scopeProposedToUser` | Filter objects that have sent a report (i.e., the object is the sender). |
+| | `scopeNotProposedToUser` | Filter objects that have not sent a report. |
+| **Filtering by Existence of Reports** | `scopeHasProposals` | Filter objects that have reports (with a minimum count). |
+| | `scopeHasNoProposals` | Filter objects that have no reports. |
+| **Status Column for User** | `scopeWithIsProposedByUser` | Add the `is_proposed_by_user` column. |
+| | `scopeWithIsProposedToUser` | Add the `is_proposed_to_user` column. |
+| **Advanced Scope** | `scopeWhereHasProposalAdvanced` | Flexible scope for filtering by reports with full support for both sides (target/user), advanced conditions, and multiple relationship types (`has`, `orHas`, `doesntHave`, `orDoesntHave`). |
+| **Special Scopes** | `scopeTopProposed` | Retrieve the objects with the most reports (by report count). |
+
+#### Helper Statistical Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalProposals` | Total number of reports (sum of `COUNT`) with filtering options. |
+| `getProposalsCountByType` | Distribution of reports by user type (`user_type`). |
+| `getProposersUsers` | List of users who sent reports for the object. |
+
+All functions and scopes support filtering options: `$type` (report type), `$onlyActive`, `$withTrashed`.
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+Old scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to get aggregated values (e.g., `COUNT`, `MAX`). This approach leads to incorrect and unpredictable results.
+
+**New Approach**:
+- Use an aggregate function directly in the subquery without `GROUP BY` or `LIMIT`.
+- Write the full table name before each field to avoid ambiguity.
+- Add additional conditions (e.g., `type`, `is_active`) via `where` inside the subquery.
+
+#### 2.2 Standardizing Scope Interface
+Function signatures have been standardized to include:
+- `$orderDirection`: Sorting direction (default `DESC`).
+- `$columnName`: Name of the added column (appropriate default like `proposals_count`, `latest_proposal_at`).
+- `$type`: Filter by report type (`proposals`, `reports`, `complaints`).
+- `$onlyActive`: Filter by `is_active`.
+- `$withTrashed`: Include soft-deleted records.
+
+#### 2.3 Adding the Advanced Scope `scopeWhereHasProposalAdvanced`
+This scope is the new core for filtering by reports, supporting:
+- **Required Side** (`side`): `target` (reports received by the object) or `user` (reports sent from the object).
+- **Relationship Type** (`type`): `has`, `orHas`, `doesntHave`, `orDoesntHave`.
+- **Flexible Conditions** (`conditions`): Can be an array of fields and values, a closure, or an array supporting advanced queries (e.g., `['whereIn', [1,2,3]]`).
+- **Control over Applying User/Target Conditions** (`useUserConditions`, `useTargetConditions`): Can be set to `true` (apply all), `false` (apply none), or an array containing the required field names (e.g., `['user_type']`).
+- **Control over Forcing Conditions When Entity is Absent** (`isForceUser`, `isForceTarget`): If `true` and the user (or target) does not exist while its conditions are required, an impossible condition (`whereRaw('1 = 0')`) is added to return no results. If `false`, no condition is added.
+- **Source for Obtaining User/Target** (`userSource`, `targetSource`): Can be `'current_user'` (fetch from AuthHelpers) or `'current_model'` (use the current model). Reads from settings or can be passed.
+- **Support for `withTrashed` and `onlyTrashed`**: Handled as special keywords within `conditions`, and the appropriate scope is called on the subquery.
+
+#### 2.4 Supporting `withTrashed` and `onlyTrashed` as Keywords
+In `$conditions`, passing `'withTrashed' => true` or `'onlyTrashed' => true` will call the appropriate function (`withTrashed()` or `onlyTrashed()`) on the subquery instead of treating them as `where` conditions.
+
+#### 2.5 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:
+`Nano2\Proposals\Behaviors\ProposalModel\ProposalScopesAndHelpers`
+
+#### 2.6 Backward Compatibility
+Old scopes have been retained as wrapper functions in the main class, with an `@deprecated` comment. Functions `scopeWhereHasProposal`, `scopeWhereHasProposals`, `scopeWhereHasUserProposal`, `scopeWhereHasUserProposals` are also provided, redirecting users to the advanced scope.
+
+**List of Supported Old Functions:**
+- `scopeSortByCountProposalsOld` → `scopeSortByCountProposals`
+- `scopeWithSortByCountProposals` → `scopeWithCountProposals`
+- `scopeAddSortByCountProposals` → `scopeAddCountProposals`
+- `scopeSortByCreatedAtProposals` → `scopeSortByLatestProposal`
+- `scopeAddSortByCreatedAtProposals` → `scopeAddLatestProposal`
+- `scopeWithSortByCreatedAtProposals` → `scopeWithLatestProposal`
+- `scopeWhereHasProposal` → `scopeWhereHasProposalAdvanced` (target side)
+- `scopeWhereHasProposals` → `scopeWhereHasProposalAdvanced`
+- `scopeWhereHasUserProposal` → `scopeWhereHasProposalAdvanced` (user side)
+- `scopeWhereHasUserProposals` → `scopeWhereHasProposalAdvanced`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Ordering by Report Count
+```php
+// Products with the most reports (all types)
+$products = Product::sortByCountProposals('DESC')->get();
+
+// Products with the most reports of type 'complaints'
+$products = Product::sortByCountProposals('DESC', 'complaints')->get();
+
+// Add report count column with ordering
+$products = Product::withCountProposals('DESC', 'proposals_count', 'reports')->get();
+```
+
+#### 3.2 Ordering by Date
+```php
+// Products with the most recent report (all types)
+$products = Product::sortByLatestProposal('DESC')->get();
+
+// Products with the most recent report of type 'reports'
+$products = Product::sortByLatestProposal('DESC', 'latest_report_at', 'reports')->get();
+
+// Add latest report date column with ordering
+$products = Product::withLatestProposal('DESC', 'last_proposal_date')->get();
+```
+
+#### 3.3 Filtering by User (Target Side)
+```php
+// Products that the current user has reported
+$products = Product::proposedByUser()->get();
+
+// Products that a specific user has reported, of type 'complaints'
+$user = User::find(1);
+$products = Product::proposedByUser($user, 'complaints')->get();
+
+// Products that the current user has not reported
+$products = Product::notProposedByUser()->get();
+```
+
+#### 3.4 Filtering by User (User Side – Object is the Sender)
+```php
+// Users who have sent reports (as senders)
+$users = User::proposedToUser()->get();
+
+// Users who have sent reports of type 'reports'
+$users = User::proposedToUser(null, 'reports')->get();
+```
+
+#### 3.5 Filtering by Existence of Reports
+```php
+// Products that have more than 5 reports of type 'complaints'
+$products = Product::hasProposals(5, 'complaints')->get();
+
+// Products that have no reports
+$products = Product::hasNoProposals()->get();
+```
+
+#### 3.6 Adding a Status Column for the Current User
+```php
+$products = Product::withIsProposedByUser()->get();
+foreach ($products as $product) {
+    echo $product->is_proposed_by_user ? 'You have reported this' : 'You have not reported this';
+}
+```
+
+#### 3.7 Advanced Usage of the `scopeWhereHasProposalAdvanced` Scope
+
+```php
+// Products that have reports of type 'reports' (any user)
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => ['type' => 'reports']
+])->get();
+
+// Products that have active reports of type 'complaints' from the current user
+$products = Product::whereHasProposalAdvanced([
+    'side' => 'target',
+    'conditions' => ['type' => 'complaints', 'is_active' => true],
+])->get();
+
+// Products that have no reports of type 'proposals'
+$products = Product::whereHasProposalAdvanced([
+    'type' => 'doesntHave',
+    'conditions' => ['type' => 'proposals']
+])->get();
+
+// Using a closure for complex conditions
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => function($q) {
+        $q->where('type', 'reports')
+          ->where('created_at', '>=', Carbon::now()->subWeek());
+    }
+])->get();
+
+// Using whereIn on the report type
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => [
+        'type' => ['whereIn', ['reports', 'complaints']],
+        'is_active' => true,
+    ]
+])->get();
+
+// Controlling the application of user conditions (target side)
+$products = Product::whereHasProposalAdvanced([
+    'useUserConditions' => false, // do not apply user_id/user_type
+    'conditions' => ['type' => 'reports']
+])->get();
+
+// Searching for reports of a specific type, including soft-deleted ones
+$products = Product::whereHasProposalAdvanced([
+    'conditions' => [
+        'type' => 'complaints',
+        'withTrashed' => true,
+    ]
+])->get();
+
+// Controlling the user source when side=user
+$users = User::whereHasProposalAdvanced([
+    'side' => 'user',
+    'userSource' => 'current_model', // use the current model as the user
+])->get();
+```
+
+#### 3.8 Statistical Functions
+```php
+$product = Product::find(1);
+echo "Total reports of type 'reports': " . $product->getTotalProposals('reports');
+print_r($product->getProposalsCountByType('reports')->toArray());
+$users = $product->getProposersUsers('reports');
+foreach ($users as $user) {
+    echo $user->name . "\n";
+}
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: An integrated set of ready-made scopes saves time and reduces errors. The unified interface makes learning and usage easy. The advanced scope `scopeWhereHasProposalAdvanced` meets all complex use cases.
+- **For End Users**: The ability to present intelligently ordered lists (most reported, latest reported) improves the user experience.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: Ability to filter by report type, activity status, user, and side (target/user), with full control over user/target conditions.
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative shift in managing report, proposal, and complaint queries within NanoSoft applications. By restructuring scopes and moving them to an independent trait, along with adding advanced functions for ordering, filtering, and statistics, developers can now build sophisticated reporting systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open up vast possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and how to use it, please refer to the `ProposalModel` behavior documentation file or review the examples provided above.
+
+See [docs/ProposalModel/Docs-ProposalModel-en.md](./docs/ProposalModel/Docs-ProposalModel-en.md)
+
+See [docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-en.md](./docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-en.md)
