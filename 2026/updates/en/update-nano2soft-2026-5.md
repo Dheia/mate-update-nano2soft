@@ -3285,3 +3285,203 @@ This update represents a qualitative shift in managing report, proposal, and com
 See [docs/ProposalModel/Docs-ProposalModel-en.md](./docs/ProposalModel/Docs-ProposalModel-en.md)
 
 See [docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-en.md](./docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-en.md)
+
+## 2026-05-19 - 2026-05-20
+
+### Comprehensive Update of Query Scopes in `VisitModel` Behavior
+
+**Complete development of query scopes and helper functions within the `Nano2.Visitors` package**
+
+An integrated development package has been implemented aimed at improving the performance and flexibility of queries related to the visits and views system in NanoSoft applications. Developers no longer need to write complex queries or rely on incorrect usage of `GROUP BY` and `LIMIT` within subqueries; instead, they have a set of ready‑made scopes that enable:
+
+- Sorting by **visit count** (number of records).
+- Sorting by **total visits** (field `visits`).
+- Sorting by **total views** (field `views`).
+- Sorting by **latest visit date** (most recent).
+- Sorting by **earliest visit date** (oldest).
+- Adding computed columns to `SELECT` (such as `visits_count`, `sum_visits`, `latest_visit_at`) without affecting ordering.
+- Filtering objects that are visited (or not visited) by a specific user.
+- Filtering objects that have (or do not have) visits, with the ability to specify a minimum count.
+- Adding the `is_visited_by_user` column that indicates whether the current user has visited the object.
+- Advanced statistical functions to get total visits, total views, visit distribution by user type, and the list of visitor users.
+
+Existing scopes have been restructured and new scopes added, while preserving backward compatibility via wrapper functions marked `@deprecated`. All scopes and helper functions have been moved to a standalone trait `VisitScopesAndHelpers` to facilitate maintenance and reuse.
+
+---
+
+### 1. Developed Components
+
+| Behavior | Component | Description |
+|----------|-----------|-------------|
+| `VisitModel` | `VisitScopesAndHelpers` (trait) | Contains all advanced scopes and helper functions for the visits and views system. |
+
+#### New and Improved Scopes
+
+| Category | Scope | Description |
+|----------|-------|-------------|
+| **Visit Count** | `scopeAddCountVisits` | Adds a visit count column to `SELECT` (without sorting). |
+| | `scopeSortByCountVisits` | Sorts results by visit count (without adding the column). |
+| | `scopeWithCountVisits` | Adds the column and sorts together. |
+| **Total Visits** | `scopeAddSumVisits` | Adds a column with the total visits (field `visits`). |
+| | `scopeSortBySumVisits` | Sorts by total visits. |
+| | `scopeWithSumVisits` | Adds the column and sorts together. |
+| **Total Views** | `scopeAddSumViews` | Adds a column with the total views (field `views`). |
+| | `scopeSortBySumViews` | Sorts by total views. |
+| | `scopeWithSumViews` | Adds the column and sorts together. |
+| **Latest Visit Date** | `scopeAddLatestVisit` | Adds a column with the latest visit date. |
+| | `scopeSortByLatestVisit` | Sorts by the latest visit date. |
+| | `scopeWithLatestVisit` | Adds the column and sorts together. |
+| **Earliest Visit Date** | `scopeAddEarliestVisit` | Adds a column with the earliest visit date. |
+| | `scopeSortByEarliestVisit` | Sorts by the earliest visit date. |
+| | `scopeWithEarliestVisit` | Adds the column and sorts together. |
+| **Filtering by User** | `scopeVisitedByUser` | Filters objects visited by a specific user. |
+| | `scopeNotVisitedByUser` | Filters objects not visited by a specific user. |
+| **Filtering by Visit Presence** | `scopeHasVisits` | Filters objects that have visits (with a minimum count). |
+| | `scopeHasNoVisits` | Filters objects that have no visits. |
+| **User Status Column** | `scopeWithIsVisitedByUser` | Adds the `is_visited_by_user` column. |
+| **Special Scopes** | `scopeTopVisited` | Retrieves the most visited objects (by record count). |
+| | `scopeTopSumVisits` | Retrieves the most visited objects (by sum of `visits`). |
+
+#### New Helper Functions
+
+| Function | Description |
+|----------|-------------|
+| `getTotalVisits` | Total number of visits (sum of `visits`) with filtering options. |
+| `getTotalViews` | Total number of views (sum of `views`) with filtering options. |
+| `getVisitsCountByType` | Distribution of visits by user type (`user_type`). |
+| `getVisitorsUsers` | List of users who visited the object. |
+
+All these functions accept the filtering options: `$onlyActive`, `$withTrashed`, `$type`, `$processType`, `$eventType`.
+
+---
+
+### 2. Details of Code Updates
+
+#### 2.1 Fixing Subquery Errors
+The legacy scopes in the original behavior relied on using `GROUP BY` and `LIMIT` inside subqueries to obtain aggregated values (such as `COUNT`, `SUM`, `MAX`). This approach leads to incorrect and unpredictable results, because `GROUP BY` creates multiple groups and then `LIMIT 1` picks only the first group.
+
+**New Approach**:
+- Use a direct aggregate function in the subquery without `GROUP BY` or `LIMIT`. An aggregate function in a correlated subquery automatically works on all rows matching the join condition.
+- Prefix each field with the full table name to avoid ambiguity.
+- Add additional conditions (such as `type`, `processType`, `eventType`) via `where` inside the subquery.
+
+Example of the correct query for sorting by visit count:
+
+```php
+$subQuery = Visit::selectRaw('COUNT(' . $table . '.id)')
+    ->whereColumn($table . '.visitable_id', $this->model->getTable() . '.id')
+    ->where($table . '.visitable_type', $this->model->getMorphClass())
+    ->where(...);
+```
+
+#### 2.2 Unifying Scope Signatures
+Function signatures have been unified to include:
+- `$orderDirection`: sort direction (default `DESC`).
+- `$columnName`: name of the added column (with a sensible default such as `visits_count`, `sum_visits`, `latest_visit_at`).
+- `$onlyActive`: filter by `is_active`.
+- `$withTrashed`: include soft‑deleted records.
+- `$type`, `$processType`, `$eventType`: additional filtering options by visit type, process type, and event type.
+- For date scopes, an additional `$field` parameter has been added to specify the timestamp field to use (`created_at`, `updated_at`, `last_visit_at`, `date_at`).
+
+#### 2.3 Supporting `withTrashed` (Soft‑Deleted Visits)
+The `$withTrashed` parameter has been added to all scopes and statistical functions. When `true` is passed, soft‑deleted visit records are included in the subquery. This requires that the `Visit` model uses the `SoftDeletes` trait.
+
+#### 2.4 Moving Scopes to a Separate Trait
+To facilitate maintenance and reuse, all scopes and helper functions have been moved to a new trait:  
+`Nano2\Visitors\Behaviors\VisitModel\VisitScopesAndHelpers`
+
+This trait is then used inside the `VisitModel` behavior via `use`.
+
+#### 2.5 Backward Compatibility
+Legacy scopes have been retained as wrapper functions in the main class, with a `@deprecated` annotation to guide developers toward the new alternatives. The functions `scopeWhereHasVisit` and `scopeWhereHasVisits` have also been modified to preserve the original behavior (when no user is present, they return no results) while adding an `$isForceUser` parameter to control this behavior.
+
+**List of Supported Legacy Functions:**
+- `scopeSortByCountVisitsOld` → `scopeSortByCountVisits`
+- `scopeWithSortByCountVisits` → `scopeWithCountVisits`
+- `scopeSortBySumVisitsOld` → `scopeSortBySumVisits`
+- `scopeWithSortBySumVisits` → `scopeWithSumVisits`
+- `scopeSortBySumViewsOld` → `scopeSortBySumViews`
+- `scopeWithSortBySumViews` → `scopeWithSumViews`
+- `scopeWhereHasVisit` → `scopeVisitedByUser` (with enhancements)
+- `scopeWhereHasVisits` → `scopeVisitedByUser`
+
+---
+
+### 3. Practical Examples
+
+#### 3.1 Sorting by Visit Count
+```php
+// Most visited products (by record count)
+$products = Product::sortByCountVisits('DESC', 'visits_count')->take(10)->get();
+
+// Add a visit count column
+$products = Product::addCountVisits()->get();
+foreach ($products as $product) {
+    echo $product->visits_count;
+}
+```
+
+#### 3.2 Sorting by Total Visits (field visits)
+```php
+$products = Product::sortBySumVisits('DESC', 'sum_visits')->get();
+```
+
+#### 3.3 Adding the `is_visited_by_user` Column for the Current User
+```php
+$products = Product::withIsVisitedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_visited_by_user ? 'Visited' : 'Not visited';
+}
+```
+
+#### 3.4 Filtering Products Visited by the Current User
+```php
+$visitedProducts = Product::visitedByUser()->get();
+```
+
+#### 3.5 Filtering by Visit Type and Process
+```php
+// Products visited by the current user with type "add" (entry) and event "contest"
+$products = Product::visitedByUser(null, null, false, 'add', 'in', 'contest')->get();
+```
+
+#### 3.6 Statistics
+```php
+$product = Product::find(1);
+echo "Total visits: " . $product->getTotalVisits(true); // active only
+echo "Visitor distribution by type: ";
+print_r($product->getVisitsCountByType(true)->toArray());
+$visitors = $product->getVisitorsUsers(true);
+```
+
+#### 3.7 Combining Advanced Scopes
+```php
+// Products with more than 5 active visits, sorted by latest visit
+$products = Product::hasVisits(5, true)
+    ->sortByLatestVisit('DESC', 'latest_visit_at')
+    ->get();
+```
+
+---
+
+### 4. Added Value
+
+- **For Developers**: A comprehensive set of ready‑made scopes saves time and reduces errors. Developers no longer need to write complex subqueries or worry about result correctness. The unified interface makes learning and usage easier across different behaviors.
+- **For End Users**: Ability to present intelligently sorted lists (most visited, most recently active) improves user experience and increases the effectiveness of applications.
+- **For the System**: Better performance through optimized SQL queries, eliminating inefficient queries that incorrectly used `GROUP BY` and `LIMIT`.
+- **Flexibility**: Filtering by type (`type`), process (`processType`), and event (`eventType`) allows building complex systems such as detailed visit and view analytics.
+- **Scalability**: Adding new scopes for any future behavior follows the same pattern, ensuring code consistency and ease of maintenance.
+
+---
+
+### 5. Conclusion
+
+This update represents a qualitative leap in managing visit and view queries within NanoSoft applications. By restructuring scopes and moving them to a standalone trait, while adding advanced sorting, filtering, and statistical functions, developers can now build sophisticated visit tracking systems with ease and high performance. Backward compatibility ensures a smooth transition for existing projects, while the new additions open wide possibilities for rich user experiences.
+
+---
+
+**Note**: For more details about each scope and its usage, please refer to the documentation file for the `VisitModel` behavior or review the examples provided above.
+
+See [docs/VisitModel/Docs-VisitModel-en.md](./docs/VisitModel/Docs-VisitModel-en.md)
+
+See [docs/VisitModel/Docs-VisitModel-Advenced-Examples-en.md](./docs/VisitModel/Docs-VisitModel-Advenced-Examples-en.md)

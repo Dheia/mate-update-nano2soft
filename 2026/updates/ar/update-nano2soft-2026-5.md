@@ -3286,3 +3286,203 @@ foreach ($users as $user) {
 See [docs/ProposalModel/Docs-ProposalModel-ar.md](./docs/ProposalModel/Docs-ProposalModel-ar.md)
 
 See [docs/ProposalModel/Docs-ProposalModel-Advenced-Examples-ar.md](./docs/ProposalModel/Docs-ProposalModel-ar.md)
+
+## 2026-05-19 - 2026-05-20
+
+### تحديث شامل لنطاقات الاستعلام في سلوك `VisitModel`
+
+**تطوير كامل لنطاقات (Scopes) الاستعلام والوظائف المساعدة ضمن حزمة `Nano2.Visitors`**
+
+تم تنفيذ حزمة تطويرية متكاملة تهدف إلى تحسين أداء ومرونة الاستعلامات المتعلقة بنظام الزيارات والمشاهدات (Visits & Views) في تطبيقات نانوسوفت. لم يعد المطور بحاجة إلى كتابة استعلامات معقدة أو الاعتماد على `GROUP BY` و `LIMIT` بشكل خاطئ داخل الاستعلامات الفرعية، بل أصبح لديه مجموعة من النطاقات الجاهزة التي تتيح:
+
+- الترتيب حسب **عدد الزيارات** (عدد السجلات).
+- الترتيب حسب **مجموع الزيارات** (حقل `visits`).
+- الترتيب حسب **مجموع المشاهدات** (حقل `views`).
+- الترتيب حسب **أحدث تاريخ زيارة** (الأحدث).
+- الترتيب حسب **أقدم تاريخ زيارة** (الأقدم).
+- إضافة أعمدة محسوبة إلى `SELECT` (مثل `visits_count`، `sum_visits`، `latest_visit_at`) دون التأثير على الترتيب.
+- تصفية الكائنات التي زارها (أو لم يزرها) مستخدم معين.
+- تصفية الكائنات التي لديها (أو ليس لديها) زيارات مع إمكانية تحديد حد أدنى للعدد.
+- إضافة عمود `is_visited_by_user` الذي يوضح ما إذا كان المستخدم الحالي قد زار الكائن.
+- دوال إحصائية متقدمة للحصول على إجمالي الزيارات، المشاهدات، توزيع الزيارات حسب نوع المستخدم، وقائمة المستخدمين الزائرين.
+
+تمت إعادة هيكلة النطاقات الموجودة سابقاً وإضافة نطاقات جديدة، مع الاحتفاظ بالتوافق العكسي عبر دوال تغليف موصوفة بـ `@deprecated`. تم نقل جميع النطاقات والدوال المساعدة إلى ترايت مستقل `VisitScopesAndHelpers` لتسهيل الصيانة وإعادة الاستخدام.
+
+---
+
+### 1. المكونات المطورة
+
+| السلوك | المكون | الوصف |
+|--------|--------|-------|
+| `VisitModel` | `VisitScopesAndHelpers` (trait) | يحتوي على جميع النطاقات المتقدمة والدوال المساعدة لنظام الزيارات والمشاهدات. |
+
+#### النطاقات الجديدة والمحسنة
+
+| الفئة | النطاق | الوصف |
+|-------|--------|-------|
+| **عدد الزيارات** | `scopeAddCountVisits` | إضافة عمود عدد الزيارات إلى `SELECT` (بدون ترتيب). |
+| | `scopeSortByCountVisits` | ترتيب النتائج حسب عدد الزيارات (دون إضافة العمود). |
+| | `scopeWithCountVisits` | إضافة العمود والترتيب معاً. |
+| **مجموع الزيارات** | `scopeAddSumVisits` | إضافة عمود مجموع الزيارات (حقل `visits`). |
+| | `scopeSortBySumVisits` | ترتيب حسب مجموع الزيارات. |
+| | `scopeWithSumVisits` | إضافة العمود والترتيب معاً. |
+| **مجموع المشاهدات** | `scopeAddSumViews` | إضافة عمود مجموع المشاهدات (حقل `views`). |
+| | `scopeSortBySumViews` | ترتيب حسب مجموع المشاهدات. |
+| | `scopeWithSumViews` | إضافة العمود والترتيب معاً. |
+| **أحدث تاريخ زيارة** | `scopeAddLatestVisit` | إضافة عمود بأحدث تاريخ زيارة. |
+| | `scopeSortByLatestVisit` | ترتيب حسب أحدث تاريخ زيارة. |
+| | `scopeWithLatestVisit` | إضافة العمود والترتيب معاً. |
+| **أقدم تاريخ زيارة** | `scopeAddEarliestVisit` | إضافة عمود بأقدم تاريخ زيارة. |
+| | `scopeSortByEarliestVisit` | ترتيب حسب أقدم تاريخ زيارة. |
+| | `scopeWithEarliestVisit` | إضافة العمود والترتيب معاً. |
+| **التصفية حسب المستخدم** | `scopeVisitedByUser` | تصفية الكائنات التي زارها مستخدم معين. |
+| | `scopeNotVisitedByUser` | تصفية الكائنات التي لم يزرها مستخدم معين. |
+| **التصفية حسب وجود زيارات** | `scopeHasVisits` | تصفية الكائنات التي لديها زيارات (مع حد أدنى). |
+| | `scopeHasNoVisits` | تصفية الكائنات التي ليس لديها زيارات. |
+| **عمود الحالة للمستخدم** | `scopeWithIsVisitedByUser` | إضافة عمود `is_visited_by_user`. |
+| **نطاقات خاصة** | `scopeTopVisited` | جلب الكائنات الأكثر زيارة (عدد السجلات). |
+| | `scopeTopSumVisits` | جلب الكائنات الأكثر زيارة (مجموع `visits`). |
+
+#### الدوال المساعدة الجديدة
+
+| الدالة | الوصف |
+|--------|-------|
+| `getTotalVisits` | إجمالي عدد الزيارات (مجموع `visits`) مع خيارات التصفية. |
+| `getTotalViews` | إجمالي عدد المشاهدات (مجموع `views`) مع خيارات التصفية. |
+| `getVisitsCountByType` | توزيع الزيارات حسب نوع المستخدم (`user_type`). |
+| `getVisitorsUsers` | قائمة المستخدمين الذين زاروا الكائن. |
+
+جميع هذه الدوال تقبل خيارات التصفية: `$onlyActive`, `$withTrashed`, `$type`, `$processType`, `$eventType`.
+
+---
+
+### 2. تفاصيل التحديثات البرمجية
+
+#### 2.1 إصلاح أخطاء الاستعلامات الفرعية
+كانت النطاقات القديمة في السلوك الأصلي تعتمد على استخدام `GROUP BY` و `LIMIT` داخل الاستعلامات الفرعية للحصول على قيم مجمعة (مثل `COUNT`, `SUM`, `MAX`). هذا الأسلوب يؤدي إلى نتائج غير صحيحة وعشوائية، لأن `GROUP BY` ينشئ عدة مجموعات ثم `LIMIT 1` يختار أول مجموعة فقط.
+
+**النهج الجديد**:
+- استخدام دالة تجميعية مباشرة في الاستعلام الفرعي دون `GROUP BY` أو `LIMIT`. الدالة التجميعية في استعلام فرعي مرتبط تعمل تلقائياً على جميع الصفوف المطابقة لشرط الربط.
+- كتابة اسم الجدول بالكامل أمام كل حقل لتجنب الغموض.
+- إضافة شروط إضافية (مثل `type`, `processType`, `eventType`) عبر `where` داخل الاستعلام الفرعي.
+
+مثال على الاستعلام الصحيح لترتيب حسب عدد الزيارات:
+
+```php
+$subQuery = Visit::selectRaw('COUNT(' . $table . '.id)')
+    ->whereColumn($table . '.visitable_id', $this->model->getTable() . '.id')
+    ->where($table . '.visitable_type', $this->model->getMorphClass())
+    ->where(...);
+```
+
+#### 2.2 توحيد واجهة النطاقات
+تم توحيد توقيع الدوال لتكون:
+- `$orderDirection`: اتجاه الترتيب (افتراضي `DESC`).
+- `$columnName`: اسم العمود المضاف (افتراضي مناسب مثل `visits_count`, `sum_visits`, `latest_visit_at`).
+- `$onlyActive`: تصفية حسب `is_active`.
+- `$withTrashed`: تضمين السجلات المحذوفة (Soft Deletes).
+- `$type`, `$processType`, `$eventType`: خيارات إضافية للتصفية حسب نوع الزيارة ونوع العملية ونوع الحدث.
+- في نطاقات التاريخ، تم إضافة باراميتر `$field` لتحديد حقل التاريخ المستخدم (`created_at`, `updated_at`, `last_visit_at`, `date_at`).
+
+#### 2.3 دعم `withTrashed` (الزيارات المحذوفة)
+تم إضافة باراميتر `$withTrashed` في جميع النطاقات والدوال الإحصائية. عند تمرير `true`، يتم تضمين سجلات الزيارة المحذوفة (Soft Deletes) في الاستعلام الفرعي. يتطلب ذلك أن يكون موديل `Visit` مفعّلاً للـ `SoftDeletes`.
+
+#### 2.4 نقل النطاقات إلى ترايت منفصل
+لتسهيل الصيانة وإعادة الاستخدام، تم نقل جميع النطاقات والدوال المساعدة إلى ترايت جديد:  
+`Nano2\Visitors\Behaviors\VisitModel\VisitScopesAndHelpers`
+
+ثم تم استخدام هذا التراث داخل السلوك `VisitModel` عبر `use`.
+
+#### 2.5 التوافق العكسي
+تم الاحتفاظ بالنطاقات القديمة كدوال تغليف في الكلاس الرئيسي، مع إضافة تعليق `@deprecated` لتوجيه المطورين إلى استخدام البدائل الجديدة. كما تم تعديل دوال `scopeWhereHasVisit` و `scopeWhereHasVisits` لتحافظ على السلوك الأصلي (عند عدم وجود مستخدم، لا تعيد أي نتائج) مع إضافة معامل `$isForceUser` للتحكم في هذا السلوك.
+
+**قائمة الدوال القديمة المدعومة:**
+- `scopeSortByCountVisitsOld` → `scopeSortByCountVisits`
+- `scopeWithSortByCountVisits` → `scopeWithCountVisits`
+- `scopeSortBySumVisitsOld` → `scopeSortBySumVisits`
+- `scopeWithSortBySumVisits` → `scopeWithSumVisits`
+- `scopeSortBySumViewsOld` → `scopeSortBySumViews`
+- `scopeWithSortBySumViews` → `scopeWithSumViews`
+- `scopeWhereHasVisit` → `scopeVisitedByUser` (مع تحسينات)
+- `scopeWhereHasVisits` → `scopeVisitedByUser`
+
+---
+
+### 3. أمثلة تطبيقية
+
+#### 3.1 الترتيب حسب عدد الزيارات
+```php
+// المنتجات الأكثر زيارة (عدد السجلات)
+$products = Product::sortByCountVisits('DESC', 'visits_count')->take(10)->get();
+
+// إضافة عمود عدد الزيارات
+$products = Product::addCountVisits()->get();
+foreach ($products as $product) {
+    echo $product->visits_count;
+}
+```
+
+#### 3.2 الترتيب حسب مجموع الزيارات (حقل visits)
+```php
+$products = Product::sortBySumVisits('DESC', 'sum_visits')->get();
+```
+
+#### 3.3 إضافة عمود `is_visited_by_user` للمستخدم الحالي
+```php
+$products = Product::withIsVisitedByUser()->paginate(20);
+foreach ($products as $product) {
+    echo $product->is_visited_by_user ? 'زُرتَه' : 'لم تزره';
+}
+```
+
+#### 3.4 تصفية المنتجات التي زارها المستخدم الحالي
+```php
+$visitedProducts = Product::visitedByUser()->get();
+```
+
+#### 3.5 التصفية حسب نوع الزيارة والعملية
+```php
+// المنتجات التي زارها المستخدم الحالي من نوع "add" (دخول) في حدث "contest"
+$products = Product::visitedByUser(null, null, false, 'add', 'in', 'contest')->get();
+```
+
+#### 3.6 الإحصائيات
+```php
+$product = Product::find(1);
+echo "إجمالي الزيارات: " . $product->getTotalVisits(true); // نشطة فقط
+echo "توزيع الزوار حسب النوع: ";
+print_r($product->getVisitsCountByType(true)->toArray());
+$visitors = $product->getVisitorsUsers(true);
+```
+
+#### 3.7 الجمع بين النطاقات المتقدمة
+```php
+// المنتجات التي لها أكثر من 5 زيارات نشطة، مرتبة حسب أحدث زيارة
+$products = Product::hasVisits(5, true)
+    ->sortByLatestVisit('DESC', 'latest_visit_at')
+    ->get();
+```
+
+---
+
+### 4. القيمة المضافة
+
+- **للمطورين**: مجموعة متكاملة من النطاقات الجاهزة توفر الوقت وتقلل الأخطاء. لم يعد المطور بحاجة لكتابة استعلامات فرعية معقدة أو القلق بشأن صحة النتائج. الواجهة الموحدة تسهل التعلم والاستخدام عبر مختلف السلوكيات.
+- **للمستخدمين النهائيين**: إمكانية تقديم قوائم مرتبة بذكاء (الأكثر زيارة، الأحدث نشاطاً) مما يحسن تجربة المستخدم ويزيد من فعالية التطبيقات.
+- **للنظام**: أداء أفضل من خلال استعلامات SQL مُحسّنة، والقضاء على الاستعلامات غير الفعالة التي كانت تستخدم `GROUP BY` و `LIMIT` بشكل خاطئ.
+- **المرونة**: إمكانية التصفية حسب النوع (`type`) والعملية (`processType`) والحدث (`eventType`) تسمح ببناء أنظمة معقدة مثل تتبع الإحصائيات التفصيلية للزيارات والمشاهدات.
+- **قابلية التوسع**: إضافة نطاقات جديدة لأي سلوك مستقبلي يتم بنفس النمط، مما يضمن اتساق الكود وسهولة صيانته.
+
+---
+
+### 5. الخاتمة
+
+يمثل هذا التحديث نقلة نوعية في إدارة استعلامات الزيارات والمشاهدات داخل تطبيقات نانوسوفت. من خلال إعادة هيكلة النطاقات ونقلها إلى ترايت مستقل، مع إضافة وظائف متقدمة للترتيب والتصفية والإحصائيات، أصبح بإمكان المطورين بناء أنظمة تتبع زيارة متطورة بسهولة وأداء عالٍ. التوافق العكسي يضمن سلاسة الانتقال للمشاريع القائمة، بينما تفتح الإضافات الجديدة آفاقاً واسعة لتجارب مستخدم غنية.
+
+---
+
+**ملاحظة**: لمزيد من التفاصيل حول كل نطاق وطريقة استخدامه، يمكن الرجوع إلى ملف التوثيق الخاص بالسلوك `VisitModel` أو مراجعة الأمثلة المقدمة أعلاه.
+
+See [docs/VisitModel/Docs-VisitModel-ar.md](./docs/VisitModel/Docs-VisitModel-ar.md)
+
+See [docs/VisitModel/Docs-VisitModel-Advenced-Examples-ar.md](./docs/VisitModel/Docs-VisitModel-Advenced-Examples-ar.md)
