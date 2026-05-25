@@ -344,6 +344,9 @@ The `AccessManager` class is a cornerstone for any secure API system in the Nano
 
 **References:**
 
+- [`AccessManager-Permission` documentation](./Docs-AccessManager-Permission-en.md)
+- [General examples `AccessManager-Example`](./Docs-AccessManager-Example-en.md)
+- [Comprehensive practical example `AccessManager-Example-Api`](./Docs-AccessManager-Example-Api-en.md)
 - [Full documentation of the `Nano.AuthApi` plugin](./Docs-AuthApi-index.md)
 - [`AdvancedQueryHelper` class (Nano2.QueryBuilder)](../querybuilder/Docs-AdvancedQueryHelper.md)
 - [API Plugin Development Guide (Nano-Api-SKILL)](../mcp/Nano-Api-SKILL.md)
