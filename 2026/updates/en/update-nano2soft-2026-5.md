@@ -4425,3 +4425,350 @@ Version **1.0.20** of `Nano.AuthApi` represents an important step towards unifyi
 - [`AuthHelpers` class documentation](./docs/AuthApi/Docs-AuthHelpers-en.md)
 - [API Plugin Development Guide (Nano-Api-SKILL)](./docs/mcp/Nano-Api-SKILL.md)
 
+## 2026-05-24 – 2026-05-26
+
+**Update to the `Tss.Student` Plugin – Version 1.0.13**
+
+### Restructuring `getRecords` Functions, Adding Specialised Helpers, and Supporting `AccessManager` and `AdvancedQueryHelper`
+
+---
+
+### Summary of Updates
+
+Version **1.0.13** of the `Tss.Student` plugin represents a qualitative leap in the way student, parent, and academic record (`StudentRecord`) data is retrieved via the API and the Backend system. The `getRecords` functions have been restructured and unified in a new `StudentRecordsHelper` class, with similar functions added for parents (`getParentRecords`) and student records (`getStudentRecordRecords`). Advanced techniques such as `AccessManager` for flexible permission control and `AdvancedQueryHelper` for dynamic filtering have also been integrated.
+
+This release aims to provide a unified, secure, and extensible interface for student and parent queries, with improved performance through built‑in caching, support for advanced filters (`is_or`, `is_not`, `is_force`, `is_or_null`), and intelligent text search.
+
+---
+
+### Release Objectives
+
+- **Unify record retrieval logic** in a single helper class (`StudentRecordsHelper`) that can be used from both API and Backend controllers.
+- **Create specialised functions** for:
+  - Students (`getRecords`)
+  - Parents (`getParentRecords`)
+  - Student academic records (`getStudentRecordRecords`)
+- **Integrate `AccessManager`** for managing permissions and access scopes (`all`, `own`, `created_by`, `company`, `department`, `state`, `children`).
+- **Leverage `AdvancedQueryHelper`** to execute dynamic filters with support for advanced logic (`is_or`, `is_not`, `is_force`, `is_or_null`).
+- **Provide a unified response structure** for all `getRecords` functions, including `code`, `status`, `message`, `data`, `error`, `errors`, `input_data`, `process_data`, `debug`.
+- **Support caching** with unique keys, tags, and forced refresh.
+- **Support events** (`event_before_name`, `event_after_name`, `event_list_name`) with the ability to disable them.
+- **Add linking functions** between user and student/parent (e.g., `getStudentByUser`, `getUserByStudent`, `getMparentByUser`, `getUserByMparent`).
+- **Add `Mparent`‑specific helper functions** such as `getStudentIdsByMparent`, `getStudentsByMparent`, `getStudentsByUser`.
+- **Add `StudentRecord`‑specific helper functions** such as `getCurrentStudentRecord`, `getStudentIdFromRecord`.
+
+---
+
+### New Features and Improvements
+
+#### 1. `StudentRecordsHelper` Class – Unified Record Retrieval Helper
+
+A new class has been created at `Tss\Student\Helpers\StudentRecordsHelper` containing a general `getRecords` function that can be used for any model, along with specialised functions for students, parents, and student records.
+
+**Key features of the general `getRecords` function:**
+
+- **Safely merges default options** (checking for key existence using `array_key_exists`).
+- **Uses `AdvancedQueryManager::scopeWhereField`** to apply filters with support for `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **Supports advanced text search (`q`)** with `is_advanced_search` and `is_search_weights` options.
+- **Supports `with_count`** to load counts of related relationships.
+- **Supports `group_by`** (as array or string) and `having`.
+- **Supports caching** via `cache_enabled`, `cache_key`, `cache_ttl`, `cache_tags`, `cache_force_refresh`.
+- **Supports events** (`fire_before_event`, `fire_after_event`) with customisable event names.
+- **Supports `is_to_sql`** to log the SQL query in `trace_log` for debugging.
+- **Supports `withTrashed` and `onlyTrashed`** for working with soft‑deleted records.
+- **Supports different output options**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`.
+
+#### 2. `getRecords` Function in `StudentHelper` (for fetching students)
+
+The existing `StudentHelper::getRecords` function has been updated to become a simple wrapper that calls `StudentRecordsHelper::getRecords` with the `Student` model. This ensures backward compatibility with existing code while taking advantage of the new features.
+
+**Usage example:**
+
+```php
+$result = StudentHelper::getRecords([
+    'gender' => 'male',
+    'is_active' => true,
+    'q' => 'Mohamed',
+    'orderBy' => 'full_name',
+    'per_page' => 20,
+    'cache_enabled' => true,
+]);
+```
+
+#### 3. `getParentRecords` Function – Fetching Parents
+
+A new function `StudentHelper::getParentRecords` has been added, which calls `StudentRecordsHelper` with the `Mparent` model. It supports all the filtering options available in `getRecords` plus additional filters specific to `Mparent`:
+
+- `students_id`: filter parents who have children with specific IDs.
+- `has_students` / `is_has_students`: filter by having children (or not).
+- `has_students_active` / `is_has_students_active`: filter by having active children.
+- `is_has_students_count`: filter by the number of children (supports comparisons like `['>', 2]` or `">=3"`).
+
+**Usage example:**
+
+```php
+$result = StudentHelper::getParentRecords([
+    'has_students' => true,
+    'is_has_students_count' => ['>=', 2],
+    'orderBy' => 'full_name',
+]);
+```
+
+#### 4. `getStudentRecordRecords` Function – Fetching Student Academic Records
+
+A new function `StudentHelper::getStudentRecordRecords` has been added, dedicated to the `Tss\School\Models\StudentRecord` model. It supports the following filters (in addition to the general filters):
+
+- `student_id`, `year_id`, `class_id`, `group_id`.
+- `status_class`, `status_mony`, `semster`, `currencys_id`, `periods_id`, `cost_centers_id`.
+- `is_bus`, `is_discount`, `is_registration_fees`.
+- Numeric filters with comparisons for `study_fees`, `registration_fees`, `discount`, `bus_fees` (e.g., `['>', 1000]`).
+- Date filters (`field_date`, `date_at`, `to_date_at`, `created_at_from`, `created_at_to`, `updated_at_from`, `updated_at_to`).
+
+**Usage example:**
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'status_class' => 'continue',
+    'study_fees' => ['>', 5000],
+    'with_count' => ['student', 'class'],
+]);
+```
+
+#### 5. `AccessManager` Support for Permissions
+
+`AccessManager` has been integrated into the `getRecords` functions so that a permission check result (`access_result`) can be passed in and the scopes automatically applied to the query.
+
+**Example in an API controller:**
+
+```php
+$config = [
+    'is_allow' => true,
+    'backend' => [
+        'allow' => true,
+        'check_permission' => true,
+        'permissions' => ['tss.student.students.access'],
+        'access_scope' => 'all',
+    ],
+    'frontend' => [
+        'allow' => true,
+        'allowed_ref_types' => ['student', 'parent'],
+        'access_scope' => 'own',
+    ],
+];
+$access = AccessManager::instance()->check('list', $config, $user);
+$options['access_result'] = $access;
+$result = StudentHelper::getRecords($options);
+```
+
+Inside `StudentRecordsHelper::getRecords`, `AccessManager::instance()->applyAccessScope()` is called to automatically apply the permission conditions.
+
+#### 6. User‑Student and User‑Parent Linking Functions
+
+The following functions have been added (or improved) in `StudentHelper`:
+
+- `getStudentByUser($user)`: retrieves the student object associated with a given user.
+- `getUserByStudent($student)`: retrieves the user object associated with a student.
+- `getMparentByUser($user)`: retrieves the parent object associated with a given user.
+- `getUserByMparent($mparent)`: retrieves the user object associated with a parent.
+- `getStudentIdsByMparent($mparent, $useCache)`: returns an array of student IDs belonging to a parent.
+- `getStudentsByMparent($mparent, array $options)`: retrieves student objects belonging to a parent, supporting `getRecords` options.
+- `getStudentsByUser($user, array $options)`: retrieves students associated with a user (supports the student themselves or a parent’s children).
+- `getStudentIdFromRecord($record)`: extracts the student ID from a `StudentRecord` object or record ID.
+- `getCurrentStudentRecord($student, array $options)`: retrieves the current student record (usually with `status_class = 'continue'`) with support for year and class options.
+
+**Example using `getStudentsByUser`:**
+
+```php
+$students = StudentHelper::getStudentsByUser(null, ['is_active' => true]);
+// If the current user is a parent -> returns their children
+// If the current user is a student -> returns only their own data
+```
+
+#### 7. Improved Advanced Filter Handling (AdvancedQueryHelper)
+
+`AdvancedQueryManager::scopeWhereField` has been applied to all filters, allowing comma‑separated multiple values, and the use of `is_or`, `is_not`, `is_force`, `is_or_null` logic. This is now available for all filterable fields in students, parents, and student records.
+
+**Example:**
+
+```php
+$options = [
+    'gender' => 'male,female',           // values separated by commas
+    'is_or_gender' => true,              // OR between values
+    'is_not_gender' => false,
+    'is_force_gender' => true,
+    'is_or_null_gender' => false,        // include records where gender = null
+];
+```
+
+#### 8. Unified Response Structure
+
+All `getRecords` functions (for students, parents, student records) now return a unified array with the following structure:
+
+```php
+[
+    'code'    => 200,
+    'status'  => true,
+    'message' => '...',
+    'data'    => $data,          // Builder, Collection, Paginator, or transformed array
+    'error'   => null,
+    'errors'  => null,
+    'input_data'   => $input,    // original options
+    'process_data' => $processed, // options after merging
+    'debug'   => [...]            // only when APP_DEBUG=true
+]
+```
+
+This simplifies handling results in API layers and provides tracing information for development.
+
+#### 9. Caching Support
+
+Full caching options have been added:
+
+- `cache_enabled`: enable caching (default `false`, can be enabled via settings).
+- `cache_key`: custom key (auto‑generated if not provided).
+- `cache_ttl`: time‑to‑live in minutes (default `60`).
+- `cache_tags`: cache tags (e.g., for Redis).
+- `cache_force_refresh`: ignore cache and fetch fresh data.
+
+#### 10. Event Support
+
+Three customisable events are fired:
+
+- `event_before_name` (default `api.list.extendQueryBefore`) – before applying filters.
+- `event_after_name` (default `api.list.extendQuery`) – after applying filters and before execution.
+- `event_list_name` (default `StudentsApi.ApiControllers.Students.List`) – after obtaining a `Paginator` and before transformation (Transformer).
+
+Events can be disabled via `fire_before_event` and `fire_after_event`.
+
+---
+
+### Practical Usage Examples
+
+#### 1. Fetching Active Students with a Governorate Filter and Ordering by Name
+
+```php
+$result = StudentHelper::getRecords([
+    'is_active' => true,
+    'state_id' => '5',
+    'orderBy' => 'full_name',
+    'orderDirection' => 'asc',
+]);
+```
+
+#### 2. Fetching Parents Who Have More Than Two Children
+
+```php
+$result = StudentHelper::getParentRecords([
+    'is_has_students_count' => ['>', 2],
+    'with_count' => ['Student'],
+]);
+```
+
+#### 3. Fetching Student Records for a Specific Academic Year with Study Fees Greater Than 5000
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'study_fees' => ['>', 5000],
+    'orderBy' => 'study_fees',
+    'orderDirection' => 'desc',
+]);
+```
+
+#### 4. Using `getCurrentStudentRecord` for a Specific Student
+
+```php
+$student = Student::find(100);
+$currentRecord = StudentHelper::getCurrentStudentRecord($student, [
+    'year_id' => 3,   // if not passed, the default year is used
+    'status_class' => 'continue',
+]);
+if ($currentRecord) {
+    echo "Class: " . $currentRecord->class_id;
+}
+```
+
+#### 5. Using `getStudentsByUser` in an API Controller
+
+```php
+public function myChildren()
+{
+    $user = AuthHelpers::getCurrentUser();
+    $students = StudentHelper::getStudentsByUser($user, ['is_active' => true]);
+    return $this->respondWithCollection($students, new StudentTransformer);
+}
+```
+
+---
+
+### Backward Compatibility
+
+- **All old functions in `StudentHelper` remain unchanged** (e.g., `getStudentRecord`, `getResultRecord`, `setUpStudentRecord`, date functions). No old function has been removed or modified.
+- **The old `StudentHelper::getRecords` function** now transparently uses `StudentRecordsHelper::getRecords`, while preserving the previous output structure (array with `code`, `status`, `message`, `data`, `error`, `errors`, `input_data`, `process_data`, `debug`).
+- **Any code that directly called `StudentHelper::getRecords` will continue to work** without modification.
+- **Only new functions have been added** (`getParentRecords`, `getStudentRecordRecords`, additional linking functions). No breaking changes or radical modifications have been made.
+
+---
+
+### Upgrade Requirements (from 1.0.12 to 1.0.13)
+
+1. **Update the code**:
+   - Replace the `helpers/StudentHelper.php` file with the new version (which calls `StudentRecordsHelper` and contains the new functions).
+   - Add the new file `helpers/StudentRecordsHelper.php`.
+   - (Optional) Add `helpers/ParentRecordsHelper.php` and `StudentRecordRecordsHelper.php` if you wish to separate the functions, but they have been merged into `StudentHelper` to reduce dependencies.
+
+2. **Update the `version.yaml` file**:
+   Add the new version as follows:
+   ```yaml
+   1.0.13:
+       - 'Improve StudentHelper and add new helpers with advanced features'
+       - 'Add StudentRecordsHelper, ParentRecordsHelper, StudentRecordRecordsHelper'
+       - 'Support AccessManager for permissions and AdvancedQueryHelper for dynamic filtering'
+       - 'Add unified getRecords, getParentRecords, getStudentRecordRecords methods'
+       - 'Enhance caching, event hooks, and sorting scopes'
+   ```
+
+3. **Run migrations**: No new database migrations.
+
+4. **Update configuration (optional)**:
+   New keys can be added in `config.php` for `nano.studentsapi::students.cache_enabled`, etc., but this is outside the scope of the `Tss.Student` plugin. It is recommended to update the `Nano.StudentsApi` settings to benefit from caching.
+
+5. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+6. **Test the functionality**:
+   - Ensure that `getRecords`, `getParentRecords`, and `getStudentRecordRecords` return expected results.
+   - Test advanced filters (`is_or`, `is_not`, etc.) with multiple values.
+   - Ensure that caching works when enabled.
+   - Verify that events are fired at the appropriate times.
+
+---
+
+### Benefits and Added Value
+
+- **Unified query handling** across students, parents, and student records, reducing code duplication and standardising behaviour.
+- **High filtering flexibility** thanks to `AdvancedQueryHelper`, allowing clients to easily build complex queries.
+- **Better performance** through built‑in caching and the ability to omit unnecessary columns.
+- **Improved security** by integrating `AccessManager` and automatically applying access scopes, preventing unauthorised data leaks.
+- **Full backward compatibility**, allowing the plugin to be upgraded without changing existing applications.
+- **Extensibility** through events that allow other plugins to modify the query dynamically.
+
+---
+
+### Conclusion
+
+Version **1.0.13** of the `Tss.Student` plugin represents a significant leap in the querying capabilities for student and parent data. By restructuring the `getRecords` functions, adding specialised helpers, and integrating `AccessManager` and `AdvancedQueryHelper`, the system can now provide a unified, secure, and high‑performance interface. All new functions maintain backward compatibility, ensuring a smooth upgrade process for existing projects. These improvements open the door to more interactive applications and advanced reports based on a clean and powerful API.
+
+---
+
+**Reference documentation**:
+- [General documentation for the Tss.Student plugin](./docs/Student/Docs-Student-en.md)
+- [StudentHelper class documentation](./docs/Student/Docs-StudentHelper-Class-en.md)
+- [StudentRecordsHelper class documentation](./docs/Student/Docs-StudentRecordsHelper-Class-en.md)
+- [AccessManager methods documentation](./docs/AuthApi/Docs-AccessManager-en.md)
+- [AdvancedQueryHelper documentation](./docs/querybuilder/Docs-AdvancedQueryHelper-en.md)
+

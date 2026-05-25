@@ -2372,7 +2372,7 @@ curl -X GET "https://yourdomain.com/api/v1/absence/class-type-companies" \
 - [توثيق إضافة `Nano.StudentsApi`](./docs/StudentsApi/Docs-StudentsApi-ar.md)
 - [توثيق إضافة `Nano.AbsenceApi`](./docs/AbsenceApi/Docs-AbsenceApi-ar.md)
 
-2026-05-13 - 2026-05-14
+## 2026-05-13 - 2026-05-14
 
 **تحديثات إضافة `Nano.UserPlus` – الإصدار 1.1.7**
 
@@ -4424,4 +4424,351 @@ if ($perms['allowed']) {
 - [توثيق كلاس `AccessManager`](./docs/AuthApi/Docs-AccessManager-ar.md)
 - [توثيق كلاس `AuthHelpers`](./docs/AuthApi/Docs-AuthHelpers-ar.md)
 - [دليل تطوير إضافات API (Nano-Api-SKILL)](./docs/mcp/Nano-Api-SKILL.md)
+
+## 2026-05-24 – 2026-05-26
+
+**تحديث إضافة `Tss.Student` – الإصدار 1.0.13**
+
+### إعادة هيكلة دوال `getRecords`، إضافة مساعدات متخصصة، ودعم `AccessManager` و `AdvancedQueryHelper`
+
+---
+
+### ملخص التحديثات
+
+يقدم الإصدار **1.0.13** من إضافة `Tss.Student` نقلة نوعية في طريقة جلب بيانات الطلاب وأولياء الأمور وسجلاتهم الدراسية (`StudentRecord`) عبر API ونظام Backend. تم إعادة هيكلة وتوحيد دوال `getRecords` في كلاس `StudentRecordsHelper` جديد، مع إضافة دوال مماثلة لأولياء الأمور (`getParentRecords`) وسجلات الطلاب (`getStudentRecordRecords`). كما تم دمج تقنيات متقدمة مثل `AccessManager` للتحكم المرن في الصلاحيات و `AdvancedQueryHelper` للتصفية الديناميكية.
+
+يهدف هذا الإصدار إلى توفير واجهة موحدة وآمنة وقابلة للتوسع لاستعلامات الطلاب وأولياء الأمور، مع تحسين الأداء من خلال التخزين المؤقت المدمج، ودعم الفلاتر المتقدمة (`is_or`, `is_not`, `is_force`, `is_or_null`) والبحث النصي الذكي.
+
+---
+
+### أهداف الإصدار
+
+- **توحيد منطق جلب السجلات** في كلاس مساعد واحد (`StudentRecordsHelper`) يمكن استخدامه من متحكمات API و Backend.
+- **إنشاء دوال متخصصة** لـ:
+  - الطلاب (`getRecords`)
+  - أولياء الأمور (`getParentRecords`)
+  - سجلات الطالب الدراسية (`getStudentRecordRecords`)
+- **دمج `AccessManager`** لإدارة الصلاحيات ونطاقات الوصول (`all`, `own`, `created_by`, `company`, `department`, `state`, `children`).
+- **الاستفادة من `AdvancedQueryHelper`** لتنفيذ الفلاتر الديناميكية مع دعم المنطق المتقدم (`is_or`, `is_not`, `is_force`, `is_or_null`).
+- **توفير هيكل استجابة موحد** لجميع دوال `getRecords` يشمل `code`, `status`, `message`, `data`, `error`, `errors`, `input_data`, `process_data`, `debug`.
+- **دعم التخزين المؤقت (caching)** مع مفاتيح فريدة وعلامات (tags) وإمكانية فرض التحديث.
+- **دعم الأحداث** (`event_before_name`, `event_after_name`, `event_list_name`) مع إمكانية تعطيلها.
+- **إضافة دوال ربط بين المستخدم والطالب/ولي الأمر** (مثل `getStudentByUser`, `getUserByStudent`, `getMparentByUser`, `getUserByMparent`).
+- **إضافة دوال مساعدة خاصة بـ `Mparent`** مثل `getStudentIdsByMparent`, `getStudentsByMparent`, `getStudentsByUser`.
+- **إضافة دوال مساعدة لـ `StudentRecord`** مثل `getCurrentStudentRecord`, `getStudentIdFromRecord`.
+
+---
+
+### الميزات الجديدة والتحسينات
+
+#### 1. كلاس `StudentRecordsHelper` – مساعد موحد لجلب السجلات
+
+تم إنشاء كلاس جديد في المسار `Tss\Student\Helpers\StudentRecordsHelper` يحتوي على دالة عامة `getRecords` يمكن استخدامها لأي نموذج، بالإضافة إلى دوال متخصصة للطلاب وأولياء الأمور وسجلات الطالب.
+
+**الخصائص الرئيسية لدالة `getRecords` العامة:**
+
+- **دمج الخيارات الافتراضية** بشكل آمن (مع التحقق من وجود المفاتيح باستخدام `array_key_exists`).
+- **استخدام `AdvancedQueryManager::scopeWhereField`** لتطبيق الفلاتر مع دعم `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **دعم البحث النصي المتقدم (`q`)** مع خيارات `is_advanced_search` و `is_search_weights`.
+- **دعم `with_count`** لجلب عدد العلاقات المرتبطة.
+- **دعم `group_by`** (كمصفوفة أو نص) و `having`.
+- **دعم التخزين المؤقت** عبر `cache_enabled`, `cache_key`, `cache_ttl`, `cache_tags`, `cache_force_refresh`.
+- **دعم الأحداث** (`fire_before_event`, `fire_after_event`) مع أسماء أحداث قابلة للتخصيص.
+- **دعم `is_to_sql`** لتسجيل استعلام SQL في `trace_log` لأغراض التصحيح.
+- **دعم `withTrashed` و `onlyTrashed`** للعمل مع السجلات المحذوفة ناعماً.
+- **دعم خيارات الإخراج المختلفة**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`.
+
+#### 2. دالة `getRecords` في `StudentHelper` (لجلب الطلاب)
+
+تم تحديث الدالة الحالية `StudentHelper::getRecords` لتصبح واجهة مباشرة تستدعي `StudentRecordsHelper::getRecords` مع تمرير نموذج `Student`. هذا يضمن التوافق العكسي مع الكود القديم مع الاستفادة من الميزات الجديدة.
+
+**مثال الاستخدام:**
+
+```php
+$result = StudentHelper::getRecords([
+    'gender' => 'male',
+    'is_active' => true,
+    'q' => 'محمد',
+    'orderBy' => 'full_name',
+    'per_page' => 20,
+    'cache_enabled' => true,
+]);
+```
+
+#### 3. دالة `getParentRecords` – جلب أولياء الأمور
+
+تم إضافة دالة جديدة `StudentHelper::getParentRecords` تستدعي `StudentRecordsHelper` مع نموذج `Mparent`. تدعم جميع خيارات التصفية المتوفرة في `getRecords` بالإضافة إلى فلاتر خاصة بـ `Mparent`:
+
+- `students_id`: فلترة أولياء الأمور الذين لديهم أبناء بأرقام محددة.
+- `has_students` / `is_has_students`: فلترة حسب وجود أبناء (أو عدم وجودهم).
+- `has_students_active` / `is_has_students_active`: فلترة حسب وجود أبناء نشطين.
+- `is_has_students_count`: فلترة حسب عدد الأبناء (يدعم مقارنات مثل `['>', 2]` أو `">=3"`).
+
+**مثال الاستخدام:**
+
+```php
+$result = StudentHelper::getParentRecords([
+    'has_students' => true,
+    'is_has_students_count' => ['>=', 2],
+    'orderBy' => 'full_name',
+]);
+```
+
+#### 4. دالة `getStudentRecordRecords` – جلب سجلات الطالب الدراسية
+
+تم إضافة دالة `StudentHelper::getStudentRecordRecords` مخصصة لنموذج `Tss\School\Models\StudentRecord`. تدعم الفلاتر التالية (بالإضافة إلى الفلاتر العامة):
+
+- `student_id`, `year_id`, `class_id`, `group_id`.
+- `status_class`, `status_mony`, `semster`, `currencys_id`, `periods_id`, `cost_centers_id`.
+- `is_bus`, `is_discount`, `is_registration_fees`.
+- فلاتر رقمية مع مقارنات لـ `study_fees`, `registration_fees`, `discount`, `bus_fees` (مثل `['>', 1000]`).
+- فلاتر التاريخ (`field_date`, `date_at`, `to_date_at`, `created_at_from`, `created_at_to`, `updated_at_from`, `updated_at_to`).
+
+**مثال الاستخدام:**
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'status_class' => 'continue',
+    'study_fees' => ['>', 5000],
+    'with_count' => ['student', 'class'],
+]);
+```
+
+#### 5. دعم `AccessManager` للصلاحيات
+
+تم دمج `AccessManager` في دوال `getRecords` بحيث يمكن تمرير نتيجة التحقق من الصلاحيات (`access_result`) وتطبيق النطاقات تلقائياً على الاستعلام.
+
+**مثال في متحكم API:**
+
+```php
+$config = [
+    'is_allow' => true,
+    'backend' => [
+        'allow' => true,
+        'check_permission' => true,
+        'permissions' => ['tss.student.students.access'],
+        'access_scope' => 'all',
+    ],
+    'frontend' => [
+        'allow' => true,
+        'allowed_ref_types' => ['student', 'parent'],
+        'access_scope' => 'own',
+    ],
+];
+$access = AccessManager::instance()->check('list', $config, $user);
+$options['access_result'] = $access;
+$result = StudentHelper::getRecords($options);
+```
+
+ثم داخل `StudentRecordsHelper::getRecords` يتم استدعاء `AccessManager::instance()->applyAccessScope()` لتطبيق شروط الصلاحية تلقائياً.
+
+#### 6. دوال الربط بين المستخدم والطالب/ولي الأمر
+
+تمت إضافة الدوال التالية في `StudentHelper` (كانت موجودة جزئياً وتم تحسينها):
+
+- `getStudentByUser($user)`: جلب كائن الطالب المرتبط بمستخدم معين.
+- `getUserByStudent($student)`: جلب كائن المستخدم المرتبط بطالب.
+- `getMparentByUser($user)`: جلب كائن ولي الأمر المرتبط بمستخدم.
+- `getUserByMparent($mparent)`: جلب كائن المستخدم المرتبط بولي أمر.
+- `getStudentIdsByMparent($mparent, $useCache)`: جلب مصفوفة بأرقام الطلاب التابعين لولي أمر.
+- `getStudentsByMparent($mparent, array $options)`: جلب كائنات الطلاب التابعين لولي أمر مع دعم خيارات `getRecords`.
+- `getStudentsByUser($user, array $options)`: جلب الطلاب المرتبطين بمستخدم (يدعم الطالب نفسه أو أبناء ولي الأمر).
+- `getStudentIdFromRecord($record)`: استخراج معرف الطالب من كائن `StudentRecord` أو معرف السجل.
+- `getCurrentStudentRecord($student, array $options)`: جلب سجل الطالب الحالي (عادةً بحالة `continue`) مع دعم خيارات السنة والصف.
+
+**مثال استخدام `getStudentsByUser`:**
+
+```php
+$students = StudentHelper::getStudentsByUser(null, ['is_active' => true]);
+// إذا كان المستخدم الحالي ولي أمر -> يعيد أبناءه
+// إذا كان طالباً -> يعيد بياناته فقط
+```
+
+#### 7. تحسين معالجة الفلاتر المتقدمة (AdvancedQueryHelper)
+
+تم تطبيق `AdvancedQueryManager::scopeWhereField` على جميع الفلاتر، مما يسمح بتمرير قيم متعددة مفصولة بفواصل، واستخدام المنطق `is_or`, `is_not`, `is_force`, `is_or_null`. هذا متاح الآن لجميع الحقول القابلة للتصفية في الطلاب وأولياء الأمور وسجلات الطالب.
+
+**مثال:**
+
+```php
+$options = [
+    'gender' => 'male,female',           // القيم مفصولة بفواصل
+    'is_or_gender' => true,              // OR بين القيم
+    'is_not_gender' => false,
+    'is_force_gender' => true,
+    'is_or_null_gender' => false,        // تضمين السجلات التي gender = null
+];
+```
+
+#### 8. هيكل استجابة موحد
+
+جميع دوال `getRecords` (لطلاب، أولياء الأمور، سجلات الطالب) تعيد الآن مصفوفة موحدة بالصيغة التالية:
+
+```php
+[
+    'code'    => 200,
+    'status'  => true,
+    'message' => '...',
+    'data'    => $data,          // Builder, Collection, Paginator, أو مصفوفة محولة
+    'error'   => null,
+    'errors'  => null,
+    'input_data'   => $input,    // الخيارات الأصلية
+    'process_data' => $processed, // الخيارات بعد الدمج
+    'debug'   => [...]            // فقط عند APP_DEBUG=true
+]
+```
+
+هذا يسهل التعامل مع النتائج في طبقات API ويوفر معلومات تتبع للتطوير.
+
+#### 9. دعم التخزين المؤقت
+
+تمت إضافة خيارات كاملة للتخزين المؤقت:
+
+- `cache_enabled`: تفعيل الكاش (افتراضي `false`، يمكن تفعيله عبر الإعدادات).
+- `cache_key`: مفتاح مخصص (يُولّد تلقائياً إذا لم يُقدم).
+- `cache_ttl`: مدة الصلاحية بالدقائق (افتراضي `60`).
+- `cache_tags`: علامات للكاش (تستخدم مع Redis مثلاً).
+- `cache_force_refresh`: تجاهل الكاش وجلب بيانات جديدة.
+
+#### 10. دعم الأحداث
+
+تم إطلاق حدثين قابلين للتخصيص:
+
+- `event_before_name` (افتراضي `api.list.extendQueryBefore`) – قبل تطبيق الفلاتر.
+- `event_after_name` (افتراضي `api.list.extendQuery`) – بعد تطبيق الفلاتر وقبل التنفيذ.
+- `event_list_name` (افتراضي `StudentsApi.ApiControllers.Students.List`) – بعد الحصول على `Paginator` وقبل التحويل (Transformer).
+
+يمكن تعطيل الأحداث عبر `fire_before_event` و `fire_after_event`.
+
+---
+
+### أمثلة عملية على الاستخدام الجديد
+
+#### 1. جلب الطلاب النشطين مع فلترة المحافظة وترتيب حسب الاسم
+
+```php
+$result = StudentHelper::getRecords([
+    'is_active' => true,
+    'state_id' => '5',
+    'orderBy' => 'full_name',
+    'orderDirection' => 'asc',
+]);
+```
+
+#### 2. جلب أولياء الأمور الذين لديهم أكثر من طفلين
+
+```php
+$result = StudentHelper::getParentRecords([
+    'is_has_students_count' => ['>', 2],
+    'with_count' => ['Student'],
+]);
+```
+
+#### 3. جلب سجلات الطلاب لسنة دراسية معينة ورسوم دراسة أكبر من 5000
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'study_fees' => ['>', 5000],
+    'orderBy' => 'study_fees',
+    'orderDirection' => 'desc',
+]);
+```
+
+#### 4. استخدام `getCurrentStudentRecord` لطالب معين
+
+```php
+$student = Student::find(100);
+$currentRecord = StudentHelper::getCurrentStudentRecord($student, [
+    'year_id' => 3,   // إذا لم يُمرر، يُستخدم العام الافتراضي
+    'status_class' => 'continue',
+]);
+if ($currentRecord) {
+    echo "الصف: " . $currentRecord->class_id;
+}
+```
+
+#### 5. استخدام `getStudentsByUser` في متحكم API
+
+```php
+public function myChildren()
+{
+    $user = AuthHelpers::getCurrentUser();
+    $students = StudentHelper::getStudentsByUser($user, ['is_active' => true]);
+    return $this->respondWithCollection($students, new StudentTransformer);
+}
+```
+
+---
+
+### التوافق مع الإصدارات السابقة
+
+- **جميع الدوال القديمة في `StudentHelper` بقيت كما هي** (مثل `getStudentRecord`, `getResultRecord`, `setUpStudentRecord`, دوال التواريخ). لم يتم حذف أو تعديل أي دالة قديمة.
+- **الدالة `StudentHelper::getRecords` القديمة** أصبحت تستخدم `StudentRecordsHelper::getRecords` بشكل شفاف، مع الحفاظ على نفس بنية المخرجات السابقة (مصفوفة تحتوي على `code`, `status`, `message`, `data`, `error`, `errors`, `input_data`, `process_data`, `debug`).
+- **أي كود كان يستخدم `StudentHelper::getRecords` مباشرة سيستمر في العمل** دون تعديل.
+- **تم إضافة دوال جديدة فقط** (`getParentRecords`, `getStudentRecordRecords`, دوال الربط الإضافية). لا توجد إزالة أو تعديلات جذرية.
+
+---
+
+### متطلبات الترقية (من 1.0.12 إلى 1.0.13)
+
+1. **تحديث الكود**:
+   - استبدال ملف `helpers/StudentHelper.php` بالنسخة الجديدة (التي تستدعي `StudentRecordsHelper` وتحتوي على الدوال الجديدة).
+   - إضافة ملف `helpers/StudentRecordsHelper.php` الجديد.
+   - (اختياري) إضافة ملف `helpers/ParentRecordsHelper.php` و `StudentRecordRecordsHelper.php` إذا رغبت في فصل الدوال، لكن تم دمجها في `StudentHelper` لتقليل الاعتماديات.
+
+2. **تحديث ملف الإصدارات `version.yaml`**:
+   أضف الإصدار الجديد كما يلي:
+   ```yaml
+   1.0.13:
+       - 'Improve StudentHelper and add new helpers with advanced features'
+       - 'Add StudentRecordsHelper, ParentRecordsHelper, StudentRecordRecordsHelper'
+       - 'Support AccessManager for permissions and AdvancedQueryHelper for dynamic filtering'
+       - 'Add unified getRecords, getParentRecords, getStudentRecordRecords methods'
+       - 'Enhance caching, event hooks, and sorting scopes'
+   ```
+
+3. **تنفيذ الهجرات**: لا توجد هجرات قاعدة بيانات جديدة.
+
+4. **تحديث الإعدادات (اختياري)**:
+   يمكن إضافة مفاتيح جديدة في `config.php` لـ `nano.studentsapi::students.cache_enabled` وغيرها، لكن هذا خارج نطاق إضافة `Tss.Student`. يوصى بتحديث إعدادات `Nano.StudentsApi` للاستفادة من التخزين المؤقت.
+
+5. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+6. **اختبار الوظائف**:
+   - تأكد من أن دوال `getRecords`, `getParentRecords`, `getStudentRecordRecords` تعيد النتائج المتوقعة.
+   - اختبر الفلاتر المتقدمة (`is_or`, `is_not`, إلخ) مع قيم متعددة.
+   - تأكد من أن التخزين المؤقت يعمل عند تفعيله.
+   - تحقق من أن الأحداث (events) تُطلق في الوقت المناسب.
+
+---
+
+### الفوائد والقيمة المضافة
+
+- **توحيد معالجة الاستعلامات** بين الطلاب وأولياء الأمور وسجلات الطالب، مما يقلل تكرار الكود ويوحد السلوك.
+- **مرونة عالية في التصفية** بفضل `AdvancedQueryHelper`، مما يسمح للعملاء ببناء استعلامات معقدة بسهولة.
+- **أداء أفضل** عبر التخزين المؤقت المدمج وإمكانية استبعاد الأعمدة غير الضرورية.
+- **أمان محسّن** عبر دمج `AccessManager` وتطبيق نطاقات الوصول تلقائياً، مما يمنع تسرب بيانات غير مصرح بها.
+- **توافق عكسي كامل**، مما يسمح بترقية الإضافة دون الحاجة لتعديل التطبيقات الحالية.
+- **قابلية التوسع** من خلال الأحداث التي تسمح لإضافات أخرى بتعديل الاستعلام ديناميكياً.
+
+---
+
+### الخاتمة
+
+يمثل الإصدار **1.0.13** من إضافة `Tss.Student` قفزة نوعية في قدرات الاستعلام عن بيانات الطلاب وأولياء الأمور. من خلال إعادة هيكلة دوال `getRecords`، وإضافة مساعدات متخصصة، ودمج `AccessManager` و `AdvancedQueryHelper`، أصبح النظام قادراً على تقديم واجهة موحدة وآمنة وعالية الأداء. جميع الدوال الجديدة تحافظ على التوافق العكسي، مما يضمن عملية ترقية سلسة للمشاريع القائمة. هذه التحسينات تفتح الباب لتطبيقات أكثر تفاعلية وتقارير متقدمة تعتمد على API نظيف وقوي.
+
+---
+
+**الوثائق المرجعية**:
+- [التوثيق العام لإضافة Tss.Student](./docs/Student/Docs-Student-ar.md)
+- [توثيق كلاس StudentHelper](./docs/Student/Docs-StudentHelper-Class-ar.md)
+- [توثيق كلاس StudentRecordsHelper](./docs/Student/Docs-StudentRecordsHelper-Class-ar.md)
+- [توثيق دوال AccessManager](./docs/AuthApi/Docs-AccessManager-ar.md)
+- [توثيق AdvancedQueryHelper](./docs/querybuilder/Docs-AdvancedQueryHelper-ar.md)
 
