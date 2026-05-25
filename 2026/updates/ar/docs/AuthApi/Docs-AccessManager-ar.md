@@ -344,6 +344,9 @@ $access = AccessManager::instance()->check('delete', $config);
 
 **المراجع:**
 
+- [توثيق الصلاحيات `AccessManager-Permission`](./Docs-AccessManager-Permission-ar.md)
+- [امثلة عامة `AccessManager-Example`](./Docs-AccessManager-Example-ar.md)
+- [مثال عملى شامل  `AccessManager-Example-Api`](./Docs-AccessManager-Example-Api-ar.md)
 - [التوثيق الكامل لإضافة `Nano.AuthApi`](./Docs-AuthApi-index.md)
 - [كلاس `AdvancedQueryHelper` (Nano2.QueryBuilder)](../querybuilder/Docs-AdvancedQueryHelper.md)
 - [دليل تطوير إضافات API (Nano-Api-SKILL)](../mcp/Nano-Api-SKILL.md)
