@@ -3487,6 +3487,482 @@ See [docs/VisitModel/Docs-VisitModel-ar.md](./docs/VisitModel/Docs-VisitModel-ar
 
 See [docs/VisitModel/Docs-VisitModel-Advenced-Examples-ar.md](./docs/VisitModel/Docs-VisitModel-Advenced-Examples-ar.md)
 
+## 2026-05-20 - 2026-05-21
+
+### تحديثات إضافة `Nano.Location` وإضافة `Nano.LocationApi`
+
+### الإصدار 1.1.0 – دعم الوسائط المتعددة (Media) في النماذج الجغرافية وواجهة API
+
+**الإصدار:** 1.1.0 (لـ Nano.LocationApi) و 1.0.16 (لـ Nano.Location)
+
+---
+
+#### ملخص التحديثات
+
+يأتي هذا الإصدار ليعزز إضافة `Nano.Location` بإضافة دعم كامل للوسائط المتعددة (صور، فيديوهات، ملفات صوتية، مستندات) إلى نماذج **الدول (Country)**، **المدن/الولايات (State)**، و **المناطق/المديريات (Directorate)**. يشمل التحديث كلاً من الواجهة الخلفية (Backend) حيث أضيفت الحقول والأعمدة في قوائم الإدارة والنماذج، وواجهة برمجة التطبيقات (API) حيث أُضيف Behavior مخصص يسمح بتضمين هذه الوسائط ديناميكياً في استجابات الـ API عبر Transformers الخاصة بالموقع الجغرافي (`CountryTransformer`، `StateTransformer`، `DirectorateTransformer`).
+
+تم تصميم الحل ليكون **قابلاً للتوسع**، **متوافقاً مع معمارية `Nano.API`**، ومتبعاً لنفس النمط المستخدم في `ProductTransformer` و `DynamicAddIncludeKyc` لضمان الاتساق وسهولة الصيانة.
+
+---
+
+### الإصدار 1.1.0 – تفاصيل التحديث
+
+#### أهداف الإصدار
+
+- **إضافة علاقات الميديا** إلى نماذج الموقع الجغرافي (Country، State، Directorate) باستخدام `attachOne` و `attachMany`.
+- **توسيع قوائم الإدارة** (Backend Lists) لعرض الصور الرئيسية ومعارض الصور بشكل مرئي.
+- **إضافة حقول رفع الملفات** في نماذج الإدارة (Backend Forms) مع دعم الصور، الفيديو، الصوت، والملفات العامة.
+- **إنشاء Behavior جديد** `DynamicAddMediaIncludes` داخل `Nano.LocationApi` لإضافة includes ديناميكية إلى Transformers API.
+- **ربط Behavior المذكور** مع `CountryTransformer`، `StateTransformer`، `DirectorateTransformer` لتمكين طلب الوسائط عبر API بنفس آلية `include`.
+- **دعم إرجاع بيانات الميتا** (معلومات الملف التفصيلية) اختيارياً عبر المعامل `is_mate_data_media` أو عبر الخيارات المحددة لكل include.
+- **ضمان التوافق** مع الأنظمة الحالية وعدم كسر أي من نقاط النهاية (Endpoints) الحالية.
+
+---
+
+#### الميزات الجديدة
+
+##### 1. دعم الوسائط المتعددة في نماذج الموقع الجغرافي (Models)
+
+تم توسيع كل من النماذج التالية بإضافة العلاقات الآتية (ديناميكياً عبر `Plugin.php` دون تعديل النماذج الأصلية):
+
+- `RainLab\Location\Models\Country`
+- `RainLab\Location\Models\State`
+- `Nano\Location\Models\State`
+- `Nano\Location\Models\Directorate`
+
+**العلاقات المضافة:**
+
+```php
+public $attachOne = [
+    'image'      => \System\Models\File::class,
+    'book_intro' => \System\Models\File::class,
+];
+
+public $attachMany = [
+    'images' => \System\Models\File::class,
+    'videos' => \System\Models\File::class,
+    'audios' => \System\Models\File::class,
+    'files'  => \System\Models\File::class,
+];
+```
+
+###### الجدول التالي يوضح استخدام كل علاقة:
+
+| العلاقة | النوع | الوصف | الاستخدام النموذجي |
+| :--- | :--- | :--- | :--- |
+| `image` | `attachOne` | صورة واحدة (شعار، علم) | الصورة الرئيسية للدولة أو المدينة |
+| `images` | `attachMany` | معرض صور متعدد | صور متعددة للمعالم السياحية |
+| `videos` | `attachMany` | فيديوهات متعددة | فيديوهات تعريفية |
+| `audios` | `attachMany` | ملفات صوتية متعددة | تسجيلات صوتية للتراث |
+| `files` | `attachMany` | ملفات عامة متعددة | مستندات PDF، ملفات إضافية |
+| `book_intro` | `attachOne` | ملف تمهيدي واحد | كتيب تعريف أو ملف PDF واحد |
+
+##### 2. تحسين الواجهة الخلفية (Backend)
+
+###### أ. إضافة أعمدة في قوائم الإدارة (List Columns)
+
+تمت إضافة الأعمدة التالية إلى قوائم `Country`، `State`، `Directorate` عبر حدث `backend.list.extendColumns`:
+
+| العمود | النوع | مرئي افتراضياً | الوصف |
+| :--- | :--- | :--- | :--- |
+| `image` | `simpleimage` | نعم | عرض الصورة الرئيسية كمصغرة |
+| `images` | `simpleimages` | لا | عرض أيقونة تشير إلى وجود معرض صور |
+| `book_intro` | `partial` (رابط) | لا | رابط لتنزيل الملف التمهيدي |
+| `files` | `partial` (رابط) | لا | رابط لتنزيل الملفات العامة |
+| `videos` | `partial` (رابط) | لا | رابط لتنزيل الفيديوهات |
+| `audios` | `partial` (رابط) | لا | رابط لتنزيل التسجيلات الصوتية |
+
+**مثال لعمود `image` في `columns.yaml` (ديناميكياً):**
+
+```php
+'image' => [
+    'label' => Lang::get('nano.location::lang.public.models.image'),
+    'type' => 'simpleimage',
+    'searchable' => false,
+    'sortable' => false,
+    'invisible' => false,
+    'cssClass' => 'nolink',
+],
+```
+
+###### ب. إضافة حقول في نماذج الإدارة (Form Fields)
+
+تمت إضافة تبويب جديد باسم `Media` (أو `الوسائط` حسب اللغة) يحتوي على الحقول التالية عبر حدث `backend.form.extendFields`:
+
+| الحقل | النوع | الخيارات | التبويب |
+| :--- | :--- | :--- | :--- |
+| `image` | `fileupload` | mode: image, imageWidth: 120, imageHeight: 120, useCaption: true | Media |
+| `images` | `fileupload` | mode: image, multiple: true | Media |
+| `videos` | `fileupload` | mode: file, fileTypes: mp4,avi,mov,mkv,webm, maxFiles: 5, maxFilesize: 15 | Media |
+| `audios` | `fileupload` | mode: file, fileTypes: mp3,wav,wma,m4a,ogg, maxFiles: 5, maxFilesize: 15 | Media |
+| `book_intro` | `fileupload` | mode: file, useCaption: true | Media |
+| `files` | `fileupload` | mode: file, multiple: true | Media |
+
+**مثال لكود إضافة الحقول في `Plugin.php`:**
+
+```php
+$widget->addTabFields([
+    'image' => [
+        'label' => Lang::get('nano.location::lang.public.models.image'),
+        'type' => 'fileupload',
+        'mode' => 'image',
+        'imageWidth' => 120,
+        'imageHeight' => 120,
+        'useCaption' => true,
+        'span' => 'auto',
+        'tab' => $tab,
+    ],
+    // ... باقي الحقول
+]);
+```
+
+##### 3. Behavior جديد: `DynamicAddMediaIncludes` (في إضافة `Nano.LocationApi`)
+
+تم إنشاء Behavior ضمن الـ namespace `Nano\LocationApi\Behaviors\DynamicAddMediaIncludes` لتوفير الدوال الخاصة بـ includes الخاصة بالوسائط بشكل موحد وقابل لإعادة الاستخدام. هذا الـ Behavior يتبع نفس نمط `DynamicAddIncludeKyc` المستخدم في إضافة `Nano3.Kyc`.
+
+###### أ. هيكل الـ Behavior
+
+```php
+<?php namespace Nano\LocationApi\Behaviors;
+
+use October\Rain\Extension\ExtensionBase;
+use Nano\API\Classes\Transformer;
+use League\Fractal\Resource\Primitive;
+use League\Fractal\Resource\Collection;
+
+class DynamicAddMediaIncludes extends ExtensionBase
+{
+    protected Transformer $transformer;
+    
+    public function __construct(Transformer $transformer)
+    {
+        $this->transformer = $transformer;
+        
+        // إضافة includes إلى availableIncludes
+        $mediaIncludes = ['image', 'images', 'videos', 'audios', 'files', 'book_intro'];
+        foreach ($mediaIncludes as $include) {
+            if (!in_array($include, $this->transformer->availableIncludes, true)) {
+                $this->transformer->availableIncludes[] = $include;
+            }
+        }
+    }
+    
+    public function includeImage($model) { /* ... */ }
+    public function includeImages($model) { /* ... */ }
+    public function includeVideos($model) { /* ... */ }
+    public function includeAudios($model) { /* ... */ }
+    public function includeFiles($model) { /* ... */ }
+    public function includeBookIntro($model) { /* ... */ }
+}
+```
+
+###### ب. الميزات الرئيسية للـ Behavior:
+
+- **إضافة تلقائية للـ includes**: يضيف الـ Behavior تلقائياً `image`, `images`, `videos`, `audios`, `files`, `book_intro` إلى `availableIncludes` في الـ Transformer.
+- **دعم التحكم في بيانات الميتا**: يمكن التحكم في إرجاع بيانات الميتا لكل include على حدة عبر request parameters:
+  - عام: `?is_mate_data_media=1`
+  - خاص: `?image[mate_data]=1&files[mate_data]=1`
+- **التكامل مع دوال الـ Transformer الأساسية**: يستخدم الـ Behavior دوال `image()`، `images()`، `file()`، `files()` الموجودة في `Nano\API\Classes\Transformer` لضمان تنسيق موحد.
+- **معالجة آمنة للاستثناءات**: في حالة حدوث خطأ (مثل عدم وجود العلاقة في النموذج)، يتم إرجاع قيم افتراضية (`null` للـ attachOne، `[]` للـ attachMany) بدلاً من إلقاء استثناء، مما يضمن عدم تعطل استجابة الـ API.
+
+###### ج. دوال الـ Behavior بالتفصيل:
+
+| الدالة | نوع المورد | القيمة الافتراضية عند الخطأ | الوصف |
+| :--- | :--- | :--- | :--- |
+| `includeImage` | `Primitive` | `null` | إرجاع بيانات الصورة الرئيسية |
+| `includeImages` | `Collection` | `[]` | إرجاع قائمة ببيانات معرض الصور |
+| `includeVideos` | `Collection` | `[]` | إرجاع قائمة ببيانات الفيديوهات |
+| `includeAudios` | `Collection` | `[]` | إرجاع قائمة ببيانات التسجيلات الصوتية |
+| `includeFiles` | `Collection` | `[]` | إرجاع قائمة ببيانات الملفات العامة |
+| `includeBookIntro` | `Primitive` | `null` | إرجاع بيانات الملف التمهيدي |
+
+##### 4. توسيع Transformers الخاصة بالموقع الجغرافي
+
+تم توسيع الـ Transformers التالية لتشمل الـ Behavior الجديد:
+
+- `Nano\LocationApi\Transformers\CountryTransformer`
+- `Nano\LocationApi\Transformers\StateTransformer`
+- `Nano\LocationApi\Transformers\DirectorateTransformer`
+
+تم ذلك عبر دالة `extendTransformerDynamicAddMediaIncludes` داخل `Plugin.php` الخاصة بـ `Nano.LocationApi`:
+
+```php
+protected function extendTransformerDynamicAddMediaIncludes($className): void
+{
+    try {
+        $className::extend(function ($transformer) {
+            if (!$transformer->isClassExtendedWith('Nano\LocationApi\Behaviors\DynamicAddMediaIncludes')) {
+                $transformer->extendClassWith('Nano\LocationApi\Behaviors\DynamicAddMediaIncludes');
+            }
+        });
+    } catch (\Exception | \Throwable $e) {
+        Log::error("Error extending transformer: " . $e->getMessage());
+    }
+}
+```
+
+##### 5. دعم الترجمة (Multi-language)
+
+تمت إضافة مفاتيح الترجمة الجديدة في ملفات اللغة العربية والإنجليزية داخل إضافة `Nano.Location`:
+
+**الملف:** `plugins/nano/location/lang/ar/lang.php`
+
+```php
+'models' => [
+    'media_tab' => 'الوسائط',
+    'image' => 'الصورة الرئيسية',
+    'images' => 'معرض الصور',
+    'book_intro' => 'ملف تمهيدي',
+    'files' => 'الملفات المرفقة',
+    'videos' => 'الفيديوهات',
+    'audios' => 'التسجيلات الصوتية',
+    'image_comment' => 'اختر صورة واحدة',
+    'images_comment' => 'اختر عدة صور',
+    'book_intro_comment' => 'رفع ملف PDF أو مستند',
+    'files_comment' => 'رفع ملفات متنوعة',
+    'videos_comment' => 'رفع فيديوهات (mp4, avi, mov, mpg, mpeg, mkv, webm)',
+    'audios_comment' => 'رفع ملفات صوتية (mp3, wav, wma, m4a, ogg)',
+],
+```
+
+**الملف:** `plugins/nano/location/lang/en/lang.php`
+
+```php
+'models' => [
+    'media_tab' => 'Media',
+    'image' => 'Main Image',
+    'images' => 'Gallery Images',
+    'book_intro' => 'Introductory File',
+    'files' => 'Attached Files',
+    'videos' => 'Videos',
+    'audios' => 'Audio Recordings',
+    'image_comment' => 'Choose a single image',
+    'images_comment' => 'Choose multiple images',
+    'book_intro_comment' => 'Upload a PDF or document',
+    'files_comment' => 'Upload various files',
+    'videos_comment' => 'Upload videos (mp4, avi, mov, mpg, mpeg, mkv, webm)',
+    'audios_comment' => 'Upload audio files (mp3, wav, wma, m4a, ogg)',
+],
+```
+
+---
+
+#### أمثلة عملية
+
+##### 1. استخدام API لاسترجاع دولة مع صورها وفيديوهات
+
+**الطلب:**
+```http
+GET /api/v1/countries/1?include=image,images,videos&is_mate_data_media=1
+```
+
+**الاستجابة (JSON):**
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Yemen",
+    "code": "YE",
+    "image": {
+      "original": "https://domain.com/storage/app/media/flags/ye.png",
+      "small": "https://domain.com/storage/app/media/flags/ye_small.png",
+      "thumb": "https://domain.com/storage/app/media/flags/ye_thumb.png",
+      "mate_data": {
+        "id": 101,
+        "title": "Flag of Yemen",
+        "description": "Official flag",
+        "file_name": "ye.png",
+        "file_size": 45678,
+        "extension": "png",
+        "mime_type": "image/png"
+      }
+    },
+    "images": [
+      {
+        "original": "https://domain.com/storage/app/media/gallery/sanaa.jpg",
+        "small": "https://domain.com/storage/app/media/gallery/sanaa_small.jpg",
+        "mate_data": { ... }
+      }
+    ],
+    "videos": [
+      {
+        "file_name": "yemen_intro.mp4",
+        "path": "https://domain.com/storage/app/media/videos/yemen_intro.mp4",
+        "mate_data": { ... }
+      }
+    ]
+  }
+}
+```
+
+##### 2. طلب بيانات مدينة مع تضمين الملف التمهيدي فقط
+
+**الطلب:**
+```http
+GET /api/v1/states/5?include=book_intro
+```
+
+**الاستجابة (مقتطف):**
+```json
+{
+  "data": {
+    "id": 5,
+    "name": "Sana'a",
+    "country_id": 1,
+    "book_intro": {
+      "file_name": "sanaa_guide.pdf",
+      "path": "https://domain.com/storage/app/media/guides/sanaa_guide.pdf",
+      "file_size": 2048000
+    }
+  }
+}
+```
+
+##### 3. طلب بيانات مديرية مع تضمين الصور والملفات مع بيانات الميتا المخصصة لكل include
+
+**الطلب:**
+```http
+GET /api/v1/directorates/10?include=images,files&images[mate_data]=1&files[mate_data]=0
+```
+
+في هذا المثال، سيتم إرجاع بيانات الميتا للصور فقط وليس للملفات.
+
+##### 4. الواجهة الخلفية: رفع صورة رئيسية لدولة
+
+1. انتقل إلى `الموقع الجغرافي > الدول`.
+2. اختر دولة من القائمة أو أنشئ دولة جديدة.
+3. في تبويب `الوسائط` (Media)، ارفع صورة في حقل `الصورة الرئيسية`.
+4. احفظ التغييرات.
+5. ستظهر الصورة المصغرة في قائمة الدول.
+
+##### 5. استخدام الـ Behavior في Transformer مخصص
+
+إذا كان لديك Transformer مخصص ترغب في إضافة دعم الوسائط له، يمكنك ببساطة إضافة الـ Behavior:
+
+```php
+use Nano\LocationApi\Behaviors\DynamicAddMediaIncludes;
+
+class MyCustomTransformer extends Transformer
+{
+    public $implement = [
+        DynamicAddMediaIncludes::class,
+    ];
+    
+    // ... باقي الكود
+}
+```
+
+---
+
+#### التحسينات والإصلاحات
+
+| المجال | التحسين |
+| :--- | :--- |
+| **معالجة الاستثناءات** | في حالة عدم وجود علاقة ميديا في النموذج (مثل `image` غير معرفة)، يتم إرجاع `null` أو `[]` بدلاً من إلقاء خطأ. |
+| **دعم جزئي للميتا** | يمكن طلب بيانات الميتا لكل include على حدة (`image[mate_data]=1`) أو بشكل عام (`is_mate_data_media=1`). |
+| **توافق عكسي كامل** | جميع الـ Transformers الحالية لم تتأثر، ولا يتم تضمين الوسائط إلا إذا طلبها العميل صراحة (`include=image,...`). |
+| **تحسين أداء التخزين المؤقت** | يتم التعامل مع الوسائط كأي علاقة أخرى في نظام Fractal، مما يسمح بتخزينها مؤقتاً بشكل ذكي. |
+| **توسع سهل** | يمكن إضافة علاقات وسائط جديدة مستقبلاً ببساطة عن طريق إضافة الدوال المناسبة في الـ Behavior وإضافتها إلى `availableIncludes`. |
+| **توافق مع `System\Models\File`** | يتم استخدام نظام الملفات القياسي في October CMS، مما يضمن توافق الملفات مع جميع ميزات `System\Models\File` (مثل التصغير، التحكم في الوصول، إلخ). |
+
+---
+
+#### متطلبات الترقية
+
+##### 1. تحديث كود الإضافة `Nano.Location`
+
+- **استبدال** ملف `plugins/nano/location/Plugin.php` بالنسخة الجديدة (التي تحتوي على دوال `extendCountryWithMedia`، `extendRainLabStateWithMedia`، إلخ، واستدعائها في `boot()`).
+- **إضافة** مفاتيح الترجمة الجديدة إلى `plugins/nano/location/lang/ar/lang.php` و `plugins/nano/location/lang/en/lang.php`.
+- **إنشاء** ملفات الـ partial لعرض الروابط في الأعمدة (اختياري، حيث تم إخفاء الأعمدة غير `image` افتراضياً). إذا أردت استخدامها، قم بإنشاء المجلد `plugins/nano/location/models/country/` وأضف الملفات التالية:
+  - `_link_book_intro.htm`
+  - `_link_files.htm`
+  - `_link_videos.htm`
+  - `_link_audios.htm`
+
+**مثال لمحتوى `_link_book_intro.htm`:**
+```twig
+{% if model.book_intro %}
+    <a href="{{ model.book_intro.path }}" target="_blank">تحميل</a>
+{% endif %}
+```
+
+##### 2. تحديث كود الإضافة `Nano.LocationApi`
+
+- **استبدال** ملف `plugins/nano/locationapi/Plugin.php` بالنسخة الجديدة (التي تحتوي على دالة `extendTransformerDynamicAddMediaIncludes` واستدعائها في `boot()`).
+- **إضافة** مجلد `behaviors` في `plugins/nano/locationapi/` ووضع ملف `DynamicAddMediaIncludes.php` فيه.
+- **تحديث** ملف `version.yaml` الخاص بـ `Nano.LocationApi` لإضافة الإصدار `1.1.0` كما هو موضح في قسم التحديثات.
+
+##### 3. تحديث ملفات `version.yaml`
+
+**لـ `Nano.Location` (`plugins/nano/location/updates/version.yaml`):**
+```yaml
+1.0.16:
+    - 'Add media relations (image, images, videos, audios, files, book_intro) to Country, State, and Directorate models'
+    - 'Add media fields and list columns to backend forms and lists for Country, State, Directorate'
+    - 'Add translations for media fields (ar/en)'
+```
+
+**لـ `Nano.LocationApi` (`plugins/nano/locationapi/updates/version.yaml`):**
+```yaml
+1.1.0:
+    - 'Add DynamicAddMediaIncludes behavior for CountryTransformer, StateTransformer, DirectorateTransformer'
+    - 'Support dynamic media includes (image, images, videos, audios, files, book_intro) in Location API'
+    - 'Add is_mate_data_media parameter to control returning file metadata in API responses'
+    - 'Extend availableIncludes automatically for media relations'
+```
+
+##### 4. تشغيل أوامر التحديث
+
+```bash
+# مسح الكاش
+php artisan cache:clear
+php artisan config:clear
+```
+
+##### 5. التحقق من صلاحيات رفع الملفات
+
+تأكد من أن مجلد `storage/app/uploads` قابل للكتابة بواسطة خادم الويب:
+
+```bash
+chmod -R 775 storage/app/uploads
+```
+
+##### 6. اختبار الوظائف
+
+- **اختبار الواجهة الخلفية:** انتقل إلى `الموقع الجغرافي > الدول`، جرب رفع صورة لدولة وتأكد من ظهورها في القائمة.
+- **اختبار API:** استخدم `curl` أو Postman لاختبار نقاط النهاية التالية:
+
+```bash
+# جلب دولة مع الصورة الرئيسية
+curl -X GET "https://yourdomain.com/api/v1/countries/1?include=image"
+
+# جلب مدينة مع معرض الصور والملفات
+curl -X GET "https://yourdomain.com/api/v1/states/5?include=images,files&is_mate_data_media=1"
+```
+
+---
+
+#### التوافق مع الإصدارات السابقة
+
+- **لا توجد تغييرات جوهرية** في هيكل قاعدة البيانات، فقط تمت إضافة علاقات `attachOne` و `attachMany` ديناميكياً.
+- **لا يتم تضمين الوسائط تلقائياً** في استجابات API الحالية، لذلك لن تتأثر التطبيقات الحالية التي تستخدم API.
+- **جميع دوال الـ API الحالية** تعمل كما هي دون تعديل.
+- **الواجهة الخلفية الحالية** لم تتأثر، وتمت إضافة تبويب جديد فقط دون إزالة أي حقول موجودة.
+
+---
+
+#### الخاتمة
+
+يمثل الإصدار 1.1.0 من إضافة `Nano.Location` و `Nano.LocationApi` نقلة نوعية في دعم الوسائط المتعددة للنماذج الجغرافية. بفضل البنية المعيارية المستندة إلى Behaviors، أصبح من السهل الآن إضافة وإدارة الصور والفيديوهات والملفات للدول والمدن والمديريات من خلال واجهة إدارة بديهية، واسترجاعها عبر API بنفس طريقة استرجاع أي علاقة أخرى.
+
+---
+
+**الوثائق المرجعية:**
+- [توثيق إضافة Nano.Location](./docs/Location/Docs-Nano-Location-ar.md)
+- [توثيق Behavior DynamicAddMediaIncludes](./docs/Location/Docs-DynamicAddMediaIncludes-ar.md)
+- [توثيق واجهة برمجة التطبيقات (API) للموقع الجغرافي](./docs/Location/Docs-LocationAPI-ar.md)
+
+
 ## 2026-05-20 – 2026-05-22
 
 **تحديث بوابة الدفع CashPay (الدفع النقدي الإلكتروني – OTP) في نظام المدفوعات بنانوسوفت**

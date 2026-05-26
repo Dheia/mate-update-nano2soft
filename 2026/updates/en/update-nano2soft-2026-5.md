@@ -3486,6 +3486,482 @@ See [docs/VisitModel/Docs-VisitModel-en.md](./docs/VisitModel/Docs-VisitModel-en
 
 See [docs/VisitModel/Docs-VisitModel-Advenced-Examples-en.md](./docs/VisitModel/Docs-VisitModel-Advenced-Examples-en.md)
 
+## 2026-05-20 – 2026-05-21
+
+### Updates to the `Nano.Location` Plugin and the `Nano.LocationApi` Plugin
+
+### Version 1.1.0 – Support for Multimedia in Geographic Models and API
+
+**Version:** 1.1.0 (for `Nano.LocationApi`) and 1.0.16 (for `Nano.Location`)
+
+---
+
+#### Summary of Updates
+
+This release enhances the `Nano.Location` plugin by adding full support for multimedia (images, videos, audio files, documents) to the **Country**, **State**, and **Directorate** models. The update covers both the backend (where fields and columns have been added to administration lists and forms) and the API (where a custom behavior has been added to dynamically include this media in API responses via the location transformers – `CountryTransformer`, `StateTransformer`, `DirectorateTransformer`).
+
+The solution is designed to be **extensible**, **compatible with the `Nano.API` architecture**, and follows the same pattern used in `ProductTransformer` and `DynamicAddIncludeKyc` to ensure consistency and ease of maintenance.
+
+---
+
+### Version 1.1.0 – Update Details
+
+#### Release Objectives
+
+- **Add media relationships** to geographic models (Country, State, Directorate) using `attachOne` and `attachMany`.
+- **Extend administration lists** to display main images and image galleries in a visual way.
+- **Add file upload fields** to administration forms, supporting images, videos, audio, and general files.
+- **Create a new Behavior** `DynamicAddMediaIncludes` inside `Nano.LocationApi` to dynamically add includes to API transformers.
+- **Attach this Behavior** to `CountryTransformer`, `StateTransformer`, and `DirectorateTransformer` to enable requesting media via the API using the same `include` mechanism.
+- **Support returning optional metadata** (detailed file information) via the `is_mate_data_media` parameter or via per‑include options.
+- **Ensure backward compatibility** with existing systems and not break any existing endpoints.
+
+---
+
+#### New Features
+
+##### 1. Support for Multimedia in Geographic Models
+
+The following models have been extended with the following relationships (dynamically via `Plugin.php` without modifying the original model files):
+
+- `RainLab\Location\Models\Country`
+- `RainLab\Location\Models\State`
+- `Nano\Location\Models\State`
+- `Nano\Location\Models\Directorate`
+
+**Added relationships:**
+
+```php
+public $attachOne = [
+    'image'      => \System\Models\File::class,
+    'book_intro' => \System\Models\File::class,
+];
+
+public $attachMany = [
+    'images' => \System\Models\File::class,
+    'videos' => \System\Models\File::class,
+    'audios' => \System\Models\File::class,
+    'files'  => \System\Models\File::class,
+];
+```
+
+###### The following table explains each relationship:
+
+| Relationship | Type | Description | Typical Use |
+| :--- | :--- | :--- | :--- |
+| `image` | `attachOne` | Single image (logo, flag) | Main image for a country or city |
+| `images` | `attachMany` | Multiple image gallery | Multiple images for tourist attractions |
+| `videos` | `attachMany` | Multiple videos | Introductory videos |
+| `audios` | `attachMany` | Multiple audio files | Audio recordings of heritage |
+| `files` | `attachMany` | Multiple general files | PDF documents, additional files |
+| `book_intro` | `attachOne` | Single introductory file | Single brochure or PDF |
+
+##### 2. Backend Improvements
+
+###### a. Added List Columns
+
+The following columns have been added to the `Country`, `State`, and `Directorate` lists via the `backend.list.extendColumns` event:
+
+| Column | Type | Visible by default | Description |
+| :--- | :--- | :--- | :--- |
+| `image` | `simpleimage` | Yes | Displays the main image as a thumbnail |
+| `images` | `simpleimages` | No | Shows an icon indicating the presence of an image gallery |
+| `book_intro` | `partial` (link) | No | Link to download the introductory file |
+| `files` | `partial` (link) | No | Link to download the general files |
+| `videos` | `partial` (link) | No | Link to download the videos |
+| `audios` | `partial` (link) | No | Link to download the audio recordings |
+
+**Example of the `image` column in `columns.yaml` (dynamically):**
+
+```php
+'image' => [
+    'label' => Lang::get('nano.location::lang.public.models.image'),
+    'type' => 'simpleimage',
+    'searchable' => false,
+    'sortable' => false,
+    'invisible' => false,
+    'cssClass' => 'nolink',
+],
+```
+
+###### b. Added Form Fields
+
+A new tab named `Media` (or `الوسائط` depending on language) has been added with the following fields via the `backend.form.extendFields` event:
+
+| Field | Type | Options | Tab |
+| :--- | :--- | :--- | :--- |
+| `image` | `fileupload` | mode: image, imageWidth: 120, imageHeight: 120, useCaption: true | Media |
+| `images` | `fileupload` | mode: image, multiple: true | Media |
+| `videos` | `fileupload` | mode: file, fileTypes: mp4,avi,mov,mkv,webm, maxFiles: 5, maxFilesize: 15 | Media |
+| `audios` | `fileupload` | mode: file, fileTypes: mp3,wav,wma,m4a,ogg, maxFiles: 5, maxFilesize: 15 | Media |
+| `book_intro` | `fileupload` | mode: file, useCaption: true | Media |
+| `files` | `fileupload` | mode: file, multiple: true | Media |
+
+**Example code for adding fields in `Plugin.php`:**
+
+```php
+$widget->addTabFields([
+    'image' => [
+        'label' => Lang::get('nano.location::lang.public.models.image'),
+        'type' => 'fileupload',
+        'mode' => 'image',
+        'imageWidth' => 120,
+        'imageHeight' => 120,
+        'useCaption' => true,
+        'span' => 'auto',
+        'tab' => $tab,
+    ],
+    // ... remaining fields
+]);
+```
+
+##### 3. New Behavior: `DynamicAddMediaIncludes` (in the `Nano.LocationApi` plugin)
+
+A Behavior has been created under the namespace `Nano\LocationApi\Behaviors\DynamicAddMediaIncludes` to provide the functions for media includes in a unified and reusable way. This Behavior follows the same pattern as `DynamicAddIncludeKyc` used in the `Nano3.Kyc` plugin.
+
+###### a. Structure of the Behavior
+
+```php
+<?php namespace Nano\LocationApi\Behaviors;
+
+use October\Rain\Extension\ExtensionBase;
+use Nano\API\Classes\Transformer;
+use League\Fractal\Resource\Primitive;
+use League\Fractal\Resource\Collection;
+
+class DynamicAddMediaIncludes extends ExtensionBase
+{
+    protected Transformer $transformer;
+    
+    public function __construct(Transformer $transformer)
+    {
+        $this->transformer = $transformer;
+        
+        // Add includes to availableIncludes
+        $mediaIncludes = ['image', 'images', 'videos', 'audios', 'files', 'book_intro'];
+        foreach ($mediaIncludes as $include) {
+            if (!in_array($include, $this->transformer->availableIncludes, true)) {
+                $this->transformer->availableIncludes[] = $include;
+            }
+        }
+    }
+    
+    public function includeImage($model) { /* ... */ }
+    public function includeImages($model) { /* ... */ }
+    public function includeVideos($model) { /* ... */ }
+    public function includeAudios($model) { /* ... */ }
+    public function includeFiles($model) { /* ... */ }
+    public function includeBookIntro($model) { /* ... */ }
+}
+```
+
+###### b. Main Features of the Behavior:
+
+- **Automatic inclusion of includes**: The Behavior automatically adds `image`, `images`, `videos`, `audios`, `files`, `book_intro` to the `availableIncludes` of the Transformer.
+- **Control over metadata**: You can control the return of metadata for each include individually via request parameters:
+  - Global: `?is_mate_data_media=1`
+  - Specific: `?image[mate_data]=1&files[mate_data]=1`
+- **Integration with base Transformer methods**: The Behavior uses the `image()`, `images()`, `file()`, `files()` methods already present in `Nano\API\Classes\Transformer` to ensure a unified format.
+- **Safe exception handling**: In case of an error (e.g., the relationship does not exist on the model), default values are returned (`null` for `attachOne`, `[]` for `attachMany`) instead of throwing an exception, ensuring that the API response does not break.
+
+###### c. Detailed Behavior Methods:
+
+| Method | Resource Type | Default value on error | Description |
+| :--- | :--- | :--- | :--- |
+| `includeImage` | `Primitive` | `null` | Returns main image data |
+| `includeImages` | `Collection` | `[]` | Returns a list of gallery image data |
+| `includeVideos` | `Collection` | `[]` | Returns a list of video data |
+| `includeAudios` | `Collection` | `[]` | Returns a list of audio recording data |
+| `includeFiles` | `Collection` | `[]` | Returns a list of general file data |
+| `includeBookIntro` | `Primitive` | `null` | Returns introductory file data |
+
+##### 4. Extending the Geographic Transformers
+
+The following Transformers have been extended to include the new Behavior:
+
+- `Nano\LocationApi\Transformers\CountryTransformer`
+- `Nano\LocationApi\Transformers\StateTransformer`
+- `Nano\LocationApi\Transformers\DirectorateTransformer`
+
+This was done via the `extendTransformerDynamicAddMediaIncludes` function inside `Plugin.php` of `Nano.LocationApi`:
+
+```php
+protected function extendTransformerDynamicAddMediaIncludes($className): void
+{
+    try {
+        $className::extend(function ($transformer) {
+            if (!$transformer->isClassExtendedWith('Nano\LocationApi\Behaviors\DynamicAddMediaIncludes')) {
+                $transformer->extendClassWith('Nano\LocationApi\Behaviors\DynamicAddMediaIncludes');
+            }
+        });
+    } catch (\Exception | \Throwable $e) {
+        Log::error("Error extending transformer: " . $e->getMessage());
+    }
+}
+```
+
+##### 5. Translation Support (Multi‑language)
+
+New translation keys have been added in the Arabic and English language files inside the `Nano.Location` plugin.
+
+**File:** `plugins/nano/location/lang/ar/lang.php`
+
+```php
+'models' => [
+    'media_tab' => 'الوسائط',
+    'image' => 'الصورة الرئيسية',
+    'images' => 'معرض الصور',
+    'book_intro' => 'ملف تمهيدي',
+    'files' => 'الملفات المرفقة',
+    'videos' => 'الفيديوهات',
+    'audios' => 'التسجيلات الصوتية',
+    'image_comment' => 'اختر صورة واحدة',
+    'images_comment' => 'اختر عدة صور',
+    'book_intro_comment' => 'رفع ملف PDF أو مستند',
+    'files_comment' => 'رفع ملفات متنوعة',
+    'videos_comment' => 'رفع فيديوهات (mp4, avi, mov, mpg, mpeg, mkv, webm)',
+    'audios_comment' => 'رفع ملفات صوتية (mp3, wav, wma, m4a, ogg)',
+],
+```
+
+**File:** `plugins/nano/location/lang/en/lang.php`
+
+```php
+'models' => [
+    'media_tab' => 'Media',
+    'image' => 'Main Image',
+    'images' => 'Gallery Images',
+    'book_intro' => 'Introductory File',
+    'files' => 'Attached Files',
+    'videos' => 'Videos',
+    'audios' => 'Audio Recordings',
+    'image_comment' => 'Choose a single image',
+    'images_comment' => 'Choose multiple images',
+    'book_intro_comment' => 'Upload a PDF or document',
+    'files_comment' => 'Upload various files',
+    'videos_comment' => 'Upload videos (mp4, avi, mov, mpg, mpeg, mkv, webm)',
+    'audios_comment' => 'Upload audio files (mp3, wav, wma, m4a, ogg)',
+],
+```
+
+---
+
+#### Practical Examples
+
+##### 1. Using the API to Retrieve a Country with its Images and Videos
+
+**Request:**
+```http
+GET /api/v1/countries/1?include=image,images,videos&is_mate_data_media=1
+```
+
+**Response (JSON):**
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Yemen",
+    "code": "YE",
+    "image": {
+      "original": "https://domain.com/storage/app/media/flags/ye.png",
+      "small": "https://domain.com/storage/app/media/flags/ye_small.png",
+      "thumb": "https://domain.com/storage/app/media/flags/ye_thumb.png",
+      "mate_data": {
+        "id": 101,
+        "title": "Flag of Yemen",
+        "description": "Official flag",
+        "file_name": "ye.png",
+        "file_size": 45678,
+        "extension": "png",
+        "mime_type": "image/png"
+      }
+    },
+    "images": [
+      {
+        "original": "https://domain.com/storage/app/media/gallery/sanaa.jpg",
+        "small": "https://domain.com/storage/app/media/gallery/sanaa_small.jpg",
+        "mate_data": { ... }
+      }
+    ],
+    "videos": [
+      {
+        "file_name": "yemen_intro.mp4",
+        "path": "https://domain.com/storage/app/media/videos/yemen_intro.mp4",
+        "mate_data": { ... }
+      }
+    ]
+  }
+}
+```
+
+##### 2. Requesting a City with only the Introductory File Included
+
+**Request:**
+```http
+GET /api/v1/states/5?include=book_intro
+```
+
+**Response (excerpt):**
+```json
+{
+  "data": {
+    "id": 5,
+    "name": "Sana'a",
+    "country_id": 1,
+    "book_intro": {
+      "file_name": "sanaa_guide.pdf",
+      "path": "https://domain.com/storage/app/media/guides/sanaa_guide.pdf",
+      "file_size": 2048000
+    }
+  }
+}
+```
+
+##### 3. Requesting a Directorate with Images and Files and Custom Metadata per Include
+
+**Request:**
+```http
+GET /api/v1/directorates/10?include=images,files&images[mate_data]=1&files[mate_data]=0
+```
+
+In this example, metadata will be returned for images only, not for files.
+
+##### 4. Backend: Uploading a Main Image for a Country
+
+1. Go to `Geographic Location > Countries`.
+2. Choose a country from the list or create a new one.
+3. In the `Media` tab, upload an image in the `Main Image` field.
+4. Save the changes.
+5. The thumbnail will appear in the countries list.
+
+##### 5. Using the Behavior in a Custom Transformer
+
+If you have a custom transformer and want to add media support, you can simply attach the Behavior:
+
+```php
+use Nano\LocationApi\Behaviors\DynamicAddMediaIncludes;
+
+class MyCustomTransformer extends Transformer
+{
+    public $implement = [
+        DynamicAddMediaIncludes::class,
+    ];
+    
+    // ... rest of the code
+}
+```
+
+---
+
+#### Improvements and Fixes
+
+| Area | Improvement |
+| :--- | :--- |
+| **Exception handling** | If a media relationship does not exist on the model (e.g., `image` is not defined), `null` or `[]` is returned instead of throwing an error. |
+| **Partial metadata support** | Metadata can be requested per include (`image[mate_data]=1`) or globally (`is_mate_data_media=1`). |
+| **Full backward compatibility** | All existing transformers are unaffected; media is only included if explicitly requested (`include=image,...`). |
+| **Improved caching performance** | Media is treated like any other relationship in Fractal, allowing smart caching. |
+| **Easy extensibility** | New media relationships can be added in the future simply by adding the appropriate methods to the Behavior and adding them to `availableIncludes`. |
+| **Compatibility with `System\Models\File`** | Uses the standard October CMS file system, ensuring full compatibility with all features of `System\Models\File` (e.g., thumbnails, access control, etc.). |
+
+---
+
+#### Upgrade Requirements
+
+##### 1. Update the `Nano.Location` Plugin Code
+
+- **Replace** the file `plugins/nano/location/Plugin.php` with the new version (which contains the functions `extendCountryWithMedia`, `extendRainLabStateWithMedia`, etc., and calls them in `boot()`).
+- **Add** the new translation keys to `plugins/nano/location/lang/ar/lang.php` and `plugins/nano/location/lang/en/lang.php`.
+- **Create** the partial files for displaying links in the columns (optional, as non‑`image` columns are hidden by default). If you wish to use them, create the folder `plugins/nano/location/models/country/` and add the following files:
+  - `_link_book_intro.htm`
+  - `_link_files.htm`
+  - `_link_videos.htm`
+  - `_link_audios.htm`
+
+**Example content for `_link_book_intro.htm`:**
+```twig
+{% if model.book_intro %}
+    <a href="{{ model.book_intro.path }}" target="_blank">Download</a>
+{% endif %}
+```
+
+##### 2. Update the `Nano.LocationApi` Plugin Code
+
+- **Replace** the file `plugins/nano/locationapi/Plugin.php` with the new version (which contains the function `extendTransformerDynamicAddMediaIncludes` and calls it in `boot()`).
+- **Add** the `behaviors` folder in `plugins/nano/locationapi/` and place the file `DynamicAddMediaIncludes.php` inside it.
+- **Update** the `version.yaml` file of `Nano.LocationApi` to add version `1.1.0` as shown in the updates section.
+
+##### 3. Update `version.yaml` Files
+
+**For `Nano.Location` (`plugins/nano/location/updates/version.yaml`):**
+```yaml
+1.0.16:
+    - 'Add media relations (image, images, videos, audios, files, book_intro) to Country, State, and Directorate models'
+    - 'Add media fields and list columns to backend forms and lists for Country, State, Directorate'
+    - 'Add translations for media fields (ar/en)'
+```
+
+**For `Nano.LocationApi` (`plugins/nano/locationapi/updates/version.yaml`):**
+```yaml
+1.1.0:
+    - 'Add DynamicAddMediaIncludes behavior for CountryTransformer, StateTransformer, DirectorateTransformer'
+    - 'Support dynamic media includes (image, images, videos, audios, files, book_intro) in Location API'
+    - 'Add is_mate_data_media parameter to control returning file metadata in API responses'
+    - 'Extend availableIncludes automatically for media relations'
+```
+
+##### 4. Run Update Commands
+
+```bash
+# Clear cache
+php artisan cache:clear
+php artisan config:clear
+```
+
+##### 5. Verify File Upload Permissions
+
+Make sure the `storage/app/uploads` folder is writable by the web server:
+
+```bash
+chmod -R 775 storage/app/uploads
+```
+
+##### 6. Test the Functionality
+
+- **Test the backend:** Go to `Geographic Location > Countries`, try uploading an image for a country and verify that it appears in the list.
+- **Test the API:** Use `curl` or Postman to test the following endpoints:
+
+```bash
+# Fetch a country with its main image
+curl -X GET "https://yourdomain.com/api/v1/countries/1?include=image"
+
+# Fetch a city with its image gallery and files
+curl -X GET "https://yourdomain.com/api/v1/states/5?include=images,files&is_mate_data_media=1"
+```
+
+---
+
+#### Backward Compatibility
+
+- **No breaking changes** to the database structure – only `attachOne` and `attachMany` relationships have been added dynamically.
+- **Media is not automatically included** in existing API responses, so existing applications that use the API will not be affected.
+- **All existing API methods** work unchanged.
+- **The existing backend** has not been altered; only a new tab has been added without removing any existing fields.
+
+---
+
+#### Conclusion
+
+Version 1.1.0 of the `Nano.Location` and `Nano.LocationApi` plugins represents a major step forward in multimedia support for geographic models. Thanks to the modular behavior‑based architecture, it is now easy to add and manage images, videos, and files for countries, states, and directorates through an intuitive administration interface, and to retrieve them via the API in the same way as any other relationship.
+
+---
+
+**Reference documentation:**
+- [Nano.Location Plugin Documentation](./docs/Location/Docs-Nano-Location-en.md)
+- [DynamicAddMediaIncludes Behavior Documentation](./docs/Location/Docs-DynamicAddMediaIncludes-en.md)
+- [Location API Documentation](./docs/Location/Docs-LocationAPI-en.md)
+
+
 ## 2026-05-20 – 2026-05-22
 
 **CashPay Payment Gateway Update (Electronic Cash Payment – OTP) in the NanoSoft Payment System**
