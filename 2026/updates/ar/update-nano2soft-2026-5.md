@@ -5486,3 +5486,220 @@ $query = AccessManager::instance()->applyAccessScope($query, $access, [
 - [دليل تطوير إضافات API (Nano-Api-SKILL)](./docs/mcp/Nano-Api-SKILL.md
 - [تحديث إضافة `Nano.AbsenceApi` (نموذج تطبيقي)](./docs/AbsenceApi/Update-AbsenceApi-v1.1.0-ar.md)
 
+## 2026-05-26 - 2026-05-27
+
+**تحديث إضافة `Nano.AbsenceApi` – الإصدار 1.1.0**
+
+### إعادة هيكلة كاملة للمتحكمات وفقاً لدليل `Nano-Api-SKILL.md` وتكامل `AccessManager`
+
+---
+
+### ملخص التحديثات
+
+يقدم الإصدار **1.1.0** من إضافة `Nano.AbsenceApi` نقلة نوعية في جودة الكود وأمانه وتوافقه مع معايير Nano API الحديثة. تم إعادة كتابة جميع المتحكمات (`Absences`, `Files`, `ClassTypes`, `ClassTypeCompanies`) بالكامل لتصبح متوافقة مع دليل `Nano-Api-SKILL.md`، مع الاستفادة الكاملة من `AccessManager` للتحكم المركزي بالصلاحيات، `AdvancedQueryHelper` للتصفية الديناميكية، ونظام تخزين مؤقت وأحداث موحد.
+
+**أبرز التغييرات:**
+- توحيد هيكل جميع المتحكمات (Index, Show, Store, Update, getRecords).
+- استخدام `AccessManager::checkByResource` و `checkWithFallback` للتحقق من الصلاحيات بناءً على إعدادات `config.php`.
+- إضافة دعم الفلاتر المتقدمة (`is_or`, `is_not`, `is_force`, `is_or_null`) مع تكوين مرن لكل نوع مستخدم.
+- توحيد دالة `getRecords` لدعم خيارات الإخراج المتعددة (`is_query`, `is_first`, `is_collection`, `is_paginator`، إلخ) والأحداث (`extendQueryBefore`, `extendQuery`) والتخزين المؤقت.
+- إضافة `frontend_resolver` الديناميكي لحل `student_id` و `record_id` تلقائياً لمستخدمي الطلاب وأولياء الأمور.
+- تطبيق `applyAccessScope` مع إمكانية تعطيل نطاقات محددة.
+- تحسين الأمان عبر دمج صلاحيات `show` مع `list` باستخدام `checkWithFallback`.
+- توسيع ملف `config.php` ليشمل إعدادات `permission`, `advanced_filters`, `frontend_resolver` لكل مورد.
+
+---
+
+### أهداف الإصدار
+
+- **توحيد معايير التطوير** بين جميع متحكمات الـ API في النظام البيئي Nano.
+- **تبسيط إدارة الصلاحيات** عبر مركزية الإعدادات في `config.php` واستخدام دوال `AccessManager`.
+- **تحسين الأمان** من خلال الفلاتر المتقدمة المقيدة والتحقق من الصلاحيات لكل عملية.
+- **زيادة المرونة** عبر دعم خيارات إخراج متعددة وأحداث قابلة للتوسع.
+- **تسهيل الصيانة** بإعادة هيكلة الكود بحيث يكون متسقاً وقابلاً للقراءة.
+
+---
+
+### الميزات الجديدة والتحسينات
+
+#### 1. توحيد الصلاحيات باستخدام `AccessManager`
+
+- **قبل الإصدار 1.1.0**: كان كل متحكم يبني مصفوفة الصلاحيات يدوياً داخل الكود، مما أدى إلى تكرار المنطق وصعوبة الصيانة.
+- **بعد التحديث**: يتم تعريف جميع إعدادات الصلاحيات في `config.php` لكل مورد وعملية (`list`, `show`, `create`, `update`). يتم تحميلها تلقائياً عبر `AccessManager::checkByResource`.
+
+**مثال من `Absences`:**
+
+```php
+$access = AccessManager::checkByResource('nano.absenceapi::absences.list', $user);
+```
+
+#### 2. دعم الفلاتر المتقدمة (`advanced_filters`)
+
+تمت إضافة مصفوفة `advanced_filters` داخل إعدادات كل عملية، مما يسمح بالتحكم في:
+
+- الحقول التي يمكن استخدام `is_or`, `is_not`, `is_or_null` عليها.
+- قيم افتراضية لكل نوع مستخدم (backend/frontend).
+- قواعد خاصة بكل حقل وحتى بكل `ref_type` لمستخدمي frontend.
+
+**مثال من `config.php`:**
+
+```php
+'advanced_filters' => [
+    'field_specific_rules' => [
+        'student_id' => [
+            'frontend' => [
+                '*' => false,
+                'parent' => true,
+            ],
+        ],
+    ],
+],
+```
+
+#### 3. المحلل الديناميكي للطلاب وأولياء الأمور (`frontend_resolver`)
+
+تم إضافة مقطع `frontend_resolver` الذي يقوم تلقائياً بـ:
+
+- تحديد ما إذا كان المستخدم طالباً (ref_type = student) ثم تعيين `student_id` من المستخدم وجلب `record_id` الحالي إذا لزم الأمر.
+- لولي الأمر، التأكد من توفير `student_id` أو `record_id`، والتحقق من ملكية الطالب، ثم ملء القيم المفقودة.
+
+**مثال التطبيق في المتحكم:**
+
+```php
+$options = AccessManager::instance()->resolveDynamicFrontendOptions(
+    $user, $options, null, 'nano.absenceapi::absences.list'
+);
+```
+
+#### 4. توحيد دالة `getRecords`
+
+أصبحت دالة `getRecords` متطابقة في جميع المتحكمات وتدعم:
+
+- **فلاتر متقدمة:** عبر `AdvancedQueryManager::scopeWhereField` لكل حقل مع خيارات `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **أحداث:** `api.list.extendQueryBefore` و `api.list.extendQuery` لتمكين التوسع الخارجي.
+- **تخزين مؤقت:** اختياري عبر `cached()`.
+- **خيارات إخراج متعددة:** `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **`with_count`, `group_by`, `having`, `take_limet`, `withTrashed`, `onlyTrashed`.**
+
+#### 5. تطبيق النطاق (`applyAccessScope`) مع إمكانية التعطيل
+
+أصبح من الممكن تطبيق نطاقات الشركة والقسم والولاية ومنشئ السجل تلقائياً، مع إمكانية تعطيل نطاقات معينة ببساطة عن طريق حذف المفتاح المقابل:
+
+```php
+$query = AccessManager::instance()->applyAccessScope($query, $access, [
+    'company_field'    => 'companys_id',
+    'department_field' => 'departments_id',
+    // 'state_field' omitted -> no state filter
+    'created_by_field' => 'created_by',
+]);
+```
+
+#### 6. تحسين دالة `show` باستخدام `checkWithFallback`
+
+لتجنب تكرار إعدادات الصلاحيات، تستخدم `show` الآن `checkWithFallback` لاستخدام إعدادات `list` إذا لم توجد إعدادات خاصة بـ `show`:
+
+```php
+$access = AccessManager::checkWithFallback(
+    'nano.absenceapi::absences.show',
+    'nano.absenceapi::absences.list',
+    $user
+);
+```
+
+#### 7. تحديث كامل للمتحكمات الأخرى
+
+- **`Files`**: أضيفت لها نفس بنية `getRecords` مع دعم فلاتر `companys_id`, `departments_id`, `ref_type_class`، وتطبيق `applyAccessScope` للشركة والقسم.
+- **`ClassTypes`**: تم تحديثه ليدعم الفلاتر الأساسية (`ref_type`, `is_active`) وخيارات الإخراج المتعددة.
+- **`ClassTypeCompanies`**: تم تحديثه ليدعم فلاتر `companys_id`, `departments_id`, `ref_type`، وتطبيق `applyAccessScope` على الشركة والقسم.
+
+---
+
+### أمثلة عملية على الاستخدام الجديد
+
+#### 1. جلب قائمة الغيابات لولي أمر مع فلترة متقدمة
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/absences?student_id=100&is_or_student_id=false&absences_status=absent&include=student"
+```
+
+#### 2. إنشاء سجل غياب جديد عبر API
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/absence/absences" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"student_id": 100, "absences_status": "absent", "date_at": "2026-05-25"}'
+```
+
+#### 3. استخدام `is_to_sql` لتصحيح الأخطاء
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'is_to_sql' => true,
+]);
+// ستتم طباعة استعلام SQL في trace_log
+```
+
+---
+
+### توافق الإصدارات السابقة
+
+- **جميع نقاط النهاية الحالية** (routes) لم تتغير، لذا لن يتأثر أي تطبيق يستهلك الـ API.
+- **المخرجات** لا تزال متوافقة مع الهيكل السابق (مع إضافة `input_data`, `process_data`, `debug` فقط عند الحاجة).
+- **لا توجد هجرات قاعدة بيانات** جديدة.
+- **التكوين الجديد** اختياري: يمكنك الاستمرار في استخدام الإعدادات القديمة (دون `advanced_filters` أو `frontend_resolver`) وستعمل الإضافة بالسلوك الافتراضي.
+
+---
+
+### متطلبات الترقية (من 1.0.1 إلى 1.1.0)
+
+1. **تحديث الكود**:
+   - استبدال جميع ملفات المتحكمات (`Absences.php`, `Files.php`, `ClassTypes.php`, `ClassTypeCompanies.php`) بالنسخ الجديدة.
+   - استبدال ملف `config.php` بالإصدار الجديد الذي يحتوي على أقسام `permission`, `advanced_filters`, `frontend_resolver`.
+
+2. **تحديث ملف `version.yaml`**:
+   - أضف الإصدار `1.1.0` كما هو موضح في بداية هذا المستند.
+
+3. **تنفيذ الهجرات** (لا توجد).
+
+4. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+5. **اختبار الوظائف**:
+   - تحقق من أن جميع نقاط النهاية (`absences`, `files`, `class-types`, `class-type-companies`) تعمل كما هو متوقع.
+   - اختبر صلاحيات وصول مختلفة (backend, frontend student, frontend parent, guest).
+   - تحقق من أن الفلاتر المتقدمة (`is_or`, `is_not`) تعمل فقط للحقول والأنواع المسموحة.
+
+---
+
+### الفوائد والقيمة المضافة
+
+- **أمان محسّن**: يتم تطبيق نطاقات الصلاحيات تلقائياً ولا يمكن تجاوزها بسهولة.
+- **مرونة عالية**: يمكن تكوين سلوك كل عملية بشكل مستقل دون تعديل الكود.
+- **قابلية التوسع**: بفضل الأحداث، يمكن للإضافات الأخرى تعديل الاستعلامات ديناميكياً.
+- **أداء أفضل**: مع دعم التخزين المؤقت واستبعاد الأعمدة غير الضرورية.
+- **تجربة مطور أفضل**: جميع المتحكمات تتبع نفس النمط، مما يسهل تعلم وصيانة الكود.
+
+---
+
+### الخاتمة
+
+يمثل الإصدار **1.1.0** من `Nano.AbsenceApi` إنجازاً كبيراً نحو توحيد معايير API في نظام Nano البيئي. بفضل إعادة الهيكلة الكاملة وتكامل `AccessManager`، أصبحت الإضافة أكثر أماناً وقابلية للصيانة والتوسع. جميع المتحكمات الآن متوافقة مع دليل `Nano-Api-SKILL.md` وتقدم ميزات متقدمة مثل الفلاتر المتقدمة والمحلل الديناميكي والأحداث.
+
+نوصي جميع المطورين بالترقية إلى هذا الإصدار والاستفادة من الإعدادات المركزية في `config.php` لتخصيص سلوك API حسب احتياجاتهم.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
+- [توثيق إضافة `Nano.SchoolApi`](./docs/SchoolApi/Docs-SchoolApi-ar.md)
+- [توثيق إضافة `Nano.StudentsApi`](./docs/StudentsApi/Docs-StudentsApi-ar.md)
+- [توثيق إضافة `Nano.AbsenceApi`](./docs/AbsenceApi/Docs-AbsenceApi-ar.md)
+- [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
+- [توثيق كلاس `AccessManager`](../AuthApi/Docs-AccessManager-ar.md)
+- [توثيق كلاس `AdvancedQueryHelper`](../../QueryBuilder/Docs-AdvancedQueryHelper.md)
+- [توثيق كلاس `StudentRecordsHelper` (Tss.Student)](../../Student/Helpers/Docs-StudentRecordsHelper-Class-ar.md)

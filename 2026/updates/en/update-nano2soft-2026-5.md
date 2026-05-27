@@ -5485,3 +5485,221 @@ Version **1.0.21** of `Nano.AuthApi` establishes `AccessManager` as a comprehens
 - [API Plugin Development Guide (Nano-Api-SKILL)](./docs/mcp/Nano-Api-SKILL.md)
 - [Update to the `Nano.AbsenceApi` plugin (practical example)](./docs/AbsenceApi/Update-AbsenceApi-v1.1.0-en.md)
 
+## 2026-05-26 – 2026-05-27
+
+**Update to the `Nano.AbsenceApi` Plugin – Version 1.1.0**
+
+### Complete Restructuring of Controllers According to the `Nano-Api-SKILL.md` Guide and Integration of `AccessManager`
+
+---
+
+### Summary of Updates
+
+Version **1.1.0** of the `Nano.AbsenceApi` plugin represents a significant leap in code quality, security, and compatibility with modern Nano API standards. All controllers (`Absences`, `Files`, `ClassTypes`, `ClassTypeCompanies`) have been completely rewritten to comply with the `Nano-Api-SKILL.md` guide, making full use of `AccessManager` for centralised permission control, `AdvancedQueryHelper` for dynamic filtering, and a unified caching and event system.
+
+**Key changes:**
+- Unified structure for all controllers (Index, Show, Store, Update, getRecords).
+- Use of `AccessManager::checkByResource` and `checkWithFallback` to check permissions based on `config.php` settings.
+- Added support for advanced filters (`is_or`, `is_not`, `is_force`, `is_or_null`) with flexible configuration per user type.
+- Unified `getRecords` function to support multiple output options (`is_query`, `is_first`, `is_collection`, `is_paginator`, etc.), events (`extendQueryBefore`, `extendQuery`), and caching.
+- Added dynamic `frontend_resolver` to automatically resolve `student_id` and `record_id` for student and parent frontend users.
+- Applied `applyAccessScope` with the ability to disable specific scopes.
+- Improved security by merging `show` permissions with `list` using `checkWithFallback`.
+- Expanded the `config.php` file to include settings for `permission`, `advanced_filters`, and `frontend_resolver` for each resource.
+
+---
+
+### Release Objectives
+
+- **Standardise development practices** across all API controllers in the Nano ecosystem.
+- **Simplify permission management** by centralising settings in `config.php` and using `AccessManager` functions.
+- **Improve security** through advanced restricted filters and permission checks for every operation.
+- **Increase flexibility** by supporting multiple output options and extensible events.
+- **Facilitate maintenance** by restructuring the code to be consistent and readable.
+
+---
+
+### New Features and Improvements
+
+#### 1. Unified Permissions Using `AccessManager`
+
+- **Before version 1.1.0**: each controller built the permission array manually inside the code, leading to duplicated logic and difficult maintenance.
+- **After the update**: all permission settings are defined in `config.php` for each resource and operation (`list`, `show`, `create`, `update`). They are automatically loaded via `AccessManager::checkByResource`.
+
+**Example from `Absences`:**
+
+```php
+$access = AccessManager::checkByResource('nano.absenceapi::absences.list', $user);
+```
+
+#### 2. Advanced Filters Support (`advanced_filters`)
+
+An `advanced_filters` array has been added inside the settings for each operation, allowing control over:
+
+- Which fields can use `is_or`, `is_not`, `is_or_null`.
+- Default values for each user type (backend/frontend).
+- Special rules per field and even per `ref_type` for frontend users.
+
+**Example from `config.php`:**
+
+```php
+'advanced_filters' => [
+    'field_specific_rules' => [
+        'student_id' => [
+            'frontend' => [
+                '*' => false,
+                'parent' => true,
+            ],
+        ],
+    ],
+],
+```
+
+#### 3. Dynamic Student/Parent Resolver (`frontend_resolver`)
+
+A `frontend_resolver` section has been added that automatically:
+
+- Determines whether the user is a student (`ref_type` = student) and then sets `student_id` from the user and fetches the current `record_id` if needed.
+- For a parent, ensures that `student_id` or `record_id` is provided, verifies ownership of the student, and fills in missing values.
+
+**Example of its use in the controller:**
+
+```php
+$options = AccessManager::instance()->resolveDynamicFrontendOptions(
+    $user, $options, null, 'nano.absenceapi::absences.list'
+);
+```
+
+#### 4. Unified `getRecords` Function
+
+The `getRecords` function has become identical across all controllers and supports:
+
+- **Advanced filters:** via `AdvancedQueryManager::scopeWhereField` for each field with options `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **Events:** `api.list.extendQueryBefore` and `api.list.extendQuery` to enable external extension.
+- **Caching:** optional via `cached()`.
+- **Multiple output options:** `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **`with_count`, `group_by`, `having`, `take_limet`, `withTrashed`, `onlyTrashed`.**
+
+#### 5. Scope Application (`applyAccessScope`) with Disabling Capability
+
+It is now possible to automatically apply company, department, state, and creator scopes, and to disable specific scopes simply by omitting the corresponding key:
+
+```php
+$query = AccessManager::instance()->applyAccessScope($query, $access, [
+    'company_field'    => 'companys_id',
+    'department_field' => 'departments_id',
+    // 'state_field' omitted -> no state filter
+    'created_by_field' => 'created_by',
+]);
+```
+
+#### 6. Improved `show` Function Using `checkWithFallback`
+
+To avoid duplicating permission settings, `show` now uses `checkWithFallback` to fall back to `list` settings if no `show`‑specific settings exist:
+
+```php
+$access = AccessManager::checkWithFallback(
+    'nano.absenceapi::absences.show',
+    'nano.absenceapi::absences.list',
+    $user
+);
+```
+
+#### 7. Full Update of Other Controllers
+
+- **`Files`**: Added the same `getRecords` structure with support for filters `companys_id`, `departments_id`, `ref_type_class`, and application of `applyAccessScope` for company and department.
+- **`ClassTypes`**: Updated to support basic filters (`ref_type`, `is_active`) and multiple output options.
+- **`ClassTypeCompanies`**: Updated to support filters `companys_id`, `departments_id`, `ref_type`, and application of `applyAccessScope` for company and department.
+
+---
+
+### Practical Examples of the New Usage
+
+#### 1. Fetching a List of Absences for a Parent with Advanced Filtering
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/absence/absences?student_id=100&is_or_student_id=false&absences_status=absent&include=student"
+```
+
+#### 2. Creating a New Absence Record via the API
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/absence/absences" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"student_id": 100, "absences_status": "absent", "date_at": "2026-05-25"}'
+```
+
+#### 3. Using `is_to_sql` for Debugging
+
+```php
+$result = StudentHelper::getStudentRecordRecords([
+    'year_id' => 3,
+    'is_to_sql' => true,
+]);
+// The SQL query will be printed in trace_log
+```
+
+---
+
+### Backward Compatibility
+
+- **All existing endpoints** (routes) have not changed, so any application consuming the API will not be affected.
+- **Outputs** remain compatible with the previous structure (with `input_data`, `process_data`, `debug` added only when needed).
+- **No new database migrations**.
+- **The new configuration is optional**: you can continue using the old settings (without `advanced_filters` or `frontend_resolver`), and the plugin will work with default behaviour.
+
+---
+
+### Upgrade Requirements (from 1.0.1 to 1.1.0)
+
+1. **Update the code**:
+   - Replace all controller files (`Absences.php`, `Files.php`, `ClassTypes.php`, `ClassTypeCompanies.php`) with the new versions.
+   - Replace the `config.php` file with the new version, which contains the `permission`, `advanced_filters`, and `frontend_resolver` sections.
+
+2. **Update the `version.yaml` file**:
+   - Add version `1.1.0` as shown at the beginning of this document.
+
+3. **Run migrations** (none).
+
+4. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+5. **Test the functionality**:
+   - Verify that all endpoints (`absences`, `files`, `class-types`, `class-type-companies`) work as expected.
+   - Test different access permissions (backend, frontend student, frontend parent, guest).
+   - Verify that advanced filters (`is_or`, `is_not`) work only for the allowed fields and types.
+
+---
+
+### Benefits and Added Value
+
+- **Improved security**: permission scopes are automatically applied and cannot be easily bypassed.
+- **High flexibility**: the behaviour of each operation can be configured independently without modifying the code.
+- **Extensibility**: thanks to events, other plugins can dynamically modify the queries.
+- **Better performance**: with support for caching and excluding unnecessary columns.
+- **Better developer experience**: all controllers follow the same pattern, making the code easier to learn and maintain.
+
+---
+
+### Conclusion
+
+Version **1.1.0** of `Nano.AbsenceApi` represents a major achievement in standardising API standards within the Nano ecosystem. Thanks to the complete restructuring and integration of `AccessManager`, the plugin is now more secure, maintainable, and extensible. All controllers are now compliant with the `Nano-Api-SKILL.md` guide and offer advanced features such as advanced filters, dynamic resolver, and events.
+
+We recommend that all developers upgrade to this version and take advantage of the centralised settings in `config.php` to customise the API behaviour according to their needs.
+
+---
+
+**Reference documentation**:
+- [Documentation of the `Nano.StudyyearApi` plugin](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
+- [Documentation of the `Nano.SchoolApi` plugin](./docs/SchoolApi/Docs-SchoolApi-en.md)
+- [Documentation of the `Nano.StudentsApi` plugin](./docs/StudentsApi/Docs-StudentsApi-en.md)
+- [Documentation of the `Nano.AbsenceApi` plugin](./docs/AbsenceApi/Docs-AbsenceApi-en.md)
+- [API Plugin Development Guide (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
+- [`AccessManager` class documentation](../AuthApi/Docs-AccessManager-en.md)
+- [`AdvancedQueryHelper` class documentation](../../QueryBuilder/Docs-AdvancedQueryHelper.md)
+- [`StudentRecordsHelper` class documentation (Tss.Student)](../../Student/Helpers/Docs-StudentRecordsHelper-Class-en.md)
+
