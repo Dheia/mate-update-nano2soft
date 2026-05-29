@@ -5924,3 +5924,296 @@ $result = StudentHelper::getStudentRecordRecords([
 - [توثيق `Nano.HomeworkApi`](./docs/HomeworkApi/Docs-HomeworkApi-ar.md)
 - [تحديث `Nano.HomeworkApi` الإصدار 1.0.0](./docs/HomeworkApi/Update-HomeworkApi-v1.0.1-ar.md)
 
+## 2026-05-26 - 2026-05-29
+
+### تحديث إضافة `Nano.Orders` – الإصدار 2.2.11  
+### تحديث إضافة `Nano.OrdersApi` – الإصدار 1.0.21
+
+---
+
+## ملخص التحديثات
+
+شهدت إضافة `Nano.Orders` في الإصدار **2.2.11** تحديثات جوهرية تهدف إلى:
+
+- **إثراء نموذج `Order` بعلاقات إضافية** لتغطية المزيد من سيناريوهات الأعمال (مركبة الموصل، الدولة، المدينة، المطارات).
+- **تطوير نظام إعدادات تقرير الطلب** ليكون أكثر تنظيماً وشمولية، مع تقسيم الإعدادات إلى أقسام منطقية في `fields.yaml`.
+- **إعادة هيكلة قالب التقرير `ReportsOrders`** ليعرض جميع حقول الطلب بشكل مرتب واحترافي، مع دعم الإعدادات الجديدة.
+
+أما إضافة `Nano.OrdersApi` في الإصدار **1.0.21** فقد ركزت على دعم العلاقات الجديدة في `OrderTransformer`، مما يتيح للمطورين استرجاع بيانات إضافية (نوع مركبة الموصل، مركبة الموصل، الدولة، المدينة، المطارات) عبر واجهة API.
+
+---
+
+## Nano.Orders v2.2.11 – علاقات جديدة، إعدادات تقرير متكاملة، وقوالب محدثة
+
+### أهداف الإصدار
+
+- **إضافة علاقات مفقودة** في نموذج `Order` لتغطية احتياجات التطبيقات المتقدمة (مركبة الموصل، الدولة، المدينة، وجهات المغادرة والوصول).
+- **إعادة تصميم نظام إعدادات التقرير** (`OrdersSetting`) ليكون مرناً ومنظماً، مع دعم التحكم بكل حقل يمكن أن يظهر في التقرير.
+- **إعادة كتابة قالب التقرير `ReportsOrders`** ليعرض جميع بيانات الطلب بشكل شامل ومنسق، مع الاستفادة الكاملة من الإعدادات الجديدة.
+
+### الميزات الجديدة
+
+#### 1. علاقات إضافية في نموذج `Order`
+
+تم إضافة العلاقات التالية إلى نموذج `Order` (ملف `Order.php`):
+
+| العلاقة | الجدول المرتبط | المفتاح | الوصف |
+|---------|---------------|---------|-------|
+| `delivery_vehicle_type` | `Nano\Deliverys\Models\VehicleType` | `delivery_vehicle_type_id` | نوع مركبة الموصل (معرف رقمي). |
+| `delivery_vehicle_ref_type` | `Nano\Deliverys\Models\VehicleType` | `delivery_vehicle_type_ref_type` | نوع مركبة الموصل (معرف نصي). |
+| `delivery_car` | `Nano\Deliverys\Models\Car` | `delivery_car_id` | بيانات مركبة الموصل التفصيلية. |
+| `country` | `RainLab\Location\Models\Country` | `country_id` | الدولة (لدعم تعدد الدول). |
+| `state` | `RainLab\Location\Models\State` | `state_id` | المدينة (لتصفية الطلبات حسب المنطقة). |
+| `departuredestination` | `Nano\Deliverys\Models\Airport` | `departure_destination` | جهة المغادرة (مطار أو محطة). |
+| `arrivaldestination` | `Nano\Deliverys\Models\Airport` | `arrival_destination` | جهة الوصول (مطار أو محطة). |
+
+**القيمة المضافة**:
+- يمكن الآن الوصول إلى نوع مركبة الموصل ومركبته بسهولة من خلال الطلب.
+- دعم متعدد الدول والمدن يسمح بتطبيقات توصيل جغرافية متقدمة.
+- دعم حجوزات السفر والرحلات عبر مطارات محددة.
+
+#### 2. تحديث شامل لإعدادات تقرير الطلب (`OrdersSetting`)
+
+##### 2.1 توسيع دالة `initSettingsData`
+
+تم تحديث دالة `initSettingsData` في نموذج `OrdersSetting` لتشمل جميع الإعدادات الجديدة، وتنظيمها في أقسام منطقية:
+
+| القسم | أمثلة الإعدادات |
+|-------|----------------|
+| رأس التقرير (Logo) | `is_config_logo_report`, `is_view_logo_r_company_name`, `is_view_logo_l_company_name`, `is_view_logo_c_company_logo` |
+| عنوان التقرير | `is_config_titel_report`, `is_view_titel_name` |
+| معلومات الطلب الأساسية | `is_view_info_order`, `is_view_id`, `is_view_order_type`, `is_view_created_at`, `is_view_order_date` |
+| بيانات العميل الأساسية | `is_view_basic_customer`, `is_view_sup_cus_id`, `is_view_sup_cus_name` |
+| بيانات العميل التفصيلية | `is_view_customer`, `is_view_customer_id`, `is_view_customer_address` |
+| بيانات الشحن | `is_view_shipping`, `is_view_shipping_id`, `is_view_shipping_address`, `is_view_shipping_pickup` |
+| بيانات محل الطلب | `is_view_from`, `is_view_from_id`, `is_view_from_address` |
+| بيانات المتجر/المطعم | `is_view_departments`, `is_view_departments_id`, `is_view_departments_address` |
+| بيانات الموصل | `is_view_delivery`, `is_view_delivery_id`, `is_view_delivery_user_id`, `is_view_delivery_vehicle_type`, `is_view_delivery_car_id` |
+| بيانات الحمولة والمركبة | `is_view_load_section`, `is_view_load_ref_type`, `is_view_vehicle_type_ref_type`, `is_view_weight`, `is_view_length` |
+| بيانات الحجز والرحلة | `is_view_booking_section`, `is_view_passport_type`, `is_view_passport_number`, `is_view_flight_number`, `is_view_departure_destination`, `is_view_arrival_destination` |
+| مجاميع الطلب | `is_view_total_section`, `is_view_currencys_id`, `is_view_cart_total`, `is_view_total_discount`, `is_view_shipping_total`, `is_view_total_bill` |
+| الملاحظات | `is_view_notes`, `is_view_customer_notes`, `is_view_admin_notes`, `is_view_load_notes` |
+| جدول الأصناف | `is_config_body_report`, `is_view_field_ms`, `is_view_field_products_name`, `is_view_field_quantity`, `is_view_field_real_price` |
+| تذييل التقرير | `is_config_footer_report`, `is_view_created_by`, `is_view_employees_id` |
+
+تم إضافة هذه الإعدادات بشكل افتراضي (مع قيم مناسبة مثل `true` أو `false`) لضمان تجربة متسقة للمستخدم.
+
+##### 2.2 إعادة هيكلة `fields.yaml`
+
+تم تقسيم ملف `fields.yaml` إلى أقسام تعكس الأقسام المذكورة أعلاه، باستخدام عنصر `section` لعناوين الأقسام. مثال:
+
+```yaml
+basic_customer_section_help:
+    label: 'nano.orders::lang.orders_setting.form.config_report.basic_customer_section_help'
+    commentAbove: 'nano.orders::lang.orders_setting.form.config_report.basic_customer_section_help_comment'
+    oc.commentPosition: 'top'
+    type: section
+    span: storm
+    cssClass: col-sm-12 m-a-0  p-a-2 
+    tab: config_report
+
+is_view_basic_customer:
+    label: 'nano.orders::lang.orders_setting.form.config_report.is_view_basic_customer'
+    type: checkbox
+    default: true
+    span: storm
+    cssClass: col-sm-2 m-a-0  p-a-2 b-checkbox-titel-222 b-checkbox2  b-l
+    trigger:
+        action: show
+        field: is_config_header_report
+        condition: checked
+    tab: config_report
+```
+
+**الفوائد**:
+- تنظيم أفضل للإعدادات، مما يسهل على المستخدم العثور على الخيار المطلوب.
+- استخدام `trigger` لإظهار/إخفاء الحقول ذات الصلة بناءً على الخيارات الرئيسية.
+- إضافة `commentAbove` لشرح كل قسم.
+
+#### 3. إعادة كتابة قالب تقرير `ReportsOrders`
+
+تم تحديث ملف `default_content.htm` (في المسار `plugins/nano/orders/views/tsstemplate/ReportsOrders/print/`) بشكل كامل ليعرض **جميع الحقول الممكنة** بطريقة منظمة وجذابة.
+
+##### 3.1 هيكل التقرير الجديد
+
+| القسم | المحتوى |
+|-------|---------|
+| **رأس التقرير** | يعرض `report_header` المدعوم من `Tss.Reports`. |
+| **العنوان** | يعرض `is_view_titel_name`. |
+| **معلومات الطلب الأساسية** | رقم الطلب، النوع، الحالة، التواريخ (الإنشاء، الطلب، الشحن، التسليم، العودة). |
+| **بيانات العميل الأساسية** | رقم العميل، اسم العميل، البريد، الجوال، الدولة/المدينة. |
+| **بيانات العميل التفصيلية** | الاسم، العنوان، البريد، الهاتف، الدولة/المدينة. |
+| **بيانات الشحن** | اسم المستلم، العنوان، البريد، الهاتف، حقل `pickup`. |
+| **بيانات محل الطلب** | الاسم، العنوان، البريد، الهاتف. |
+| **بيانات المتجر/المطعم** | الاسم، العنوان، البريد، الهاتف. |
+| **بيانات الموصل** | الرقم، الاسم، معرف الحساب، البريد، الهاتف، رقم العرض، نوع المركبة، معرف المركبة. |
+| **بيانات الحمولة والمركبة** | نوع المركبة، نوع الحمولة، عدد الأشخاص، حساسية التخزين، قابلية الكسر، القياس باللتر، الوزن، الطول، العرض، الارتفاع. |
+| **بيانات الحجز والرحلة** | نوع الهوية، رقم الهوية، رقم الحجز، رقم الرحلة، ذهاباً وإياباً، جهة المغادرة، جهة الوصول. |
+| **جدول الأصناف** | يعرض الأعمدة القابلة للتخصيص عبر الإعدادات (الرقم، رقم الصنف، اسم المنتج، المتجر، الوحدة، الخيارات، الكمية، السعر، الإجمالي، الملاحظة). |
+| **مجاميع الطلب** | العملة، المجموع الفرعي، إجمالي العربة، الخصم، الضريبة، رسوم التوصيل، الإكرامية، الإضافات، الخصومات، الإجمالي النهائي، طريقة الدفع، حالة الدفع. |
+| **الملاحظات** | ملاحظات العميل، الإدارة، الحمولة، الإضافات، الخصومات. |
+| **رمز QR** | في حال تفعيل الإعداد. |
+| **تذييل التقرير** | `report_footer` و `report_owner`. |
+
+##### 3.2 تحسينات تقنية في القالب
+
+- استخدام `{% if settings.is_view_... %}` للتحقق من الإعدادات قبل عرض أي قسم أو حقل.
+- استخدام `{% set customer = ... %}` لتبسيط الوصول إلى بيانات العميل.
+- استخدام الفلاتر `|date` و `|number_format` لتنسيق التواريخ والأرقام.
+- استخدام `{{ nano_order_print_options(...) }}` لعرض خيارات الأصناف الإضافية.
+- دعم عرض `delivery_vehicle_type` و `delivery_car` باستخدام العلاقات الجديدة.
+- دعم عرض `departuredestination` و `arrivaldestination` باستخدام العلاقات الجديدة.
+
+**مثال على عرض بيانات الموصل المحسنة:**
+```twig
+{% if dataModel['data'].is_view_delivery_vehicle_type %}
+<div class="item cust-with2">
+    <div class="item-label">نوع المركبة :</div>
+    <div class="item-data">
+        {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_type_ref_type|default(dataModel['records'].delivery_vehicle_type_id) %}
+        {% if delivery_vehicle_name %}
+            {% if dataModel['records'].delivery_vehicle_type and dataModel['records'].delivery_vehicle_type.name %}
+                {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_type.name %}
+            {% elseif dataModel['records'].delivery_vehicle_ref_type and dataModel['records'].delivery_vehicle_ref_type.name %}
+                {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_ref_type.name %}
+            {% endif %}
+        {% endif %}
+        {{ delivery_vehicle_name|default('---') }}
+    </div>
+</div>
+{% endif %}
+```
+
+##### 3.3 دعم الإعدادات الجديدة في القالب
+
+تمت إضافة كتل شرطية لكل إعداد جديد، مما يضمن أن المستخدم يتحكم بشكل كامل في ما يظهر في التقرير. على سبيل المثال، قسم بيانات الحجز والرحلة يتم عرضه فقط إذا كان الإعداد `is_view_booking_section` مفعلاً.
+
+---
+
+## Nano.OrdersApi v1.0.21 – دعم العلاقات الجديدة في `OrderTransformer`
+
+### أهداف الإصدار
+
+- **توسيع `OrderTransformer`** ليشمل العلاقات الجديدة المضافة إلى نموذج `Order`، مما يتيح لمستهلكي API الحصول على بيانات أكثر ثراءً.
+
+### الميزات الجديدة
+
+#### 1. إضافة العلاقات إلى `availableIncludes`
+
+تم إضافة العلاقات التالية إلى مصفوفة `availableIncludes` في `OrderTransformer`:
+
+```php
+public $availableIncludes = [
+    // ... العلاقات السابقة
+    'delivery_vehicle_type',
+    'delivery_car',
+    'country',
+    'state',
+    'departuredestination',
+    'arrivaldestination',
+];
+```
+
+#### 2. تنفيذ دوال الـ `include` لكل علاقة
+
+تم إنشاء دوال `include` منفصلة لكل علاقة، مع معالجة استثنائية جيدة لإرجاع استجابة فارغة في حال عدم وجود البيانات.
+
+**مثال على `includeDeliveryVehicleType`:**
+```php
+public function includeDeliveryVehicleType(Order $item)
+{
+    try {
+        $delivery_vehicle_type = $item->delivery_vehicle_type ?? $item->delivery_vehicle_ref_type;
+        return $this->item($delivery_vehicle_type, new VehicleTypeTransformer);
+    } catch (\Exception $e) {
+        return $this->item([], function(){
+            return [];
+        });
+    }
+}
+```
+
+**ملاحظة**: تم تحسين الدالة لتجربة الحصول على نوع المركبة عبر `delivery_vehicle_type` أو `delivery_vehicle_ref_type` كاحتياط.
+
+**مثال على `includeDeparturedestination`:**
+```php
+public function includeDeparturedestination(Order $item)
+{
+    try {
+        return $this->item($item->departuredestination, new AirportTransformer);
+    } catch (\Exception $e) {
+        return $this->item([], function(){
+            return [];
+        });
+    }
+}
+```
+
+#### 3. التوافق مع المحولات الحالية
+
+تم استخدام المحولات التالية للعلاقات الجديدة:
+- `VehicleTypeTransformer` لـ `delivery_vehicle_type` و `delivery_car`.
+- `CountryTransformer` لـ `country`.
+- `StateTransformer` لـ `state`.
+- `AirportTransformer` لـ `departuredestination` و `arrivaldestination`.
+
+هذه المحولات موجودة مسبقاً في إضافة `Nano.DeliverysApi` و `Nano.LocationApi` و `Nano.AirportsApi` (إذا كانت موجودة).
+
+#### 4. القيمة المضافة
+
+- يمكن الآن لتطبيقات API استرجاع معلومات مفصلة عن مركبة الموصل (نوعها وبياناتها) المرتبطة بالطلب.
+- إمكانية الحصول على الدولة والمدينة المرتبطة بالطلب (لتحليلات جغرافية).
+- دعم حجوزات السفر عبر استرجاع بيانات مطارات المغادرة والوصول بشكل مرتبط بالطلب.
+
+---
+
+## ملخص الإصدارات (2.2.11 و 1.0.21)
+
+| الإصدار | أبرز الميزات |
+|---------|---------------|
+| **Nano.Orders 2.2.11** | إضافة 7 علاقات جديدة في `Order`، إعادة هيكلة وتوسيع إعدادات التقرير في `OrdersSetting` و `fields.yaml`، إعادة كتابة قالب `ReportsOrders` ليكون شاملاً ومنظماً. |
+| **Nano.OrdersApi 1.0.21** | إضافة العلاقات الجديدة إلى `availableIncludes` وتنفيذ دوال `include` لها في `OrderTransformer`. |
+
+---
+
+## متطلبات الترقية
+
+1. **تحديث الملفات**:
+   - `plugins/nano/orders/models/Order.php` (إضافة العلاقات).
+   - `plugins/nano/orders/models/OrdersSetting.php` (تحديث `initSettingsData`).
+   - `plugins/nano/orders/models/ordersetting/fields.yaml` (استبدال بالملف الجديد).
+   - `plugins/nano/orders/views/tsstemplate/ReportsOrders/print/default_content.htm` (استبدال بالقالب الجديد).
+   - `plugins/nano/orders/views/tsslayout/ReportOrders/print/default_content.htm` و CSS (إن وجدت تغييرات).
+   - `plugins/nano/ordersapi/transformers/OrderTransformer.php` (إضافة العلاقات الجديدة).
+
+2. **لا توجد هجرات جديدة**: جميع الأعمدة المطلوبة للعلاقات الجديدة كانت موجودة مسبقاً في هجرات سابقة (مثل `builder_table_add_vehicle_columns_to_orders.php`، `builder_table_add_state_id_columns_to_nano_orders_orders.php`، `builder_table_add_booking_columns_to_nano_orders_orders.php`). إذا كنت متأكداً من وجودها، لا حاجة لإضافة هجرات جديدة.
+
+3. **ملفات الترجمة (lang)**:
+   - تأكد من وجود مفاتيح الترجمة المستخدمة في `fields.yaml` ضمن ملف `lang.php` (مثل `basic_customer_section_help`, `customer_section_help`, `shipping_section_help`, `from_section_help`, `departments_section_help`, `delivery_section_help`, `load_section_help`, `booking_section_help`, `total_section_help`, `notes_section_help`, `products_section_help`). أضف هذه المفاتيح إذا لم تكن موجودة.
+
+4. **اختبار التوافق**:
+   - اختبار ظهور العلاقات الجديدة في واجهة تحرير الطلب الخلفية (إن وجدت).
+   - اختبار إعدادات التقرير من خلال `OrdersSetting` في الباكند.
+   - اختبار عرض التقرير لطلب يحتوي على بيانات الحجز والرحلة، وبيانات الموصل مع المركبة.
+   - اختبار API مع `include=delivery_vehicle_type,delivery_car,country,state,departuredestination,arrivaldestination` والتحقق من البيانات المسترجعة.
+
+5. **تنظيف الكاش**:
+   - قم بتنفيذ `php artisan cache:clear` و `php artisan route:clear` إذا لزم الأمر.
+
+---
+
+## الخاتمة
+
+يمثل الإصداران **Nano.Orders 2.2.11** و **Nano.OrdersApi 1.0.21** خطوة مهمة نحو إضافة أكثر اكتمالاً وقابلية للتخصيص. العلاقات الجديدة في `Order` تفتح آفاقاً لميزات متقدمة (مركبة الموصل، الحجوزات الجوية، التوصيل الجغرافي). إعدادات التقرير المنقحة تمنح المستخدم تحكماً دقيقاً في ما يظهر في التقرير، مع تنظيم يسهل استخدامه. قالب التقرير المُعاد كتابته يعرض جميع بيانات الطلب بشكل احترافي، مما يلبي احتياجات معظم الشركات. وأخيراً، تحديث الـ API يضمن أن التطبيقات الخارجية يمكنها الاستفادة من هذه البيانات الغنية.
+
+الكود موثّق، والقالب منظم، والإعدادات قابلة للتوسع بسهولة.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق `OrderManager` وسماته](./docs/Orders/Classes/Docs-OrderManager-Class-ar.md)
+- [توثيق السمة `StepStatus`](./docs/Orders/Traits/Steps/Docs-StepStatus-Trait-ar.md)
+- [توثيق متقدم للسمة `StepStatus`](./docs/Orders/Traits/Steps/Docs-StepStatus-Trait-Advenced-ar.md)
+- [توثيق نطاقات `HasProductOwnerScopes`](./docs/Orders/Models/orders/Docs-HasProductOwnerScopes-ar.md)
+- [توثيق API الطلبات](./docs/OrdersApi/Docs-OrdersApi-ar.md)
+

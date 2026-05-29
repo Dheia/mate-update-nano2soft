@@ -5923,3 +5923,296 @@ We recommend all users of the plugin upgrade to benefit from these features, whi
 - [`Nano.HomeworkApi` documentation](./docs/HomeworkApi/Docs-HomeworkApi-en.md)
 - [`Nano.HomeworkApi` update version 1.0.0](./docs/HomeworkApi/Update-HomeworkApi-v1.0.1-en.md)
 
+## 2026-05-26 – 2026-05-29
+
+### Update to the `Nano.Orders` Plugin – Version 2.2.11  
+### Update to the `Nano.OrdersApi` Plugin – Version 1.0.21
+
+---
+
+## Summary of Updates
+
+The `Nano.Orders` plugin in version **2.2.11** has undergone substantial updates aimed at:
+
+- **Enriching the `Order` model with additional relationships** to cover more business scenarios (delivery vehicle, country, city, airports).
+- **Developing the order report settings system** to be more organised and comprehensive, with settings divided into logical sections in `fields.yaml`.
+- **Restructuring the `ReportsOrders` report template** to display all order fields in a professional, organised manner, supporting the new settings.
+
+The `Nano.OrdersApi` plugin in version **1.0.21** focused on supporting the new relationships in the `OrderTransformer`, allowing developers to retrieve additional data (delivery vehicle type, delivery vehicle, country, city, airports) via the API.
+
+---
+
+## Nano.Orders v2.2.11 – New Relationships, Integrated Report Settings, and Updated Templates
+
+### Release Objectives
+
+- **Add missing relationships** to the `Order` model to cover advanced application needs (delivery vehicle, country, city, departure and arrival destinations).
+- **Redesign the report settings system** (`OrdersSetting`) to be flexible and organised, with control over every field that can appear in the report.
+- **Rewrite the `ReportsOrders` report template** to display all order data comprehensively and neatly, making full use of the new settings.
+
+### New Features
+
+#### 1. Additional Relationships in the `Order` Model
+
+The following relationships have been added to the `Order` model (file `Order.php`):
+
+| Relationship | Linked Table | Key | Description |
+|--------------|--------------|-----|-------------|
+| `delivery_vehicle_type` | `Nano\Deliverys\Models\VehicleType` | `delivery_vehicle_type_id` | Delivery vehicle type (numeric ID). |
+| `delivery_vehicle_ref_type` | `Nano\Deliverys\Models\VehicleType` | `delivery_vehicle_type_ref_type` | Delivery vehicle type (string ID). |
+| `delivery_car` | `Nano\Deliverys\Models\Car` | `delivery_car_id` | Detailed delivery vehicle data. |
+| `country` | `RainLab\Location\Models\Country` | `country_id` | Country (to support multiple countries). |
+| `state` | `RainLab\Location\Models\State` | `state_id` | City (for filtering orders by region). |
+| `departuredestination` | `Nano\Deliverys\Models\Airport` | `departure_destination` | Departure destination (airport or station). |
+| `arrivaldestination` | `Nano\Deliverys\Models\Airport` | `arrival_destination` | Arrival destination (airport or station). |
+
+**Added value**:
+- Easy access to the delivery vehicle type and vehicle directly from the order.
+- Multi‑country and multi‑city support enables advanced geographic delivery applications.
+- Support for travel and flight bookings through specific airports.
+
+#### 2. Comprehensive Update of Order Report Settings (`OrdersSetting`)
+
+##### 2.1 Expansion of `initSettingsData`
+
+The `initSettingsData` function in the `OrdersSetting` model has been updated to include all new settings, organised into logical sections:
+
+| Section | Example Settings |
+|---------|------------------|
+| Report Header (Logo) | `is_config_logo_report`, `is_view_logo_r_company_name`, `is_view_logo_l_company_name`, `is_view_logo_c_company_logo` |
+| Report Title | `is_config_titel_report`, `is_view_titel_name` |
+| Basic Order Information | `is_view_info_order`, `is_view_id`, `is_view_order_type`, `is_view_created_at`, `is_view_order_date` |
+| Basic Customer Data | `is_view_basic_customer`, `is_view_sup_cus_id`, `is_view_sup_cus_name` |
+| Detailed Customer Data | `is_view_customer`, `is_view_customer_id`, `is_view_customer_address` |
+| Shipping Data | `is_view_shipping`, `is_view_shipping_id`, `is_view_shipping_address`, `is_view_shipping_pickup` |
+| Pickup Location Data | `is_view_from`, `is_view_from_id`, `is_view_from_address` |
+| Store/Restaurant Data | `is_view_departments`, `is_view_departments_id`, `is_view_departments_address` |
+| Delivery Data | `is_view_delivery`, `is_view_delivery_id`, `is_view_delivery_user_id`, `is_view_delivery_vehicle_type`, `is_view_delivery_car_id` |
+| Load & Vehicle Data | `is_view_load_section`, `is_view_load_ref_type`, `is_view_vehicle_type_ref_type`, `is_view_weight`, `is_view_length` |
+| Booking & Trip Data | `is_view_booking_section`, `is_view_passport_type`, `is_view_passport_number`, `is_view_flight_number`, `is_view_departure_destination`, `is_view_arrival_destination` |
+| Order Totals | `is_view_total_section`, `is_view_currencys_id`, `is_view_cart_total`, `is_view_total_discount`, `is_view_shipping_total`, `is_view_total_bill` |
+| Notes | `is_view_notes`, `is_view_customer_notes`, `is_view_admin_notes`, `is_view_load_notes` |
+| Items Table | `is_config_body_report`, `is_view_field_ms`, `is_view_field_products_name`, `is_view_field_quantity`, `is_view_field_real_price` |
+| Report Footer | `is_config_footer_report`, `is_view_created_by`, `is_view_employees_id` |
+
+These settings are added by default (with appropriate values such as `true` or `false`) to ensure a consistent user experience.
+
+##### 2.2 Restructuring `fields.yaml`
+
+The `fields.yaml` file has been divided into sections reflecting the sections mentioned above, using the `section` element for section headings. Example:
+
+```yaml
+basic_customer_section_help:
+    label: 'nano.orders::lang.orders_setting.form.config_report.basic_customer_section_help'
+    commentAbove: 'nano.orders::lang.orders_setting.form.config_report.basic_customer_section_help_comment'
+    oc.commentPosition: 'top'
+    type: section
+    span: storm
+    cssClass: col-sm-12 m-a-0  p-a-2 
+    tab: config_report
+
+is_view_basic_customer:
+    label: 'nano.orders::lang.orders_setting.form.config_report.is_view_basic_customer'
+    type: checkbox
+    default: true
+    span: storm
+    cssClass: col-sm-2 m-a-0  p-a-2 b-checkbox-titel-222 b-checkbox2  b-l
+    trigger:
+        action: show
+        field: is_config_header_report
+        condition: checked
+    tab: config_report
+```
+
+**Benefits**:
+- Better organisation of settings, making it easier for users to find the desired option.
+- Use of `trigger` to show/hide related fields based on main options.
+- Added `commentAbove` to explain each section.
+
+#### 3. Rewriting the `ReportsOrders` Report Template
+
+The `default_content.htm` file (located at `plugins/nano/orders/views/tsstemplate/ReportsOrders/print/`) has been completely rewritten to display **all possible fields** in a structured and attractive manner.
+
+##### 3.1 New Report Structure
+
+| Section | Content |
+|---------|---------|
+| **Report Header** | Displays `report_header` supported by `Tss.Reports`. |
+| **Title** | Displays `is_view_titel_name`. |
+| **Basic Order Information** | Order number, type, status, dates (created, order, shipping, delivery, return). |
+| **Basic Customer Data** | Customer number, name, email, mobile, country/city. |
+| **Detailed Customer Data** | Name, address, email, phone, country/city. |
+| **Shipping Data** | Recipient name, address, email, phone, `pickup` field. |
+| **Pickup Location Data** | Name, address, email, phone. |
+| **Store/Restaurant Data** | Name, address, email, phone. |
+| **Delivery Data** | Number, name, account ID, email, phone, offer number, vehicle type, vehicle ID. |
+| **Load & Vehicle Data** | Vehicle type, load type, number of persons, storage sensitivity, fragility, litres, weight, length, width, height. |
+| **Booking & Trip Data** | ID type, ID number, booking number, flight number, return flight, departure destination, arrival destination. |
+| **Items Table** | Displays customisable columns via settings (ID, item number, product name, store, unit, options, quantity, price, total, note). |
+| **Order Totals** | Currency, subtotal, cart total, discount, tax, delivery fee, tip, extras, deductions, final total, payment method, payment status. |
+| **Notes** | Customer notes, admin notes, load notes, extras, deductions. |
+| **QR Code** | If the setting is enabled. |
+| **Report Footer** | `report_footer` and `report_owner`. |
+
+##### 3.2 Technical Improvements in the Template
+
+- Using `{% if settings.is_view_... %}` to check settings before displaying any section or field.
+- Using `{% set customer = ... %}` to simplify access to customer data.
+- Using `|date` and `|number_format` filters to format dates and numbers.
+- Using `{{ nano_order_print_options(...) }}` to display additional item options.
+- Support for displaying `delivery_vehicle_type` and `delivery_car` using the new relationships.
+- Support for displaying `departuredestination` and `arrivaldestination` using the new relationships.
+
+**Example of improved delivery data display:**
+```twig
+{% if dataModel['data'].is_view_delivery_vehicle_type %}
+<div class="item cust-with2">
+    <div class="item-label">Vehicle type :</div>
+    <div class="item-data">
+        {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_type_ref_type|default(dataModel['records'].delivery_vehicle_type_id) %}
+        {% if delivery_vehicle_name %}
+            {% if dataModel['records'].delivery_vehicle_type and dataModel['records'].delivery_vehicle_type.name %}
+                {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_type.name %}
+            {% elseif dataModel['records'].delivery_vehicle_ref_type and dataModel['records'].delivery_vehicle_ref_type.name %}
+                {% set delivery_vehicle_name = dataModel['records'].delivery_vehicle_ref_type.name %}
+            {% endif %}
+        {% endif %}
+        {{ delivery_vehicle_name|default('---') }}
+    </div>
+</div>
+{% endif %}
+```
+
+##### 3.3 Support for New Settings in the Template
+
+Conditional blocks have been added for each new setting, ensuring that the user has full control over what appears in the report. For example, the Booking & Trip Data section is displayed only if the `is_view_booking_section` setting is enabled.
+
+---
+
+## Nano.OrdersApi v1.0.21 – Supporting New Relationships in the `OrderTransformer`
+
+### Release Objectives
+
+- **Expand the `OrderTransformer`** to include the new relationships added to the `Order` model, enabling API consumers to obtain richer data.
+
+### New Features
+
+#### 1. Adding Relationships to `availableIncludes`
+
+The following relationships have been added to the `availableIncludes` array in `OrderTransformer`:
+
+```php
+public $availableIncludes = [
+    // ... previous relationships
+    'delivery_vehicle_type',
+    'delivery_car',
+    'country',
+    'state',
+    'departuredestination',
+    'arrivaldestination',
+];
+```
+
+#### 2. Implementing `include` Methods for Each Relationship
+
+Separate `include` methods have been created for each relationship, with proper exception handling to return an empty response when data is missing.
+
+**Example `includeDeliveryVehicleType`:**
+```php
+public function includeDeliveryVehicleType(Order $item)
+{
+    try {
+        $delivery_vehicle_type = $item->delivery_vehicle_type ?? $item->delivery_vehicle_ref_type;
+        return $this->item($delivery_vehicle_type, new VehicleTypeTransformer);
+    } catch (\Exception $e) {
+        return $this->item([], function(){
+            return [];
+        });
+    }
+}
+```
+
+**Note**: The function has been improved to try obtaining the vehicle type via `delivery_vehicle_type` or `delivery_vehicle_ref_type` as a fallback.
+
+**Example `includeDeparturedestination`:**
+```php
+public function includeDeparturedestination(Order $item)
+{
+    try {
+        return $this->item($item->departuredestination, new AirportTransformer);
+    } catch (\Exception $e) {
+        return $this->item([], function(){
+            return [];
+        });
+    }
+}
+```
+
+#### 3. Compatibility with Existing Transformers
+
+The following existing transformers are used for the new relationships:
+- `VehicleTypeTransformer` for `delivery_vehicle_type` and `delivery_car`.
+- `CountryTransformer` for `country`.
+- `StateTransformer` for `state`.
+- `AirportTransformer` for `departuredestination` and `arrivaldestination`.
+
+These transformers already exist in the `Nano.DeliverysApi`, `Nano.LocationApi`, and `Nano.AirportsApi` plugins (if present).
+
+#### 4. Added Value
+
+- API applications can now retrieve detailed information about the delivery vehicle (its type and data) associated with the order.
+- Ability to obtain the country and city associated with the order (for geographic analysis).
+- Support for travel bookings by retrieving departure and arrival airport data linked to the order.
+
+---
+
+## Version Summary (2.2.11 and 1.0.21)
+
+| Version | Key Features |
+|---------|---------------|
+| **Nano.Orders 2.2.11** | Added 7 new relationships in `Order`, restructured and expanded report settings in `OrdersSetting` and `fields.yaml`, rewrote the `ReportsOrders` template to be comprehensive and organised. |
+| **Nano.OrdersApi 1.0.21** | Added the new relationships to `availableIncludes` and implemented their `include` methods in `OrderTransformer`. |
+
+---
+
+## Upgrade Requirements
+
+1. **Update the files**:
+   - `plugins/nano/orders/models/Order.php` (add relationships).
+   - `plugins/nano/orders/models/OrdersSetting.php` (update `initSettingsData`).
+   - `plugins/nano/orders/models/ordersetting/fields.yaml` (replace with the new file).
+   - `plugins/nano/orders/views/tsstemplate/ReportsOrders/print/default_content.htm` (replace with the new template).
+   - `plugins/nano/orders/views/tsslayout/ReportOrders/print/default_content.htm` and CSS (if any changes).
+   - `plugins/nano/ordersapi/transformers/OrderTransformer.php` (add the new relationships).
+
+2. **No new migrations**: All the columns required for the new relationships already existed in previous migrations (e.g., `builder_table_add_vehicle_columns_to_orders.php`, `builder_table_add_state_id_columns_to_nano_orders_orders.php`, `builder_table_add_booking_columns_to_nano_orders_orders.php`). If you are certain they exist, no new migrations are needed.
+
+3. **Language files (lang)**:
+   - Ensure that the translation keys used in `fields.yaml` exist in the `lang.php` file (e.g., `basic_customer_section_help`, `customer_section_help`, `shipping_section_help`, `from_section_help`, `departments_section_help`, `delivery_section_help`, `load_section_help`, `booking_section_help`, `total_section_help`, `notes_section_help`, `products_section_help`). Add these keys if they are missing.
+
+4. **Compatibility testing**:
+   - Test the appearance of the new relationships in the backend order edit interface (if any).
+   - Test report settings through `OrdersSetting` in the backend.
+   - Test displaying the report for an order that contains booking and trip data, as well as delivery data with a vehicle.
+   - Test the API with `include=delivery_vehicle_type,delivery_car,country,state,departuredestination,arrivaldestination` and verify the returned data.
+
+5. **Clear cache**:
+   - Run `php artisan cache:clear` and `php artisan route:clear` if necessary.
+
+---
+
+## Conclusion
+
+Versions **Nano.Orders 2.2.11** and **Nano.OrdersApi 1.0.21** represent an important step towards a more complete and customisable plugin. The new relationships in `Order` open up possibilities for advanced features (delivery vehicle, flight bookings, geographic delivery). The revised report settings give the user fine‑grained control over what appears in the report, with an organisation that is easy to use. The rewritten report template displays all order data professionally, meeting the needs of most businesses. Finally, the API update ensures that external applications can benefit from this rich data.
+
+The code is documented, the template is organised, and the settings are easily extensible.
+
+---
+
+**Reference documentation**:
+- [`OrderManager` and its attributes documentation](./docs/Orders/Classes/Docs-OrderManager-Class-en.md)
+- [`StepStatus` trait documentation](./docs/Orders/Traits/Steps/Docs-StepStatus-Trait-en.md)
+- [Advanced `StepStatus` trait documentation](./docs/Orders/Traits/Steps/Docs-StepStatus-Trait-Advanced-en.md)
+- [`HasProductOwnerScopes` scopes documentation](./docs/Orders/Models/orders/Docs-HasProductOwnerScopes-en.md)
+- [Orders API documentation](./docs/OrdersApi/Docs-OrdersApi-en.md)
+
