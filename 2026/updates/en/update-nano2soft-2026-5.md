@@ -1,6 +1,6 @@
 # Update 2026-5
 
-**Updates month four May**
+**May month updates**
 
 ## 2026-02-17 – 2026-05-01
 

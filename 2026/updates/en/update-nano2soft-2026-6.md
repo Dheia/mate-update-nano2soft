@@ -1,3 +1,7 @@
+# Update 2026-06
+
+**June month updates**
+
 ## 2026-06-01
 
 **Update to `Nano2.ProposalsApi` – Version 1.0.3**
