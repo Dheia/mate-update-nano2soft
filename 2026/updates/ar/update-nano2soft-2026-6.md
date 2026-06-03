@@ -307,3 +307,260 @@ curl -X GET "https://yourdomain.com/api/v1/media/files?categories_id=15&include=
 - [أمثلة عملية شاملة – إضافة MediaApi](./docs/MediaApi/Docs-MediaApi-Examples-ar.md)
 - [أمثلة عملية مختصرة – إضافة MediaApi](./docs/MediaApi/Docs-MediaApi-Short-Examples-ar.md)
 
+## 2026-05-30 - 2026-06-03
+
+
+**تحديث إضافة `Tss.Studyyear` – الإصداران 1.0.6 و 1.0.7**  
+**وتحديث إضافة `Nano.StudyyearApi` – الإصدار 1.0.1**
+
+### إضافة عمود `is_published_results` ودعم النشر والفلترة المتقدمة للسنوات والفصول والأشهر الدراسية
+
+---
+
+### ملخص التحديثات
+
+تم إجراء تحديثين متتاليين على إضافة `Tss.Studyyear` (الإصداران 1.0.6 و 1.0.7) بالإضافة إلى تحديث إضافة `Nano.StudyyearApi` (الإصدار 1.0.1) بهدف:
+
+- **إضافة عمود جديد** `is_published_results` إلى جداول السنوات والفصول والأشهر الدراسية.
+- **تمكين التحكم في نشر البيانات** عبر حقول `is_published`, `published_at`, `unpublished_at` في واجهة الإدارة الخلفية.
+- **توفير فلاتر متقدمة** لتصفية السجلات المنشورة وغير المنشورة والمخصصة لنشر النتائج.
+- **دعم هذه الحقول في واجهة برمجة التطبيقات (API)** لتتمكن التطبيقات الخارجية من الاستفادة من حالة النشر.
+
+تأتي هذه التحديثات استجابة لحاجة المدارس والمراكز التعليمية في التحكم بظهور السنوات والفصول والأشهر الدراسية للمستخدمين (خاصة في تطبيقات النتائج والتقارير) بشكل ديناميكي.
+
+---
+
+### أهداف التحديثات
+
+- **إضافة مرونة في نشر البيانات**: يمكن للمسؤول تحديد ما إذا كانت السنة الدراسية أو الفصل أو الشهر منشوراً على الموقع أو متاحاً للاستعلامات عبر API.
+- **فصل نشر البيانات الأساسية عن نشر النتائج**: باستخدام الحقل الجديد `is_published_results` يمكن التحكم بشكل منفصل في ظهور بيانات التقارير والنتائج للطلاب وأولياء الأمور.
+- **دعم التواريخ المؤقتة للنشر**: من خلال `published_at` و `unpublished_at` يمكن جدولة النشر والانتهاء منه تلقائياً.
+- **تحسين أداء التطبيقات**: عبر توفير فلاتر متقدمة في الخلفية والـ API لتقليل كمية البيانات المنقولة.
+- **التوافق مع متغيرات البيئة**: إتاحة تعطيل فحص تواريخ الصلاحية (Check Date) لكل كيان على حدة عبر متغيرات البيئة.
+
+---
+
+### الميزات الجديدة والتحسينات
+
+#### 1. إضافة عمود `is_published_results` إلى الجداول
+
+تم إنشاء ملف هجرة جديد (`builder_table_add_is_published_results_columns.php`) يضيف عموداً من النوع `boolean` باسم `is_published_results` إلى الجداول التالية:
+
+- `tss_studyyear_periods`
+- `tss_studyyear_semsters`
+- `tss_studyyear_months`
+
+**دلالة العمود:**  
+تحديد ما إذا كانت بيانات هذا الكيان مسموحاً بنشرها في سياق "النتائج" (مثل ظهورها للطلاب في تطبيق النتائج). يمكن استخدامه بشكل منفصل عن `is_published`.
+
+#### 2. دعم حقول النشر في النماذج (`fields.yaml`)
+
+تم تحديث ملفات `fields.yaml` الخاصة بـ `Periods`, `Semsters`, `Months` لتشمل الحقول التالية ضمن تبويب `options`:
+
+| الحقل | النوع | الوصف |
+|-------|-------|-------|
+| `is_published` | Switch | نشر العنصر على الموقع / الـ API |
+| `published_at` | Datepicker | تاريخ بدء النشر (اختياري) |
+| `unpublished_at` | Datepicker | تاريخ انتهاء النشر (اختياري) |
+| `is_published_results` | Switch | نشر العنصر في نتائج التقارير |
+
+تمت إضافة منطق `trigger` بحيث يظهر حقلا التاريخ فقط عند تفعيل `is_published`.
+
+#### 3. دعم الحقول في القوائم (`columns.yaml`)
+
+أضيفت الأعمدة التالية إلى ملفات `columns.yaml` الخاصة بكل كيان:
+
+- `is_published_results` (نص / مفتاح)
+- `is_published` (نص / مفتاح)
+- `published_at` (تاريخ ووقت)
+- `unpublished_at` (تاريخ ووقت)
+
+مع جعلها `invisible: true` افتراضياً لإبقاء القائمة بسيطة، ولكن يمكن إظهارها حسب الرغبة.
+
+#### 4. إضافة نطاقات (Scopes) جديدة في النماذج
+
+تم إضافة النطاقات التالية في نماذج `Period`, `Semster`, `Month`:
+
+```php
+public function scopeIsPublished($query)
+{
+    $now = Carbon::now();
+    return $query->where('is_published', true)
+        ->where(function ($q) use ($now) {
+            $q->where('published_at', '<=', $now)
+              ->orWhereNull('published_at');
+        })
+        ->where(function ($q) use ($now) {
+            $q->where('unpublished_at', '>=', $now)
+              ->orWhereNull('unpublished_at');
+        });
+}
+
+public function scopeIsNotPublished($query)
+{
+    // النفي المنطقي لـ isPublished
+}
+```
+
+كما تمت إضافة نطاق `scopeIsPublishedResults` للتحقق من `is_published_results`.
+
+#### 5. فلاتر متقدمة في واجهة الخلفية (`config_filter.yaml`)
+
+تم تحديث ملفات `config_filter.yaml` لكل من `Periods`, `Semsters`, `Months` بإضافة الفلاتر التالية:
+
+| اسم الفلتر | النوع | الوصف |
+|-----------|-------|-------|
+| `is_published` | Checkbox | يعرض السجلات المنشورة فقط (يستخدم `scopeIsPublished`) |
+| `is_not_published` | Checkbox | يعرض السجلات غير المنشورة فقط (يستخدم `scopeIsNotPublished`) |
+| `is_published_results` | Switch | تصفية بناءً على `is_published_results` (0/1) |
+| `is_default` | Switch | تصفية السجلات الافتراضية |
+| `is_active` | Switch | تصفية النشطة |
+
+كما تمت إضافة فلتر `departments_id` (مجموعة) و `study_year_id` و `semsters_id` و `month_num` للكائنات المناسبة.
+
+#### 6. دعم متغيرات البيئة للتحقق من صلاحية التواريخ
+
+تم تحديث ملف `config.php` الخاص بـ `Tss.Studyyear` ليصبح:
+
+```php
+return [
+    'check_date_year' => env('TSS_STUDYYEAR_CHECK_DATE_YEAR', true),
+    'check_date_semsters' => env('TSS_STUDYYEAR_CHECK_DATE_SEMSTERS', true),
+    'check_date_months' => env('TSS_STUDYYEAR_CHECK_DATE_MONTHS', true),
+];
+```
+
+هذه المتغيرات تتحكم في تفعيل فحص تواريخ الصلاحية (`from_date`, `to_date`) عند جلب البيانات. إذا تم تعطيلها (false) يتم إلغاء شرط `to_date > now()` مما يسمح بعرض العناصر منتهية الصلاحية.
+
+#### 7. تحديث واجهة برمجة التطبيقات `Nano.StudyyearApi` (الإصدار 1.0.1)
+
+- **إضافة عمود `is_published_results`** في المحولات (`PeriodTransformer`, `SemsterTransformer`, `MonthTransformer`).
+- **دعم فلاتر جديدة** في دوال `getRecords` لكل من `Periods`, `Semsters`, `Months`:
+  - `is_published_results` (0/1)
+  - `is_published` (0/1)
+  - `is_default` (0/1)
+- **تحديث منطق الجلب** في الـ API بحيث إذا لم يمرر المستخدم `is_published_results`، يتم التعامل مع `'*'` أو `null` لعدم التصفية.
+- **تحسين معالجة التواريخ** في المحولات باستخدام `formatDate`.
+
+**مثال من `Periods.php` (API):**
+
+```php
+if ($options['is_published_results'] !== null && $options['is_published_results'] !== '*') {
+    $posts->where($table . '.is_published_results', (bool)$options['is_published_results']);
+}
+if ($options['is_published'] !== null && $options['is_published'] !== '*') {
+    $options['is_published'] ? $posts->isPublished() : $posts->isNotPublished();
+}
+if ($options['is_default'] !== null && $options['is_default'] !== '*') {
+    $posts->where($table . '.is_default', (bool)$options['is_default']);
+}
+```
+
+#### 8. تحديث ملفات الإصدارات (`version.yaml`)
+
+**Tss.Studyyear**:
+```yaml
+1.0.6:
+    - 'Add is_published_results columns to all table tss_studyyear '
+    - builder_table_add_is_published_results_columns.php
+1.0.7:
+    - 'Support fields (is_published,published_at,unpublished_at and is_published_results) In Backend Interface'
+    - 'Support filter (is_published,published_at,unpublished_at and is_published_results) In Backend Interface'
+    - 'Support list columns (is_published,is_not_published and is_published_results) In Backend Interface'
+```
+
+**Nano.StudyyearApi**:
+```yaml
+1.0.0:
+    - Plugin initialization Nano.StudyyearApi.
+1.0.1:
+    - 'Support is_published_results column in PeriodTransformer,SemsterTransformer And MonthTransformer'
+    - 'Support filter is_published_results ,is_published and is_default in Periods,Semsters And Months APIControllers'
+```
+
+---
+
+### أمثلة على الاستخدام (Backend)
+
+#### 1. إضافة سنة دراسية جديدة مع جدولة النشر
+
+- انتقل إلى `السنوات الدراسية > السنة الدراسية`.
+- أنشئ سنة جديدة، مثلاً `2026-2027`.
+- فعّل خيار `نشر على الموقع`.
+- حدد `تاريخ ابتداء النشر` = `2026-06-01` وتاريخ انتهاء النشر = `2026-07-15`.
+- فعّل خيار `نشر النتائج في التطبيق` (إذا أردت ظهورها في تطبيق النتائج).
+- احفظ.
+
+ستظهر السنة فقط للواجهات والـ API خلال الفترة المحددة.
+
+#### 2. استخدام الفلتر `is_published` في قائمة الفصول
+
+- في قائمة `الفصول الدراسية`، استخدم فلتر `منشور` (checkbox) لعرض الفصول المنشورة فقط.
+
+#### 3. استعلام API لجلب الأشهر المنشورة للنتائج فقط
+
+```bash
+GET /api/v1/studyyear/months?study_year_id=5&is_published_results=1&include=period,semster
+```
+
+---
+
+### متطلبات الترقية (من الإصدارات السابقة)
+
+#### لمن يستخدم `Tss.Studyyear` (إصدارات أقدم من 1.0.6)
+
+1. **تحديث الكود**: استبدال جميع الملفات المتغيرة (models, controllers, fields.yaml, columns.yaml, config_filter.yaml, config.php, version.yaml).
+2. **تشغيل الهجرة الجديدة**:
+   ```bash
+   php artisan plugin:refresh Tss.Studyyear
+   ```
+   - ستتم إضافة الأعمدة `is_published_results` إلى الجداول الثلاثة.
+3. **إعادة تعيين الأذونات** (اختياري): لا توجد أذونات جديدة.
+4. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+#### لمن يستخدم `Nano.StudyyearApi` (إصدارات أقدم من 1.0.1)
+
+1. **تحديث الكود**: استبدال ملفات `Periods.php`, `Semsters.php`, `Months.php` والمحولات (`PeriodTransformer`, `SemsterTransformer`, `MonthTransformer`).
+2. **تحديث `version.yaml`**.
+3. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+**ملاحظة:** لا توجد تغييرات على قاعدة البيانات في `Nano.StudyyearApi`، فقط تحسينات في الكود.
+
+---
+
+### التوافق مع الإصدارات السابقة
+
+- **جميع نقاط النهاية الحالية** في الـ API لا تزال تعمل دون تغيير (الحقول الجديدة اختيارية في الفلاتر).
+- **الواجهات الخلفية** تستمر في العمل حتى لو لم يتم استخدام الحقول الجديدة.
+- **البيانات الحالية**: سيتم تعيين القيمة الافتراضية `false` لعمود `is_published_results` تلقائياً للصفوف الموجودة (لأنه تم إضافته مع `default(false)` في الهجرة).
+
+---
+
+### الفوائد والقيمة المضافة
+
+- **تحكم ديناميكي في المحتوى**: يمكن الآن جدولة ظهور السنوات والفصول والأشهر الدراسية دون الحاجة إلى حذفها أو تعطيلها يدوياً.
+- **فصل النشر العام عن نشر النتائج**: باستخدام `is_published_results` يمكن إظهار البيانات لتطبيقات النتائج مع إبقائها مخفية عن الزوار العاديين.
+- **تقليل التحميل على الخادم**: الفلاتر المتقدمة تقلل كمية البيانات المسترجعة وتحسن زمن الاستجابة.
+- **مرونة التخصيص**: يمكن تعطيل فحص التواريخ (Check Date) عبر متغيرات البيئة، مما يسمح بعرض السنوات القديمة في لوحات التحكم حسب الحاجة.
+
+---
+
+### الخاتمة
+
+تمثل التحديثات **1.0.6** و **1.0.7** من `Tss.Studyyear` و **1.0.1** من `Nano.StudyyearApi` نقلة نوعية في إدارة السنوات والفصول والأشهر الدراسية. من خلال إضافة حقل `is_published_results` ودعم النشر المؤقت والفلاتر المتقدمة، أصبح من السهل جدولة المحتوى والتحكم فيه بشكل دقيق. نوصي جميع المستخدمين بالترقية للاستفادة من هذه الميزات، خاصة في بيئات التعليم التي تعتمد على التقارير الدورية والنتائج.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق إضافة `Tss.Studyyear` ](./docs/Studyyear/Docs-Studyyear-ar.md)
+- [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
+- [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
+

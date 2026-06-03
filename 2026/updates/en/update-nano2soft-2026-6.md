@@ -306,3 +306,259 @@ Version **1.0.2** of `Nano.MediaApi` is an important step towards improving the 
 - [Comprehensive Practical Examples – MediaApi Plugin](./docs/MediaApi/Docs-MediaApi-Examples-en.md)
 - [Short Practical Examples – MediaApi Plugin](./docs/MediaApi/Docs-MediaApi-Short-Examples-en.md)
 
+## 2026-05-30 – 2026-06-03
+
+**Update to the `Tss.Studyyear` Plugin – Versions 1.0.6 and 1.0.7**  
+**and Update to the `Nano.StudyyearApi` Plugin – Version 1.0.1**
+
+### Adding the `is_published_results` Column and Supporting Publishing and Advanced Filtering for Academic Years, Semesters, and Months
+
+---
+
+### Summary of Updates
+
+Two consecutive updates have been made to the `Tss.Studyyear` plugin (versions 1.0.6 and 1.0.7) along with an update to the `Nano.StudyyearApi` plugin (version 1.0.1) with the following objectives:
+
+- **Add a new column** `is_published_results` to the academic year, semester, and month tables.
+- **Enable control over data publishing** via the `is_published`, `published_at`, and `unpublished_at` fields in the backend administration interface.
+- **Provide advanced filters** for published, unpublished, and result‑published records.
+- **Support these fields in the API** so that external applications can benefit from the publication status.
+
+These updates come in response to the need for schools and educational centres to dynamically control the visibility of academic years, semesters, and months to users (especially in results and reporting applications).
+
+---
+
+### Release Objectives
+
+- **Add flexibility in publishing data**: Administrators can determine whether an academic year, semester, or month is published on the site or available for API queries.
+- **Separate basic data publishing from results publishing**: Using the new `is_published_results` field, the visibility of report and results data for students and parents can be controlled independently.
+- **Support date‑based publishing**: Through `published_at` and `unpublished_at`, publication can be scheduled to start and end automatically.
+- **Improve application performance**: By providing advanced filters in both the backend and the API, the amount of transmitted data is reduced.
+- **Compatibility with environment variables**: Allow disabling the expiry date check (Check Date) for each entity individually via environment variables.
+
+---
+
+### New Features and Improvements
+
+#### 1. Adding the `is_published_results` Column to the Tables
+
+A new migration file (`builder_table_add_is_published_results_columns.php`) has been created to add a `boolean` column named `is_published_results` to the following tables:
+
+- `tss_studyyear_periods`
+- `tss_studyyear_semsters`
+- `tss_studyyear_months`
+
+**Meaning of the column:**  
+Determines whether this entity’s data is allowed to be published in a “results” context (e.g., appearing to students in a results application). It can be used independently of `is_published`.
+
+#### 2. Supporting Publishing Fields in Forms (`fields.yaml`)
+
+The `fields.yaml` files for `Periods`, `Semsters`, and `Months` have been updated to include the following fields under the `options` tab:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `is_published` | Switch | Publish the item on the site / API |
+| `published_at` | Datepicker | Publication start date (optional) |
+| `unpublished_at` | Datepicker | Publication end date (optional) |
+| `is_published_results` | Switch | Publish the item in report results |
+
+A `trigger` logic has been added so that the date fields appear only when `is_published` is enabled.
+
+#### 3. Supporting the Fields in Lists (`columns.yaml`)
+
+The following columns have been added to the `columns.yaml` files for each entity:
+
+- `is_published_results` (text / key)
+- `is_published` (text / key)
+- `published_at` (datetime)
+- `unpublished_at` (datetime)
+
+They are set to `invisible: true` by default to keep the list simple, but can be shown as desired.
+
+#### 4. Adding New Scopes in the Models
+
+The following scopes have been added to the `Period`, `Semster`, and `Month` models:
+
+```php
+public function scopeIsPublished($query)
+{
+    $now = Carbon::now();
+    return $query->where('is_published', true)
+        ->where(function ($q) use ($now) {
+            $q->where('published_at', '<=', $now)
+              ->orWhereNull('published_at');
+        })
+        ->where(function ($q) use ($now) {
+            $q->where('unpublished_at', '>=', $now)
+              ->orWhereNull('unpublished_at');
+        });
+}
+
+public function scopeIsNotPublished($query)
+{
+    // Logical negation of isPublished
+}
+```
+
+The `scopeIsPublishedResults` scope has also been added to check `is_published_results`.
+
+#### 5. Advanced Filters in the Backend Interface (`config_filter.yaml`)
+
+The `config_filter.yaml` files for `Periods`, `Semsters`, and `Months` have been updated with the following filters:
+
+| Filter Name | Type | Description |
+|-------------|------|-------------|
+| `is_published` | Checkbox | Shows only published records (uses `scopeIsPublished`) |
+| `is_not_published` | Checkbox | Shows only unpublished records (uses `scopeIsNotPublished`) |
+| `is_published_results` | Switch | Filters based on `is_published_results` (0/1) |
+| `is_default` | Switch | Filters default records |
+| `is_active` | Switch | Filters active records |
+
+Additionally, a `departments_id` (group) filter, `study_year_id`, `semsters_id`, and `month_num` filters have been added for the appropriate entities.
+
+#### 6. Environment Variables for Date Validity Checking
+
+The `config.php` file of `Tss.Studyyear` has been updated to:
+
+```php
+return [
+    'check_date_year' => env('TSS_STUDYYEAR_CHECK_DATE_YEAR', true),
+    'check_date_semsters' => env('TSS_STUDYYEAR_CHECK_DATE_SEMSTERS', true),
+    'check_date_months' => env('TSS_STUDYYEAR_CHECK_DATE_MONTHS', true),
+];
+```
+
+These variables control whether the date validity check (`from_date`, `to_date`) is applied when retrieving data. If disabled (false), the `to_date > now()` condition is removed, allowing expired items to be displayed.
+
+#### 7. Update to the `Nano.StudyyearApi` Plugin (Version 1.0.1)
+
+- **Added the `is_published_results` column** to the transformers (`PeriodTransformer`, `SemsterTransformer`, `MonthTransformer`).
+- **Added new filters** in the `getRecords` functions for `Periods`, `Semsters`, and `Months`:
+  - `is_published_results` (0/1)
+  - `is_published` (0/1)
+  - `is_default` (0/1)
+- **Updated the retrieval logic** in the API so that if the user does not pass `is_published_results`, it is treated as `'*'` or `null` (no filtering).
+- **Improved date handling** in the transformers using `formatDate`.
+
+**Example from `Periods.php` (API):**
+
+```php
+if ($options['is_published_results'] !== null && $options['is_published_results'] !== '*') {
+    $posts->where($table . '.is_published_results', (bool)$options['is_published_results']);
+}
+if ($options['is_published'] !== null && $options['is_published'] !== '*') {
+    $options['is_published'] ? $posts->isPublished() : $posts->isNotPublished();
+}
+if ($options['is_default'] !== null && $options['is_default'] !== '*') {
+    $posts->where($table . '.is_default', (bool)$options['is_default']);
+}
+```
+
+#### 8. Updating Version Files (`version.yaml`)
+
+**Tss.Studyyear**:
+```yaml
+1.0.6:
+    - 'Add is_published_results columns to all table tss_studyyear '
+    - builder_table_add_is_published_results_columns.php
+1.0.7:
+    - 'Support fields (is_published,published_at,unpublished_at and is_published_results) In Backend Interface'
+    - 'Support filter (is_published,published_at,unpublished_at and is_published_results) In Backend Interface'
+    - 'Support list columns (is_published,is_not_published and is_published_results) In Backend Interface'
+```
+
+**Nano.StudyyearApi**:
+```yaml
+1.0.0:
+    - Plugin initialization Nano.StudyyearApi.
+1.0.1:
+    - 'Support is_published_results column in PeriodTransformer,SemsterTransformer And MonthTransformer'
+    - 'Support filter is_published_results ,is_published and is_default in Periods,Semsters And Months APIControllers'
+```
+
+---
+
+### Usage Examples (Backend)
+
+#### 1. Adding a New Academic Year with Scheduled Publishing
+
+- Go to `Academic Years > Academic Year`.
+- Create a new year, e.g., `2026-2027`.
+- Enable `Publish on site`.
+- Set `Publication start date` = `2026-06-01` and `Publication end date` = `2026-07-15`.
+- Enable `Publish results in the application` if you want it to appear in the results app.
+- Save.
+
+The year will only appear to front‑end interfaces and the API during the specified period.
+
+#### 2. Using the `is_published` Filter in the Semester List
+
+- In the `Semesters` list, use the `Published` (checkbox) filter to show only published semesters.
+
+#### 3. API Query to Fetch Only Months Published for Results
+
+```bash
+GET /api/v1/studyyear/months?study_year_id=5&is_published_results=1&include=period,semster
+```
+
+---
+
+### Upgrade Requirements (from previous versions)
+
+#### For those using `Tss.Studyyear` (versions older than 1.0.6)
+
+1. **Update the code**: Replace all changed files (models, controllers, fields.yaml, columns.yaml, config_filter.yaml, config.php, version.yaml).
+2. **Run the new migration**:
+   ```bash
+   php artisan plugin:refresh Tss.Studyyear
+   ```
+   - The `is_published_results` columns will be added to the three tables.
+3. **Re‑assign permissions** (optional): No new permissions are required.
+4. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+#### For those using `Nano.StudyyearApi` (versions older than 1.0.1)
+
+1. **Update the code**: Replace the files `Periods.php`, `Semsters.php`, `Months.php` and the transformers (`PeriodTransformer`, `SemsterTransformer`, `MonthTransformer`).
+2. **Update `version.yaml`**.
+3. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+**Note:** There are no database changes in `Nano.StudyyearApi`, only code improvements.
+
+---
+
+### Backward Compatibility
+
+- **All existing API endpoints** still work unchanged (the new fields are optional in filters).
+- **The backend interfaces** continue to work even if the new fields are not used.
+- **Existing data**: The `is_published_results` column will automatically be set to `false` for existing rows (since the migration adds it with `default(false)`).
+
+---
+
+### Benefits and Added Value
+
+- **Dynamic content control**: You can now schedule the appearance of academic years, semesters, and months without manually deleting or disabling them.
+- **Separation of general publishing from results publishing**: Using `is_published_results`, you can show data to results applications while keeping it hidden from regular visitors.
+- **Reduced server load**: Advanced filters reduce the amount of data retrieved and improve response time.
+- **Customisation flexibility**: Date checking can be disabled via environment variables, allowing old years to be displayed in admin panels as needed.
+
+---
+
+### Conclusion
+
+Updates **1.0.6** and **1.0.7** of `Tss.Studyyear` and **1.0.1** of `Nano.StudyyearApi` represent a significant step forward in managing academic years, semesters, and months. By adding the `is_published_results` field and supporting temporary publishing and advanced filters, it is now easy to schedule and precisely control content. We recommend all users upgrade to benefit from these features, especially in educational environments that rely on periodic reports and results.
+
+---
+
+**Reference documentation**:
+- [`Tss.Studyyear` plugin documentation](./docs/Studyyear/Docs-Studyyear-en.md)
+- [`Nano.StudyyearApi` plugin documentation](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
+- [API Plugin Development Guide (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
+
