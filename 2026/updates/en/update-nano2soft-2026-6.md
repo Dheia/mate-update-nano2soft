@@ -562,3 +562,231 @@ Updates **1.0.6** and **1.0.7** of `Tss.Studyyear` and **1.0.1** of `Nano.Studyy
 - [`Nano.StudyyearApi` plugin documentation](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
 - [API Plugin Development Guide (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
 
+## 2026-06-03 – 2026-06-05
+
+**Update to the `Nano.StudyyearApi` Plugin – Version 1.0.2**
+
+### Complete Restructuring of Controllers According to the `Nano-Api-SKILL.md` Guide, Integration of `AccessManager`, and Advanced Features
+
+---
+
+### Summary of Updates
+
+Version **1.0.2** of the `Nano.StudyyearApi` plugin introduces a complete restructuring of the controllers (`Periods`, `Semsters`, `Months`) to fully comply with the `Nano-Api-SKILL.md` guide. The manual `validationList` function has been removed and replaced by `AccessManager` for centralised permission control. Support for advanced filters (`is_or`, `is_not`, `is_force`, `is_or_null`) has been added via `AdvancedQueryHelper`. The `getRecords` function has been unified to support multiple output options, events, caching, and access scope application (company, department). Smart dependency resolution between the academic year and semester has been added in the `Months` controller, and the `access_scope` settings for frontend users have been corrected.
+
+**Key changes:**
+- Removed `validationList` functions and replaced them with `AccessManager::checkByResource` and `checkWithFallback`.
+- Added support for advanced filters on all fields using `AdvancedQueryManager::scopeWhereField`.
+- Unified the `getRecords` function to support various output options (`is_query`, `is_first`, `is_collection`, `is_paginator`, `is_to_sql`).
+- Added events `api.list.extendQueryBefore` and `api.list.extendQuery` with resource‑specific event names.
+- Supported caching via `$this->cached()` and `getLastUpdateAt`.
+- Applied access scopes (`applyAccessScope`) for company and department.
+- Centralised permission settings in `config.php` with environment variables.
+- Added smart logic in the `Months` controller to infer `study_year_id` and `semsters_id` (if the user does not provide a semester, the default semester for the year is used).
+- Corrected `access_scope` from `'own'` to `'all'` for the `list` operations on `periods`, `semsters`, and `months`, because these are master data records not tied to a specific user.
+
+---
+
+### Release Objectives
+
+- **Standardise development practices** across all API controllers in the Nano ecosystem.
+- **Simplify permission management** by centralising settings in `config.php` and using `AccessManager`.
+- **Improve security** through advanced restricted filters and permission checks for every operation.
+- **Increase flexibility** by supporting multiple output options and extensible events.
+- **Facilitate maintenance** by restructuring the code to be consistent with `Nano-Api-SKILL.md`.
+- **Improve developer experience** by using `checkWithFallback` to avoid duplicating permission settings for `show`.
+
+---
+
+### New Features and Improvements
+
+#### 1. Replaced `validationList` with `AccessManager`
+
+- **Before version 1.0.2**: each controller had a `validationList` function that manually checked settings, leading to duplicated logic.
+- **After the update**: permission checks are performed using `AccessManager::checkByResource` and `checkWithFallback` based on the `config.php` settings.
+
+**Example from `Periods.php`:**
+```php
+$access = AccessManager::checkByResource('nano.studyyearapi::periods.list', $user);
+if (!$access['allowed']) {
+    return $this->errorUnauthorized($access['message']);
+}
+```
+
+#### 2. Support for Advanced Filters (`advanced_filters`)
+
+Full support for `is_or`, `is_not`, `is_force`, `is_or_null` has been added for the main fields using `AdvancedQueryManager::scopeWhereField`. These filters are controlled via the `advanced_filters` settings in `config.php`.
+
+**Example – `calendar_type` filter with `is_or`:**
+```php
+if ($options['calendar_type'] && $options['calendar_type'] !== '*') {
+    $query = AdvancedQueryManager::scopeWhereField(
+        $query, 'calendar_type', $options['calendar_type'],
+        $options['is_or_calendar_type'], $table,
+        $options['is_not_calendar_type'], $options['is_force_calendar_type']
+    );
+}
+```
+
+#### 3. Unified `getRecords` Function
+
+The `getRecords` function has become identical across all controllers and supports:
+
+- **Excluding columns** (`exclude`) to reduce data size.
+- **Including relationships** (`custom_with`).
+- **Text search** (`q`) with advanced search support (ArPhpHelper).
+- **Ordering** (`orderBy`, `orderDirection`) and grouping (`group_by`) with `having`.
+- **Output options**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **Events**: `api.list.extendQueryBefore` and `api.list.extendQuery` to extend queries.
+- **Caching** via `$this->cached()`.
+
+#### 4. Applying Access Scopes (`applyAccessScope`)
+
+Company and department scopes are now automatically applied using `applyAccessScope`, with the ability to easily disable specific scopes:
+
+```php
+if (!empty($options['access_result']) && $options['access_result']['allowed']) {
+    $query = AccessManager::instance()->applyAccessScope($query, $options['access_result'], [
+        'company_field'    => 'companys_id',
+        'department_field' => 'departments_id',
+    ]);
+}
+```
+
+#### 5. Improved `show` Function Using `checkWithFallback`
+
+To avoid duplicating permission settings, `show` now uses `checkWithFallback` to fall back to `list` settings if no `show`‑specific settings exist:
+
+```php
+$access = AccessManager::checkWithFallback(
+    'nano.studyyearapi::periods.show',
+    'nano.studyyearapi::periods.list',
+    $user
+);
+```
+
+#### 6. Centralised Settings in `config.php`
+
+All permission and advanced filter settings have been moved to `config.php`, allowing control via environment variables:
+
+```php
+'periods' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_STUDYYEARAPI_PERIODS_LIST_IS_ALLOW', true),
+            'backend' => [...],
+            'frontend' => [
+                'allow' => env('NANO_STUDYYEARAPI_PERIODS_LIST_FRONTEND_ALLOW', true),
+                'allowed_ref_types' => ['student', 'parent'],
+                'access_scope' => 'all',  // corrected from 'own' to 'all'
+            ],
+            'advanced_filters' => [...],
+        ],
+    ],
+],
+```
+
+#### 7. Smart Logic in the `Months` Controller
+
+Advanced handling for year and semester IDs has been added:
+
+- If `study_year_id` is not provided → use the default year (`Period::getPrimary()`).
+- If `semsters_id` is not provided but `study_year_id` is provided → fetch the default semester for that year (`Semster::where('study_year_id', $study_year_id)->where('is_default', true)->first()`).
+- If `semsters_id` is provided but `study_year_id` is missing → infer `study_year_id` from the semester.
+- Allow `semsters_id = '*'` to skip filtering by semester.
+
+#### 8. Corrected `access_scope` for Master Data
+
+In previous versions, the `frontend` settings for `list` used `access_scope = 'own'`, which is inappropriate for master data (years, semesters, months) because these records are not tied to a specific user. They have been corrected to `access_scope = 'all'` to match the nature of the data.
+
+---
+
+### Practical Examples of the New Usage
+
+#### 1. Fetch Published Academic Years with an Advanced Filter
+
+```bash
+GET /api/v1/studyyear/periods?is_published=1&calendar_type=years&is_or_calendar_type=false
+```
+
+#### 2. Fetch Months for a Specific Year and Semester, with the Option to Ignore the Semester
+
+```bash
+GET /api/v1/studyyear/months?study_year_id=3&semsters_id=5
+```
+Or to fetch all months of a year (without filtering by semester):
+```bash
+GET /api/v1/studyyear/months?study_year_id=3&semsters_id=*
+```
+
+#### 3. Using `is_to_sql` for Debugging
+
+```php
+$result = $controller->getRecords([
+    'study_year_id' => 3,
+    'is_to_sql' => true,
+]);
+// The SQL query will be printed in trace_log
+```
+
+---
+
+### Backward Compatibility
+
+- **All existing endpoints** (routes) have not changed, so any application consuming the API will not be affected.
+- **Outputs** remain compatible with the previous structure (with `input_data`, `process_data`, `debug` added only when needed).
+- **No new database migrations**.
+- **The new configuration is optional**: you can continue using the old settings (without `advanced_filters` or `frontend_resolver`), and the plugin will work with default behaviour.
+
+---
+
+### Upgrade Requirements (from 1.0.1 to 1.0.2)
+
+1. **Update the code**:
+   - Replace all controller files (`Periods.php`, `Semsters.php`, `Months.php`) with the new versions.
+   - Replace the `config.php` file with the new version, which contains the `permission`, `advanced_filters`, and `frontend_resolver` sections (even if they are empty).
+
+2. **Update the `version.yaml` file**:
+   - Add version `1.0.2` as shown at the beginning of this document.
+
+3. **Run migrations** (none).
+
+4. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+5. **Test the functionality**:
+   - Verify that all endpoints (`periods`, `semsters`, `months`) work as expected.
+   - Test different access permissions (backend, frontend student, frontend parent, guest).
+   - Verify that advanced filters (`is_or`, `is_not`, `is_force`) work on the fields allowed in `config.php`.
+
+---
+
+### Benefits and Added Value
+
+- **Improved security**: permission scopes are automatically applied and cannot be easily bypassed.
+- **High flexibility**: the behaviour of each operation can be configured independently without modifying the code.
+- **Extensibility**: thanks to events, other plugins can dynamically modify the queries.
+- **Better performance**: with support for caching and excluding unnecessary columns.
+- **Better developer experience**: all controllers follow the same pattern, making the code easier to learn and maintain.
+- **Better data accuracy**: the smart logic in `Months` ensures that the correct months are fetched even if the user does not provide the semester.
+
+---
+
+### Conclusion
+
+Version **1.0.2** of `Nano.StudyyearApi` represents a significant achievement in standardising API standards within the Nano ecosystem. Thanks to the complete restructuring and integration of `AccessManager`, the plugin is now more secure, maintainable, and extensible. All controllers are now compliant with the `Nano-Api-SKILL.md` guide and offer advanced features such as advanced filters, events, and caching.
+
+We recommend that all developers upgrade to this version and take advantage of the centralised settings in `config.php` to customise the API behaviour according to their needs.
+
+---
+
+**Reference documentation**:
+- [`Nano.StudyyearApi` plugin documentation](./docs/StudyyearApi/Docs-StudyyearApi-en.md)
+- [`Tss.Studyyear` plugin documentation](./docs/Studyyear/Docs-Studyyear-en.md)
+- [API Plugin Development Guide (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
+- [`AccessManager` class documentation](./docs/AuthApi/Docs-AccessManager-en.md)
+- [`AdvancedQueryHelper` class documentation](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
+

@@ -48,45 +48,359 @@ The user and their type (backend / frontend) are verified to apply the access pe
 
 ### Successful Response (List)
 
+**Periods**
 ```json
 {
   "data": [
     {
       "id": 1,
-      "name": "Academic Year 2025-2026",
-      ...
+      "code": "2-4-1",
+      "barcode": "",
+      "name": "2025-2026",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "years",
+      "from_date": "2025-03-15 21:14:38",
+      "to_date": "2026-03-15 21:14:38",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 1,
+      "created_at": "2025-03-15 21:14:55",
+      "updated_at": "2025-03-15 21:14:55",
+      "object_type": "Tss\\Studyyear\\Models\\Period"
+    },
+    {
+      "id": 2,
+      "code": "2-4-2",
+      "barcode": "",
+      "name": "2023",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "years",
+      "from_date": "2026-05-16 20:38:38",
+      "to_date": "2027-05-16 20:38:38",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "is_default": false,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 2,
+      "created_at": "2026-05-16 20:39:00",
+      "updated_at": "2026-05-16 20:39:00",
       "object_type": "Tss\\Studyyear\\Models\\Period"
     }
   ],
   "meta": {
     "pagination": {
-      "total": 5,
-      "count": 5,
+      "total": 2,
+      "count": 2,
       "per_page": 15,
       "current_page": 1,
       "total_pages": 1,
-      "links": {
-        "next": null,
-        "previous": null
-      }
+      "links": {}
     }
   }
 }
 ```
 
-### Successful Response (Single Item)
-
+**Semsters**
 ```json
 {
-  "data": {
-    "id": 3,
-    "name": "First Semester",
-    ...
+  "data": [
+    {
+      "id": 1,
+      "code": "2-4-1",
+      "barcode": "",
+      "name": "الفصل الدراسي الاول",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "months",
+      "from_date": "2025-06-24 16:22:59",
+      "to_date": "2025-10-23 16:22:59",
+      "modul_type": "",
+      "ref_type": "semster1",
+      "study_year_id": "1",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_default": true,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 1,
+      "created_at": "2025-06-24 16:23:17",
+      "updated_at": "2025-06-24 16:25:12",
+      "object_type": "Tss\\Studyyear\\Models\\Semster"
+    },
+    {
+      "id": 2,
+      "code": "2-4-2",
+      "barcode": "",
+      "name": "الفصل الدراسي الثاني",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "months",
+      "from_date": "2025-12-01 16:23:00",
+      "to_date": "2026-04-01 16:23:00",
+      "modul_type": "",
+      "ref_type": "semster2",
+      "study_year_id": "1",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_default": false,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 2,
+      "created_at": "2025-06-24 16:24:41",
+      "updated_at": "2025-06-24 16:25:12",
+      "object_type": "Tss\\Studyyear\\Models\\Semster"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "total": 2,
+      "count": 2,
+      "per_page": 15,
+      "current_page": 1,
+      "total_pages": 1,
+      "links": {}
+    }
   }
 }
 ```
 
+**Months**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "code": "2-4-1",
+      "barcode": "",
+      "name": "الشهر الاول",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "months",
+      "from_date": "2025-06-24 16:25:23",
+      "to_date": "2025-07-25 16:25:23",
+      "modul_type": "",
+      "ref_type": "",
+      "study_year_id": "1",
+      "semsters_id": "1",
+      "month_num": "1",
+      "month_number": "JUN",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_default": false,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 1,
+      "created_at": "2025-06-24 16:25:51",
+      "updated_at": "2025-06-24 16:25:51",
+      "object_type": "Tss\\Studyyear\\Models\\Month"
+    },
+    {
+      "id": 2,
+      "code": "2-4-2",
+      "barcode": "",
+      "name": "الشهر الثاني",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "months",
+      "from_date": "2025-07-25 16:25:00",
+      "to_date": "2025-08-25 16:25:00",
+      "modul_type": "",
+      "ref_type": "",
+      "study_year_id": "1",
+      "semsters_id": "1",
+      "month_num": "2",
+      "month_number": "JUL",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_default": false,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 2,
+      "created_at": "2025-06-24 16:26:36",
+      "updated_at": "2025-06-24 16:26:36",
+      "object_type": "Tss\\Studyyear\\Models\\Month"
+    },
+    {
+      "id": 3,
+      "code": "2-4-3",
+      "barcode": "",
+      "name": "الشهر الثالث",
+      "short_description": "",
+      "description": "",
+      "calendar_type": "months",
+      "from_date": "2025-08-25 16:26:00",
+      "to_date": "2025-09-25 16:26:00",
+      "modul_type": "",
+      "ref_type": "",
+      "study_year_id": "1",
+      "semsters_id": "1",
+      "month_num": "3",
+      "month_number": "AUG",
+      "is_published_results": false,
+      "is_published": true,
+      "published_at": "",
+      "unpublished_at": "",
+      "companys_id": "2",
+      "departments_id": "4",
+      "is_default": false,
+      "is_active": true,
+      "status": "active",
+      "sort_order": 3,
+      "created_at": "2025-06-24 16:27:26",
+      "updated_at": "2025-06-24 16:27:26",
+      "object_type": "Tss\\Studyyear\\Models\\Month"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "total": 3,
+      "count": 3,
+      "per_page": 15,
+      "current_page": 1,
+      "total_pages": 1,
+      "links": {}
+    }
+  }
+}
+```
+
+
+### Successful Response (Single Item)
+
+**Periods**
+```json
+{
+  "id": 1,
+  "code": "2-4-1",
+  "barcode": "",
+  "name": "2025-2026",
+  "short_description": "",
+  "description": "",
+  "calendar_type": "years",
+  "from_date": "2025-03-15 21:14:38",
+  "to_date": "2026-03-15 21:14:38",
+  "companys_id": "2",
+  "departments_id": "4",
+  "is_published_results": false,
+  "is_published": true,
+  "published_at": "",
+  "unpublished_at": "",
+  "is_default": true,
+  "is_active": true,
+  "status": "active",
+  "sort_order": 1,
+  "created_at": "2025-03-15 21:14:55",
+  "updated_at": "2025-03-15 21:14:55",
+  "object_type": "Tss\\Studyyear\\Models\\Period"
+}
+```
+
+**Semsters**
+```json
+{
+  "id": 1,
+  "code": "2-4-1",
+  "barcode": "",
+  "name": "الفصل الدراسي الاول",
+  "short_description": "",
+  "description": "",
+  "calendar_type": "months",
+  "from_date": "2025-06-24 16:22:59",
+  "to_date": "2025-10-23 16:22:59",
+  "modul_type": "",
+  "ref_type": "semster1",
+  "study_year_id": "1",
+  "is_published_results": false,
+  "is_published": true,
+  "published_at": "",
+  "unpublished_at": "",
+  "companys_id": "2",
+  "departments_id": "4",
+  "is_default": true,
+  "is_active": true,
+  "status": "active",
+  "sort_order": 1,
+  "created_at": "2025-06-24 16:23:17",
+  "updated_at": "2025-06-24 16:25:12",
+  "object_type": "Tss\\Studyyear\\Models\\Semster"
+}
+```
+
+**Months**
+```json
+{
+  "id": 1,
+  "code": "2-4-1",
+  "barcode": "",
+  "name": "الشهر الاول",
+  "short_description": "",
+  "description": "",
+  "calendar_type": "months",
+  "from_date": "2025-06-24 16:25:23",
+  "to_date": "2025-07-25 16:25:23",
+  "modul_type": "",
+  "ref_type": "",
+  "study_year_id": "1",
+  "semsters_id": "1",
+  "month_num": "1",
+  "month_number": "JUN",
+  "is_published_results": false,
+  "is_published": true,
+  "published_at": "",
+  "unpublished_at": "",
+  "companys_id": "2",
+  "departments_id": "4",
+  "is_default": false,
+  "is_active": true,
+  "status": "active",
+  "sort_order": 1,
+  "created_at": "2025-06-24 16:25:51",
+  "updated_at": "2025-06-24 16:25:51",
+  "object_type": "Tss\\Studyyear\\Models\\Month"
+}
+```
+
 ### Error Response
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "http_code": 401,
+  "status": false,
+  "message": "User ref_type 'Tss\\Student\\Models\\Mparent' is not allowed for operation 'show'.",
+  "error": "User ref_type 'Tss\\Student\\Models\\Mparent' is not allowed for operation 'show'."
+}
+```
 
 ```json
 {

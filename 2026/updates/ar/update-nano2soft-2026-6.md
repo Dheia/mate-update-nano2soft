@@ -564,3 +564,231 @@ GET /api/v1/studyyear/months?study_year_id=5&is_published_results=1&include=peri
 - [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
 - [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./Nano-Api-SKILL.md)
 
+## 2026-06-03 -2026-06-05
+
+**تحديث إضافة `Nano.StudyyearApi` – الإصدار 1.0.2**
+
+### إعادة هيكلة كاملة للمتحكمات وفقاً لدليل `Nano-Api-SKILL.md` وتكامل `AccessManager` والميزات المتقدمة
+
+---
+
+### ملخص التحديثات
+
+يقدم الإصدار **1.0.2** من إضافة `Nano.StudyyearApi` إعادة هيكلة كاملة للمتحكمات (`Periods`, `Semsters`, `Months`) لتتوافق بشكل كامل مع دليل `Nano-Api-SKILL.md`. تم الاستغناء عن دالة `validationList` اليدوية والاعتماد على `AccessManager` للتحكم المركزي بالصلاحيات، مع إضافة دعم الفلاتر المتقدمة (`is_or`, `is_not`, `is_force`, `is_or_null`) عبر `AdvancedQueryHelper`، وتوحيد دالة `getRecords` لدعم خيارات الإخراج المتعددة، والأحداث، والتخزين المؤقت، وتطبيق نطاقات الوصول (الشركة، القسم). كما تمت إضافة منطق ذكي لحل التبعيات بين السنة والترم في متحكم `Months`، وتصحيح إعدادات `access_scope` للمستخدمين الأماميين.
+
+**أبرز التغييرات:**
+- إزالة دوال `validationList` واستبدالها بـ `AccessManager::checkByResource` و `checkWithFallback`.
+- إضافة دعم الفلاتر المتقدمة لكل الحقول باستخدام `AdvancedQueryManager::scopeWhereField`.
+- توحيد دالة `getRecords` لدعم خيارات الإخراج المتنوعة (`is_query`, `is_first`, `is_collection`, `is_paginator`, `is_to_sql`).
+- إضافة أحداث `api.list.extendQueryBefore` و `api.list.extendQuery` وقوائم خاصة لكل مورد.
+- دعم التخزين المؤقت عبر `$this->cached()` و `getLastUpdateAt`.
+- تطبيق نطاق الوصول (`applyAccessScope`) للشركة والقسم.
+- مركزية إعدادات الصلاحيات في `config.php` مع متغيرات البيئة.
+- إضافة منطق ذكي لاستنتاج `study_year_id` و `semsters_id` في متحكم `Months` (إذا لم يُمرر المستخدم الترم، يتم جلب الترم الافتراضي للسنة).
+- تصحيح `access_scope` من `'own'` إلى `'all'` لأقسام `list` في `periods`, `semsters`, `months` لأن هذه البيانات عامة (Master Data) ولا ترتبط بمستخدم معين.
+
+---
+
+### أهداف الإصدار
+
+- **توحيد معايير التطوير** بين جميع متحكمات API في النظام البيئي Nano.
+- **تبسيط إدارة الصلاحيات** عبر مركزية الإعدادات في `config.php` واستخدام `AccessManager`.
+- **تحسين الأمان** من خلال الفلاتر المتقدمة المقيدة والتحقق من الصلاحيات لكل عملية.
+- **زيادة المرونة** عبر دعم خيارات إخراج متعددة وأحداث قابلة للتوسع.
+- **تسهيل الصيانة** بإعادة هيكلة الكود بحيث يكون متسقاً مع `Nano-Api-SKILL.md`.
+- **تحسين تجربة المطور** باستخدام `checkWithFallback` لتجنب تكرار إعدادات الصلاحيات لـ `show`.
+
+---
+
+### الميزات الجديدة والتحسينات
+
+#### 1. استبدال `validationList` بـ `AccessManager`
+
+- **قبل الإصدار 1.0.2**: كان كل متحكم يحتوي على دالة `validationList` تتحقق من الإعدادات يدوياً، مما أدى إلى تكرار المنطق.
+- **بعد التحديث**: يتم التحقق من الصلاحيات باستخدام `AccessManager::checkByResource` و `checkWithFallback` بناءً على إعدادات `config.php`.
+
+**مثال من `Periods.php`:**
+```php
+$access = AccessManager::checkByResource('nano.studyyearapi::periods.list', $user);
+if (!$access['allowed']) {
+    return $this->errorUnauthorized($access['message']);
+}
+```
+
+#### 2. دعم الفلاتر المتقدمة (`advanced_filters`)
+
+تمت إضافة دعم كامل لـ `is_or`, `is_not`, `is_force`, `is_or_null` للحقول الرئيسية باستخدام `AdvancedQueryManager::scopeWhereField`. يتم التحكم في هذه الفلاتر عبر إعدادات `advanced_filters` في `config.php`.
+
+**مثال – فلتر `calendar_type` مع `is_or`:**
+```php
+if ($options['calendar_type'] && $options['calendar_type'] !== '*') {
+    $query = AdvancedQueryManager::scopeWhereField(
+        $query, 'calendar_type', $options['calendar_type'],
+        $options['is_or_calendar_type'], $table,
+        $options['is_not_calendar_type'], $options['is_force_calendar_type']
+    );
+}
+```
+
+#### 3. توحيد دالة `getRecords`
+
+أصبحت دالة `getRecords` متطابقة في جميع المتحكمات وتدعم:
+
+- **استبعاد الأعمدة** (`exclude`) لتقليل حجم البيانات.
+- **تضمين العلاقات** (`custom_with`).
+- **البحث النصي** (`q`) مع دعم البحث المتقدم (ArPhpHelper).
+- **الترتيب** (`orderBy`, `orderDirection`) والمجموعات (`group_by`) و `having`.
+- **خيارات الإخراج**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **الأحداث**: `api.list.extendQueryBefore` و `api.list.extendQuery` لتوسيع الاستعلامات.
+- **التخزين المؤقت** عبر `$this->cached()`.
+
+#### 4. تطبيق نطاق الوصول (`applyAccessScope`)
+
+يتم الآن تطبيق نطاقات الشركة والقسم تلقائياً باستخدام `applyAccessScope` مع إمكانية تعطيل نطاقات معينة بسهولة:
+
+```php
+if (!empty($options['access_result']) && $options['access_result']['allowed']) {
+    $query = AccessManager::instance()->applyAccessScope($query, $options['access_result'], [
+        'company_field'    => 'companys_id',
+        'department_field' => 'departments_id',
+    ]);
+}
+```
+
+#### 5. تحسين دالة `show` باستخدام `checkWithFallback`
+
+لتجنب تكرار إعدادات الصلاحيات، تستخدم `show` الآن `checkWithFallback` لاستخدام إعدادات `list` إذا لم توجد إعدادات خاصة بـ `show`:
+
+```php
+$access = AccessManager::checkWithFallback(
+    'nano.studyyearapi::periods.show',
+    'nano.studyyearapi::periods.list',
+    $user
+);
+```
+
+#### 6. إعدادات مركزية في `config.php`
+
+تم نقل جميع إعدادات الصلاحيات والفلاتر المتقدمة إلى `config.php`، مما يسمح بالتحكم عبر متغيرات البيئة:
+
+```php
+'periods' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_STUDYYEARAPI_PERIODS_LIST_IS_ALLOW', true),
+            'backend' => [...],
+            'frontend' => [
+                'allow' => env('NANO_STUDYYEARAPI_PERIODS_LIST_FRONTEND_ALLOW', true),
+                'allowed_ref_types' => ['student', 'parent'],
+                'access_scope' => 'all',  // تم التصحيح من 'own' إلى 'all'
+            ],
+            'advanced_filters' => [...],
+        ],
+    ],
+],
+```
+
+#### 7. منطق ذكي في متحكم `Months`
+
+تمت إضافة معالجة متقدمة لمعرف السنة والترم:
+
+- إذا لم يُمرر `study_year_id` → استخدام السنة الافتراضية (`Period::getPrimary()`).
+- إذا لم يُمرر `semsters_id` ولكن `study_year_id` موجود → جلب الترم الافتراضي لتلك السنة (`Semster::where('study_year_id', $study_year_id)->where('is_default', true)->first()`).
+- إذا أُمرر `semsters_id` ولكن `study_year_id` غير موجود → استنتاج `study_year_id` من الترم.
+- السماح بـ `semsters_id = '*'` لعدم التصفية حسب الترم.
+
+#### 8. تصحيح `access_scope` للبيانات العامة
+
+في الإصدارات السابقة، كانت إعدادات `frontend` في `list` تستخدم `access_scope = 'own'`، وهو غير مناسب للبيانات العامة (السنوات، الفصول، الأشهر) لأن هذه البيانات لا ترتبط بمستخدم معين. تم تصحيحها إلى `access_scope = 'all'` لتتناسب مع طبيعة البيانات.
+
+---
+
+### أمثلة عملية على الاستخدام الجديد
+
+#### 1. جلب السنوات الدراسية المنشورة مع استخدام فلتر متقدم
+
+```bash
+GET /api/v1/studyyear/periods?is_published=1&calendar_type=years&is_or_calendar_type=false
+```
+
+#### 2. جلب أشهر سنة معينة وترم معين مع إمكانية تجاهل الترم
+
+```bash
+GET /api/v1/studyyear/months?study_year_id=3&semsters_id=5
+```
+أو لجلب كل أشهر السنة (دون فلترة حسب الترم):
+```bash
+GET /api/v1/studyyear/months?study_year_id=3&semsters_id=*
+```
+
+#### 3. استخدام `is_to_sql` لتصحيح الأخطاء
+
+```php
+$result = $controller->getRecords([
+    'study_year_id' => 3,
+    'is_to_sql' => true,
+]);
+// ستتم طباعة استعلام SQL في trace_log
+```
+
+---
+
+### توافق الإصدارات السابقة
+
+- **جميع نقاط النهاية الحالية** (routes) لم تتغير، لذا لن يتأثر أي تطبيق يستهلك الـ API.
+- **المخرجات** لا تزال متوافقة مع الهيكل السابق (مع إضافة `input_data`, `process_data`, `debug` فقط عند الحاجة).
+- **لا توجد هجرات قاعدة بيانات** جديدة.
+- **التكوين الجديد** اختياري: يمكنك الاستمرار في استخدام الإعدادات القديمة (دون `advanced_filters` أو `frontend_resolver`) وستعمل الإضافة بالسلوك الافتراضي.
+
+---
+
+### متطلبات الترقية (من 1.0.1 إلى 1.0.2)
+
+1. **تحديث الكود**:
+   - استبدال جميع ملفات المتحكمات (`Periods.php`, `Semsters.php`, `Months.php`) بالنسخ الجديدة.
+   - استبدال ملف `config.php` بالإصدار الجديد الذي يحتوي على أقسام `permission`, `advanced_filters`, `frontend_resolver` (حتى لو كانت فارغة).
+
+2. **تحديث `version.yaml`**:
+   - أضف الإصدار `1.0.2` كما هو موضح في بداية هذا المستند.
+
+3. **تنفيذ الهجرات** (لا توجد).
+
+4. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+5. **اختبار الوظائف**:
+   - تحقق من أن جميع نقاط النهاية (`periods`, `semsters`, `months`) تعمل كما هو متوقع.
+   - اختبر صلاحيات وصول مختلفة (backend, frontend student, frontend parent, guest).
+   - تحقق من أن الفلاتر المتقدمة (`is_or`, `is_not`, `is_force`) تعمل على الحقول المحددة في `config.php`.
+
+---
+
+### الفوائد والقيمة المضافة
+
+- **أمان محسّن**: تطبيق نطاقات الصلاحيات تلقائياً وعدم إمكانية تجاوزها بسهولة.
+- **مرونة عالية**: يمكن تكوين سلوك كل عملية بشكل مستقل دون تعديل الكود.
+- **قابلية التوسع**: بفضل الأحداث، يمكن للإضافات الأخرى تعديل الاستعلامات ديناميكياً.
+- **أداء أفضل**: مع دعم التخزين المؤقت واستبعاد الأعمدة غير الضرورية.
+- **تجربة مطور أفضل**: جميع المتحكمات تتبع نفس النمط، مما يسهل تعلم وصيانة الكود.
+- **دقة أكبر في البيانات**: المنطق الذكي في `Months` يضمن جلب الأشهر الصحيحة حتى لو لم يمرر المستخدم الترم.
+
+---
+
+### الخاتمة
+
+يمثل الإصدار **1.0.2** من `Nano.StudyyearApi` إنجازاً كبيراً نحو توحيد معايير API في نظام Nano البيئي. بفضل إعادة الهيكلة الكاملة وتكامل `AccessManager`، أصبحت الإضافة أكثر أماناً وقابلية للصيانة والتوسع. جميع المتحكمات الآن متوافقة مع دليل `Nano-Api-SKILL.md` وتقدم ميزات متقدمة مثل الفلاتر المتقدمة، الأحداث، والتخزين المؤقت.
+
+نوصي جميع المطورين بالترقية إلى هذا الإصدار والاستفادة من الإعدادات المركزية في `config.php` لتخصيص سلوك API حسب احتياجاتهم.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق إضافة `Nano.StudyyearApi`](./docs/StudyyearApi/Docs-StudyyearApi-ar.md)
+- [توثيق إضافة `Tss.Studyyear` ](./docs/Studyyear/Docs-Studyyear-ar.md)
+- [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
+- [توثيق كلاس `AccessManager`](./docs/AuthApi/Docs-AccessManager-ar.md)
+- [توثيق كلاس `AdvancedQueryHelper`](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
+
