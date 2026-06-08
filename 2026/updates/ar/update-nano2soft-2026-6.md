@@ -792,3 +792,341 @@ $result = $controller->getRecords([
 - [توثيق كلاس `AccessManager`](./docs/AuthApi/Docs-AccessManager-ar.md)
 - [توثيق كلاس `AdvancedQueryHelper`](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
 
+## 2026-06-01 - 2026-06-06
+
+**تحديثات إضافة `Nano2.Qrcodes` – الإصدار 1.0.3**
+
+### ملخص التحديثات
+
+يأتي الإصدار 1.0.3 ليقدّم نظاماً متكاملاً لإدارة الباركودات والرموز (1D و 2D) داخل برمجيات نانوسوفت (NanoSoft App). بعد أن كان الإصدار 1.0.2 مجرد هيكل أولي للجدول، يضيف هذا الإصدار:
+
+- **موديل `Barcode` كامل** مع سمات متعددة تدعم النطاقات، الخيارات، الكاش، السجلات الافتراضية، والعلاقات المختلفة.
+- **متحكم خلفي (Backend)** متكامل يدعم `FormController`، `ListController`، `ReorderController`، و `ImportExportController` مع صلاحيات دقيقة.
+- **كلاس `Manager`** مركزي للتعامل مع الباركودات (إنشاء، تحديث، حذف، استخدام، تحقق، إحصائيات) مع دعم حدود الاستخدام اليومية/الأسبوعية/الشهرية عبر طريقتين (Cache و Database).
+- **كلاس `BarcodeGenerator`** متطور يدعم 7 مكتبات مختلفة لتوليد الباركودات (Picqer، chillerlan، SimpleSoftwareIO، BaconQrCode، Endroid، Milon، PHP QR Code) مع مخرجات متعددة (PNG، SVG، HTML، Base64، إلخ).
+- **واجهة API** RESTful كاملة (CRUD، تحقق، استخدام، إحصائيات، صورة الباركود) مع نظام صلاحيات متقدم عبر `AccessManager`.
+- **دعم الاستيراد والتصدير** عبر ملفات CSV مع خيارات مرنة للقيم الافتراضية (قسم، مالك، منتج، وحدة، تخطي قواعد النوع).
+- **إعدادات شاملة** عبر ملف `config.php` تشمل صلاحيات لكل عملية، حدود الاستخدام، فلاتر متقدمة، ومحلل ديناميكي لمستخدمي Frontend.
+
+كل ذلك مع توثيق شامل ومفصل بالعربية والإنجليزية في ملفات `lang.php`.
+
+---
+
+### الإصدار 1.0.3 – نظام إدارة الباركودات المتكامل
+
+#### أهداف الإصدار
+
+- **بناء نموذج `Barcode` قوي** يدعم جميع أنواع الباركودات (1D و 2D) مع علاقات متعددة الأشكال (owner، verifier، subject، user) وحقول JSON ديناميكية.
+- **توفير متحكم خلفي احترافي** يتبع معايير OctoberCMS ويوفر واجهة مستخدم سهلة لإدارة الباركودات.
+- **إنشاء كلاس `Manager`** (Singleton) لتوحيد منطق الأعمال وإعادة استخدامه في الـ API و الـ Backend.
+- **تطوير `BarcodeGenerator`** ليكون متعدد المكتبات، مرنًا وقابلًا للتوسع، ويدعم تنسيقات مخرجات مختلفة.
+- **بناء واجهة API كاملة** مع دعم التصفية المتقدمة (`is_or`، `is_not`، `is_or_null`)، حدود الاستخدام، والتحقق من الصلاحيات.
+- **تمكين استيراد وتصدير الباركودات** بمرونة عالية، مع إمكانية تحديد قيم افتراضية وتخطي قواعد التحقق حسب نوع الباركود.
+- **توفير نظام حدود استخدام** (usage limits) للمستخدمين (يومي، ساعي، أسبوعي، شهري، أو عدد أيام مخصص) بطريقتين: Cache (سريع) و Database (دقيق).
+
+#### الميزات الجديدة والتحسينات
+
+##### 1. موديل `Barcode` المتكامل
+
+تم إنشاء موديل `Nano2\Qrcodes\Models\Barcode` مع السمات التالية:
+
+- **السمات الأساسية**: `Validation`، `SoftDelete`، `Purgeable`، `Sortable`.
+- **سمات متخصصة**: `HasScopesModel`، `HasDefault`، `HasUserScopes`، `HasUserOptions`، `HasSubjectScopes`، `HasSubjectOptions`، `HasOwnerScopes`، `HasOwnerOptions`، `HasVerifierScopes`، `HasVerifierOptions`، `HasRecordsOptions`، `ListObjects`، `ListOptions`، `FieldsOptions`، `HasCreateDefaultRecords`.
+- **العلاقات**:
+  - `belongsTo` مع `Company`، `Department`، `Template`، `Product`، `Unit`، والمستخدمين (`Created_by`، `Updated_by`، `Deleted_by`).
+  - `morphTo` مع `owner`، `verifier`، `subject`، `user`.
+  - `attachOne` و `attachMany` للملفات والصور.
+- **حقول JSON**: `fields_data`، `metadata`، `other_data`، `config_data`، `additional_data`.
+- **دوال مساعدة**:
+  - `isExpired()`، `isExpiringSoon()`، `canUse()`، `use($user)`، `verify($verifier, $score)`.
+  - `generateUniqueCode()` – توليد كود فريد بالصيغة `{companys_id}-{departments_id}-{تاريخ_وقت_عشوائي}`.
+  - `prepareDuplicate()` – منع التكرار حسب الإعدادات.
+  - `applyBarcodeTypeRules()` – تطبيق قواعد تحقق دقيقة لكل نوع باركود (أطوال ثابتة، أرقام فقط، طول زوجي، إلخ).
+- **دعم تخطي قواعد النوع**: خاصية `skipBarcodeTypeRules` مع دوال `skipBarcodeTypeRules()`، `enableBarcodeTypeRules()`، `disableBarcodeTypeRules()`، `isBarcodeTypeRulesSkipped()`.
+- **نظام الكاش** المتكامل لتحسين الأداء.
+
+##### 2. متحكم الخلفية `Barcodes` (Backend)
+
+تم إنشاء متحكم `Nano2\Qrcodes\Controllers\Barcodes` مع الميزات التالية:
+
+- **السلوكيات**:
+  - `FormController`، `ListController`، `ReorderController`، `ImportExportController`.
+- **الصلاحيات**: `access`، `access_all`، `add`، `edit`، `delete`، `verify`، `use`، `generate`، `print`، `export`، `import`.
+- **دوال CRUD الأساسية**: `onCreate`، `onUpdate`، `onDelete`.
+- **الإجراءات الجماعية**:
+  - `onActivateSelected` / `onDeactivateSelected` – تفعيل/تعطيل مجموعة.
+  - `onVerifySelected` – التحقق الإداري من مجموعة.
+  - `onUseSelected` – تسجيل استخدام لمجموعة.
+- **الإنشاء الجماعي**:
+  - صفحة `generate` مع نموذج لتحديد العدد، البادئة، نوع الباركود، مدة الصلاحية، المنتج، القسم.
+  - دالة `onGenerate` لتوليد عدة باركودات دفعة واحدة (حتى 1000).
+- **الطباعة**:
+  - `onPrint` و `onPrintSelected` لعرض نافذة طباعة تحتوي على الباركود مع بيانات المنتج.
+- **التصدير والاستيراد**:
+  - `onExport` لتصدير الباركودات إلى CSV.
+  - دعم `ImportExportController` مع نموذجي `BarcodeImport` و `BarcodeExport`.
+- **خيارات القوائم المنسدلة**:
+  - `getStatusOptions`، `getBarcodeTypeOptions`، `getDepartmentsIdOptions`، `getCompanysIdOptions`، `getProductIdOptions`، `getUnitIdOptions`، `getCurrencysIdOptions`، إلخ.
+- **السجلات الافتراضية**: `index_onCreateDefaultRecords` و `index_onRestDefaultRecords`.
+- **القوائم والإعدادات**: دوال `bootBackendNavigation` و `registerBackendPermissions` لتسجيل القائمة والصلاحيات عبر الأحداث.
+
+##### 3. كلاس `Manager` (إدارة العمليات)
+
+تم إنشاء كلاس `Nano2\Qrcodes\Classes\Manager` (Singleton) ليكون المسؤول الوحيد عن منطق الأعمال:
+
+- **عمليات CRUD**:
+  - `createBarcode($options)` – إنشاء باركود مع دعم خيارات متقدمة (تخطي التحقق، تخطي قواعد النوع، توليد صورة، إلخ).
+  - `updateBarcode($id, $options)` – تحديث باركود مع منع تعديل المستخدم إن تم استخدامه.
+  - `deleteBarcode($id)` – حذف ناعم (soft delete).
+  - `restoreBarcode($id)` – استعادة باركود محذوف.
+- **الاستخدام والتحقق**:
+  - `scanAndUseBarcode($barcodeValue, $user)` – استخدام باركود مع التحقق من صلاحيته وحدود المستخدم.
+  - `verifyBarcode($barcodeValue)` – التحقق من الصلاحية دون استخدام.
+  - `verifyBarcodeById($id, $verifier, $score)` – توثيق إداري.
+- **الإنشاء الجماعي**:
+  - `generateMultipleBarcodes($count, $baseOptions)` – إنشاء عدة باركودات.
+  - `generateBatch($batchOptions)` – إنشاء دفعة واحدة برقم دفعة موحد.
+- **حدود الاستخدام (Usage Limits)**:
+  - دعم طريقتين للتتبع: `cache` (سريع) و `database` (دقيق).
+  - فترات مرنة: `hour`، `day`، `week`، `month`، أو عدد أيام مخصص.
+  - دوال `checkUserUsageLimit` و `incrementUserUsage` و `getUserUsageCountFromDatabase` و `getUsageLimitValue`.
+- **إحصائيات**:
+  - `getBarcodeStats($options)` – إحصائيات عامة (إجمالي، نشط، منتهي، حسب النوع، إلخ).
+  - `getUserBarcodeUsageStats($user)` – إحصائيات استخدام المستخدم.
+- **عمليات مساعدة**:
+  - `getBarcodeRecords($options)` – استرجاع السجلات مع خيارات تصفية.
+  - `exportBarcodes($options)` – تصدير البيانات.
+  - `importBarcodes($data, $options)` – استيراد البيانات.
+  - `getBarcodeImageUrl($barcode)` – الحصول على رابط صورة الباركود.
+  - `formatBarcodeForApi($barcode)` – تنسيق البيانات للـ API.
+
+##### 4. كلاس `BarcodeGenerator` (توليد الباركودات)
+
+تم إنشاء كلاس متطور يدعم سبع مكتبات مختلفة مع كشف تلقائي:
+
+| المكتبة | الأنواع المدعومة | الأولوية |
+| :--- | :--- | :--- |
+| Picqer\Barcode | 1D و 2D | 1 (الأعلى) |
+| chillerlan\QRCode | QR فقط | 2 |
+| SimpleSoftwareIO\QrCode | QR فقط | 3 |
+| PHP QR Code (دالة `qrcode`) | QR فقط | 4 |
+| BaconQrCode | QR فقط | 5 |
+| Endroid\QrCode | QR فقط | 6 |
+| Milon\Barcode (Tss) | 1D و 2D | 7 |
+| Fallback (GD) | نص بسيط | الأخير |
+
+**الميزات**:
+- **تنسيقات المخرجات**: `png`، `jpg`، `jpeg`، `webp`، `svg`، `html`، `base64`، `data-uri`، `gd`، `response`، `file`.
+- **خيارات متقدمة**: العرض، الارتفاع، اللون، لون الخلفية، الهامش، مستوى تصحيح الخطأ، الجودة، الشفافية، الكاش.
+- **دوال خاصة**:
+  - `generate($data, $type, $options)` – الدالة الرئيسية.
+  - `generateBarcodeImage($data, $type, $options)` – توليد صورة PNG.
+  - `generateAndSaveBarcodeImage($barcode, $path)` – حفظ الصورة في التخزين وتحديث النموذج.
+  - `validateBarcode($barcode, $type)` – التحقق من صحة قيمة الباركود حسب النوع (يدعم EAN، UPC، ISBN، Code 128/39/93، I25، POSTNET، إلخ).
+- **دوال مساعدة**: `hexToRgb`، `hexToGdColor`، `getAvailableLibraries`، `selectLibrary`.
+
+##### 5. واجهة API (RESTful)
+
+تم إنشاء متحكم `Nano2\Qrcodes\ApiControllers\Barcodes` مع نقاط النهاية التالية:
+
+| الطريقة | المسار | الوصف |
+| :--- | :--- | :--- |
+| GET | `/barcodes` | جلب قائمة الباركودات مع تصفية وترقيم. |
+| GET | `/barcodes/activelystats` | آخر توقيت تحديث (للكاش). |
+| POST | `/barcodes` | إنشاء باركود جديد. |
+| PUT | `/barcodes/{id}` | تحديث باركود موجود. |
+| DELETE | `/barcodes/{id}` | حذف باركود (ناعم). |
+| GET | `/barcodes/{id}` | عرض تفاصيل باركود. |
+| POST | `/barcodes/verify` | التحقق من صحة باركود دون استخدام. |
+| POST | `/barcodes/use` | مسح واستخدام باركود (تسجيل استخدام). |
+| POST | `/barcodes/verify/{id}` | التحقق الإداري (تعيين `is_verified`). |
+| POST | `/barcodes/generate` | توليد دفعة من الباركودات (للمشرفين فقط). |
+| GET | `/barcodes/stats` | إحصائيات عامة للباركودات. |
+| GET | `/barcodes/user-stats` | إحصائيات استخدام المستخدم الحالي. |
+| GET | `/barcodes/image/{id}` | الحصول على صورة الباركود (PNG). |
+
+**نظام الصلاحيات**:
+- كل عملية (`list`، `show`، `create`، `update`، `delete`، `verify`، `use`، `generate`، `stats`، `userStats`) لها إعدادات صلاحيات مستقلة في `config.php`.
+- تدعم الفلاتر المتقدمة (`is_or`، `is_not`، `is_or_null`) عبر `advanced_filters`.
+- محلل ديناميكي (frontend resolver) لتعبئة `user_id` و `user_type` تلقائياً لمستخدمي frontend.
+
+**الاستجابات**:
+- تتبع هيكل `Nano\API\Classes\ApiController` مع الحقول: `code`، `status`، `message`، `error`، `errors`، `data`، `input_data`، `process_data`، `debug`.
+
+##### 6. الاستيراد والتصدير
+
+تم إضافة نموذجين:
+
+- **`BarcodeImport`**:
+  - يدعم خيارات: `update_existing`، `skip_barcode_type_rules` (ثلاث حالات: `null`، `true`، `false`)، `default_status`، `default_barcode_type`، `default_departments_id`، `default_owner_type` و `default_owner_id`، `default_product_id` و `default_product_name`، `default_unit_id`.
+  - دوال خيارات لبناء واجهة الاستيراد (`getSkipBarcodeTypeRulesOptions`، `getDefaultDepartmentsIdOptions`، إلخ).
+  - دالة `importData` التي تقوم بمعالجة كل صف وتستدعي `Manager::createBarcode` أو `updateBarcode` مع تمرير خيار `skip_barcode_type_rules`.
+- **`BarcodeExport`**:
+  - يقوم بتصدير البيانات حسب الأعمدة المحددة في `columns.yaml`، مع فلترة اختيارية حسب صلاحية المستخدم.
+
+##### 7. الإعدادات المركزية (config.php)
+
+تم إنشاء ملف `config.php` غني بالإعدادات:
+
+- **الإعدادات العامة**:
+  - `allow_debug_any` – تفعيل وضع التصحيح عبر GET parameters.
+  - `api.enable_cache` و `api.cache_ttl` – تفعيل الكاش للـ API.
+- **إعدادات `barcodes`**:
+  - `is_default_company`، `department_type`، `is_check_duplicate`، `is_show_create_default`، `is_stop_show_menu`، إلخ.
+  - `image_width`، `image_height`، `image_color`، `image_format`، `storage_disk` – إعدادات صورة الباركود.
+  - **`usage_limits`**:
+    - `enabled`، `daily_limit`، `hourly_limit`، `reset_at_midnight`.
+    - `tracking_type` (`cache` أو `database`).
+    - `tracking_period` (`hour`، `day`، `week`، `month`، أو عدد أيام).
+    - `tracking_custom_days`، `use_soft_limit`، `limit_message`.
+  - **إعدادات الصلاحيات لكل عملية** (`list`، `show`، `create`، `update`، `delete`، `verify`، `use`، `generate`، `stats`، `userStats`):
+    - `permission.is_allow`، `permission.backend`، `permission.frontend`، `permission.guest`.
+    - `advanced_filters` و `frontend_resolver` لكل عملية (قابلة للتخصيص عبر متغيرات البيئة).
+
+##### 8. الترجمة والدعم متعدد اللغات
+
+تم إضافة ملفات `lang/ar/lang.php` و `lang/en/lang.php` تغطي:
+
+- الأيقونات، القوائم، الصلاحيات، الرسائل، الأخطاء، الفلاتر، حقول النماذج، أعمدة القوائم، مساعدات الاستيراد/التصدير، إلخ.
+- مفاتيح خاصة بخيارات `skip_barcode_type_rules` في قسم الاستيراد.
+- ترجمة لأنواع الباركودات المتعددة المستخدمة في `getBarcodeTypeOptions`.
+
+---
+
+### أمثلة عملية
+
+#### 1. إنشاء باركود عبر API
+
+```bash
+curl -X POST "https://domain.com/api/v1/qrcodes/barcodes" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "barcode": "5901234123457",
+    "barcode_type": "EAN13",
+    "product_name": "منتج تجريبي",
+    "price": 99.99
+  }'
+```
+
+#### 2. مسح واستخدام باركود
+
+```bash
+curl -X POST "https://domain.com/api/v1/qrcodes/barcodes/use" \
+  -H "Content-Type: application/json" \
+  -d '{"barcode": "BC000101"}'
+```
+
+#### 3. الاستيراد مع تخطي قواعد النوع (في واجهة الخلفية)
+
+في نموذج استيراد الباركودات، اختر من قائمة `skip_barcode_type_rules` القيمة `true` إذا كنت تستورد باركودات EAN-13 ليست بطول 13 رقمًا، أو `false` لتطبيق القواعد، أو `null` للإعداد الافتراضي.
+
+#### 4. استخدام `Manager` مباشرة
+
+```php
+use Nano2\Qrcodes\Classes\Manager;
+
+// إنشاء باركود جديد
+$result = Manager::createBarcode([
+    'barcode' => '1234567890',
+    'barcode_type' => 'C128',
+    'product_name' => 'جهاز جديد',
+]);
+
+if ($result['status']) {
+    $barcode = $result['model'];
+    echo $barcode->code;
+}
+
+// استخدام باركود
+$useResult = Manager::scanAndUseBarcode('1234567890', $currentUser);
+
+// إحصائيات المستخدم
+$stats = Manager::getUserBarcodeUsageStats($currentUser);
+```
+
+#### 5. توليد صورة باركود باستخدام `BarcodeGenerator`
+
+```php
+use Nano2\Qrcodes\Classes\BarcodeGenerator;
+
+$pngData = BarcodeGenerator::generateBarcodeImage('5901234123457', 'EAN13');
+header('Content-Type: image/png');
+echo $pngData;
+```
+
+---
+
+### متطلبات الترقية
+
+1. **تحديث قاعدة البيانات**  
+   يجب تشغيل الترحيلات الجديدة (إن لم تكن مشغلة):
+
+   ```bash
+   php artisan october:migrate
+   ```
+
+   وهذا سيُنشئ جدول `nano2_qrcodes_barcodes` (وقد يكون موجوداً مسبقاً في الإصدار 1.0.2).
+
+2. **تحديث الكود**  
+   استبدل الملفات التالية بالنسخ الجديدة:
+   - `models/Barcode.php` (مع جميع السمات في مجلد `barcode/`).
+   - `controllers/Barcodes.php` (الخلفي).
+   - `apicontrollers/Barcodes.php` (API).
+   - `transformers/BarcodeTransformer.php`.
+   - `classes/Manager.php`.
+   - `classes/BarcodeGenerator.php`.
+   - `classes/QrcodeManagement.php` (إن وجد).
+   - `config/config.php`.
+   - `routes.php`.
+   - `updates/version.yaml`.
+   - ملفات اللغة `lang/ar/lang.php` و `lang/en/lang.php`.
+   - ملفات YAML الخاصة بالنماذج (`models/barcode/fields.yaml`, `columns.yaml`، إلخ).
+   - ملفات العرض والتهيئة الخاصة بالمتحكم الخلفي (`controllers/barcodes/*.htm`, `config_*.yaml`).
+
+3. **تسجيل القوائم والصلاحيات**  
+   تأكد من أن `Plugin.php` يستدعي `Barcodes::registerBackendPermissions()` و `Barcodes::bootBackendNavigation()` داخل دالة `boot()`.
+
+4. **إعداد متغيرات البيئة** (اختياري)  
+   يمكن وضع المتغيرات التالية في ملف `.env` لتخصيص السلوك:
+
+   ```ini
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_ENABLED=true
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_DAILY_LIMIT=10
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_TRACKING_TYPE=database
+   NANO2_QRCODES_BARCODES_LIST_BACKEND_ALLOW=true
+   NANO2_QRCODES_API_ENABLE_CACHE=false
+   NANO2_QRCODES_BARCODE_IMAGE_WIDTH=300
+   ```
+
+5. **اختبار الوظائف**  
+   - تحقق من ظهور قائمة `الباركودات` في لوحة التحكم.
+   - جرب إنشاء باركود جديد وتعديله وحذفه.
+   - اختبر الإنشاء الجماعي والطباعة والتصدير.
+   - جرب نقاط API باستخدام Postman أو `curl`.
+   - تأكد من أن حدود الاستخدام تعمل كما هو مطلوب (يمكن اختبارها عبر `use` endpoint).
+
+6. **مسح الكاش**  
+   لتطبيق الإعدادات الجديدة:
+
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### الخاتمة
+
+الإصدار 1.0.3 هو إصدار أساسي ومتكامل لإدارة الباركودات في منصة نانوسوفت. يوفّر موديلاً غنياً، متحكماً خلفياً كاملاً، واجهة API حديثة، كلاس `Manager` مرن، ومولد باركودات متعدد المكتبات. كما يدعم الاستيراد والتصدير بمرونة عالية، ونظام حدود استخدام متقدم يمكن تخصيصه حسب متطلبات العمل.
+
+نشكركم على متابعتكم، ونرحب بملاحظاتكم واقتراحاتكم لتحسين الإضافة في الإصدارات القادمة.
+
+---
+
+**الوثائق المرجعية** 
+- [التوثيق العام للإضافة](./docs/Qrcodes/Docs-Nano2-Qrcodes-ar.md)
+- [توثيق موديل `Barcode`](./docs/Qrcodes/Docs-Barcode-Model-ar.md)
+- [توثيق كلاس `Manager`](./docs/Qrcodes/Docs-Manager-Class-ar.md)
+- [توثيق كلاس `BarcodeGenerator`](./docs/Qrcodes/Docs-BarcodeGenerator-Class-ar.md)
+- [توثيق واجهة برمجة التطبيقات (API)](./docs/Qrcodes/Docs-API-Documentation-ar.md)
+

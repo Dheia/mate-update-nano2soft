@@ -790,3 +790,342 @@ We recommend that all developers upgrade to this version and take advantage of t
 - [`AccessManager` class documentation](./docs/AuthApi/Docs-AccessManager-en.md)
 - [`AdvancedQueryHelper` class documentation](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
 
+## 2026-06-01 - 2026-06-06
+
+**Updates to the `Nano2.Qrcodes` Plugin – Version 1.0.3**
+
+### Summary of Updates
+
+Version 1.0.3 introduces a complete system for managing barcodes and codes (1D and 2D) within NanoSoft software (NanoSoft App). Whereas version 1.0.2 was only a preliminary table structure, this version adds:
+
+- A **complete `Barcode` model** with multiple traits supporting scopes, options, caching, default records, and various relationships.
+- An **integrated backend controller** supporting `FormController`, `ListController`, `ReorderController`, and `ImportExportController` with fine‑grained permissions.
+- A **central `Manager` class** for handling barcodes (create, update, delete, use, verify, statistics) with support for daily/weekly/monthly usage limits via two methods (Cache and Database).
+- An **advanced `BarcodeGenerator` class** supporting 7 different barcode generation libraries (Picqer, chillerlan, SimpleSoftwareIO, BaconQrCode, Endroid, Milon, PHP QR Code) with multiple output formats (PNG, SVG, HTML, Base64, etc.).
+- A **complete RESTful API** (CRUD, verify, use, statistics, barcode image) with an advanced permission system via `AccessManager`.
+- **Import and export support** via CSV files with flexible options for default values (department, owner, product, unit, skip type rules).
+- **Comprehensive configuration** via `config.php` including permissions for each operation, usage limits, advanced filters, and a dynamic resolver for Frontend users.
+
+All of this is accompanied by thorough documentation in Arabic and English within the `lang.php` files.
+
+---
+
+### Version 1.0.3 – Integrated Barcode Management System
+
+#### Release Objectives
+
+- **Build a robust `Barcode` model** supporting all barcode types (1D and 2D) with polymorphic relationships (owner, verifier, subject, user) and dynamic JSON fields.
+- **Provide a professional backend controller** following OctoberCMS standards and offering an easy‑to‑use interface for managing barcodes.
+- **Create a `Manager` class** (Singleton) to unify business logic and reuse it in both the API and the backend.
+- **Develop a `BarcodeGenerator`** that is multi‑library, flexible, extensible, and supports various output formats.
+- **Build a complete API** with support for advanced filtering (`is_or`, `is_not`, `is_or_null`), usage limits, and permission checks.
+- **Enable high‑flexibility import/export** of barcodes, with the ability to set default values and skip validation rules per barcode type.
+- **Provide a usage limits system** (usage limits) for users (daily, hourly, weekly, monthly, or a custom number of days) using two methods: Cache (fast) and Database (accurate).
+
+#### New Features and Improvements
+
+##### 1. Integrated `Barcode` Model
+
+A model `Nano2\Qrcodes\Models\Barcode` has been created with the following traits:
+
+- **Basic traits**: `Validation`, `SoftDelete`, `Purgeable`, `Sortable`.
+- **Specialised traits**: `HasScopesModel`, `HasDefault`, `HasUserScopes`, `HasUserOptions`, `HasSubjectScopes`, `HasSubjectOptions`, `HasOwnerScopes`, `HasOwnerOptions`, `HasVerifierScopes`, `HasVerifierOptions`, `HasRecordsOptions`, `ListObjects`, `ListOptions`, `FieldsOptions`, `HasCreateDefaultRecords`.
+- **Relationships**:
+  - `belongsTo` with `Company`, `Department`, `Template`, `Product`, `Unit`, and users (`Created_by`, `Updated_by`, `Deleted_by`).
+  - `morphTo` with `owner`, `verifier`, `subject`, `user`.
+  - `attachOne` and `attachMany` for files and images.
+- **JSON fields**: `fields_data`, `metadata`, `other_data`, `config_data`, `additional_data`.
+- **Helper methods**:
+  - `isExpired()`, `isExpiringSoon()`, `canUse()`, `use($user)`, `verify($verifier, $score)`.
+  - `generateUniqueCode()` – generates a unique code in the format `{companys_id}-{departments_id}-{random_date_time}`.
+  - `prepareDuplicate()` – prevents duplication according to settings.
+  - `applyBarcodeTypeRules()` – applies precise validation rules for each barcode type (fixed lengths, digits only, even length, etc.).
+- **Skip type rules support**: property `skipBarcodeTypeRules` with methods `skipBarcodeTypeRules()`, `enableBarcodeTypeRules()`, `disableBarcodeTypeRules()`, `isBarcodeTypeRulesSkipped()`.
+- **Integrated caching system** to improve performance.
+
+##### 2. Backend Controller `Barcodes`
+
+A controller `Nano2\Qrcodes\Controllers\Barcodes` has been created with the following features:
+
+- **Behaviors**:
+  - `FormController`, `ListController`, `ReorderController`, `ImportExportController`.
+- **Permissions**: `access`, `access_all`, `add`, `edit`, `delete`, `verify`, `use`, `generate`, `print`, `export`, `import`.
+- **Basic CRUD methods**: `onCreate`, `onUpdate`, `onDelete`.
+- **Bulk actions**:
+  - `onActivateSelected` / `onDeactivateSelected` – activate/deactivate a group.
+  - `onVerifySelected` – administrative verification of a group.
+  - `onUseSelected` – record usage for a group.
+- **Batch creation**:
+  - `generate` page with a form to specify count, prefix, barcode type, expiry duration, product, department.
+  - `onGenerate` function to generate multiple barcodes at once (up to 1000).
+- **Printing**:
+  - `onPrint` and `onPrintSelected` to open a print window containing the barcode with product data.
+- **Export and import**:
+  - `onExport` to export barcodes to CSV.
+  - Support for `ImportExportController` with `BarcodeImport` and `BarcodeExport` models.
+- **Dropdown options**:
+  - `getStatusOptions`, `getBarcodeTypeOptions`, `getDepartmentsIdOptions`, `getCompanysIdOptions`, `getProductIdOptions`, `getUnitIdOptions`, `getCurrencysIdOptions`, etc.
+- **Default records**: `index_onCreateDefaultRecords` and `index_onRestDefaultRecords`.
+- **Lists and settings**: `bootBackendNavigation` and `registerBackendPermissions` functions to register the menu and permissions via events.
+
+##### 3. `Manager` Class (Business Logic)
+
+A class `Nano2\Qrcodes\Classes\Manager` (Singleton) has been created as the sole entity responsible for business logic:
+
+- **CRUD operations**:
+  - `createBarcode($options)` – create a barcode with advanced options (skip validation, skip type rules, generate image, etc.).
+  - `updateBarcode($id, $options)` – update a barcode, preventing modification of the user if already used.
+  - `deleteBarcode($id)` – soft delete.
+  - `restoreBarcode($id)` – restore a soft‑deleted barcode.
+- **Usage and verification**:
+  - `scanAndUseBarcode($barcodeValue, $user)` – scan and use a barcode, checking its validity and user limits.
+  - `verifyBarcode($barcodeValue)` – verify validity without using.
+  - `verifyBarcodeById($id, $verifier, $score)` – administrative verification.
+- **Batch creation**:
+  - `generateMultipleBarcodes($count, $baseOptions)` – create several barcodes.
+  - `generateBatch($batchOptions)` – create a batch with a unified batch number.
+- **Usage limits**:
+  - Two tracking methods: `cache` (fast) and `database` (accurate).
+  - Flexible periods: `hour`, `day`, `week`, `month`, or a custom number of days.
+  - Functions `checkUserUsageLimit`, `incrementUserUsage`, `getUserUsageCountFromDatabase`, `getUsageLimitValue`.
+- **Statistics**:
+  - `getBarcodeStats($options)` – general statistics (total, active, expired, by type, etc.).
+  - `getUserBarcodeUsageStats($user)` – user usage statistics.
+- **Helper operations**:
+  - `getBarcodeRecords($options)` – retrieve records with filtering options.
+  - `exportBarcodes($options)` – export data.
+  - `importBarcodes($data, $options)` – import data.
+  - `getBarcodeImageUrl($barcode)` – get the barcode image URL.
+  - `formatBarcodeForApi($barcode)` – format data for the API.
+
+##### 4. `BarcodeGenerator` Class (Barcode Generation)
+
+An advanced class has been created that supports seven different libraries with automatic detection:
+
+| Library | Supported Types | Priority |
+| :--- | :--- | :--- |
+| Picqer\Barcode | 1D & 2D | 1 (highest) |
+| chillerlan\QRCode | QR only | 2 |
+| SimpleSoftwareIO\QrCode | QR only | 3 |
+| PHP QR Code (`qrcode` function) | QR only | 4 |
+| BaconQrCode | QR only | 5 |
+| Endroid\QrCode | QR only | 6 |
+| Milon\Barcode (Tss) | 1D & 2D | 7 |
+| Fallback (GD) | plain text | last |
+
+**Features**:
+- **Output formats**: `png`, `jpg`, `jpeg`, `webp`, `svg`, `html`, `base64`, `data-uri`, `gd`, `response`, `file`.
+- **Advanced options**: width, height, colour, background colour, margin, error correction level, quality, transparency, caching.
+- **Special functions**:
+  - `generate($data, $type, $options)` – main function.
+  - `generateBarcodeImage($data, $type, $options)` – generate a PNG image.
+  - `generateAndSaveBarcodeImage($barcode, $path)` – save the image to storage and update the model.
+  - `validateBarcode($barcode, $type)` – validate a barcode value according to its type (supports EAN, UPC, ISBN, Code 128/39/93, I25, POSTNET, etc.).
+- **Helper functions**: `hexToRgb`, `hexToGdColor`, `getAvailableLibraries`, `selectLibrary`.
+
+##### 5. RESTful API
+
+An API controller `Nano2\Qrcodes\ApiControllers\Barcodes` has been created with the following endpoints:
+
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| GET | `/barcodes` | Fetch a list of barcodes with filtering and pagination. |
+| GET | `/barcodes/activelystats` | Latest update timestamp (for caching). |
+| POST | `/barcodes` | Create a new barcode. |
+| PUT | `/barcodes/{id}` | Update an existing barcode. |
+| DELETE | `/barcodes/{id}` | Soft‑delete a barcode. |
+| GET | `/barcodes/{id}` | View barcode details. |
+| POST | `/barcodes/verify` | Verify a barcode without using it. |
+| POST | `/barcodes/use` | Scan and use a barcode (record usage). |
+| POST | `/barcodes/verify/{id}` | Administrative verification (set `is_verified`). |
+| POST | `/barcodes/generate` | Generate a batch of barcodes (admin only). |
+| GET | `/barcodes/stats` | General barcode statistics. |
+| GET | `/barcodes/user-stats` | Statistics for the current user. |
+| GET | `/barcodes/image/{id}` | Get the barcode image (PNG). |
+
+**Permission system**:
+- Each operation (`list`, `show`, `create`, `update`, `delete`, `verify`, `use`, `generate`, `stats`, `userStats`) has independent permission settings in `config.php`.
+- Supports advanced filters (`is_or`, `is_not`, `is_or_null`) via `advanced_filters`.
+- Dynamic frontend resolver to automatically populate `user_id` and `user_type` for frontend users.
+
+**Responses**:
+- Follow the `Nano\API\Classes\ApiController` structure with fields: `code`, `status`, `message`, `error`, `errors`, `data`, `input_data`, `process_data`, `debug`.
+
+##### 6. Import and Export
+
+Two models have been added:
+
+- **`BarcodeImport`**:
+  - Supports options: `update_existing`, `skip_barcode_type_rules` (three states: `null`, `true`, `false`), `default_status`, `default_barcode_type`, `default_departments_id`, `default_owner_type` and `default_owner_id`, `default_product_id` and `default_product_name`, `default_unit_id`.
+  - Option functions to build the import interface (`getSkipBarcodeTypeRulesOptions`, `getDefaultDepartmentsIdOptions`, etc.).
+  - `importData` function that processes each row and calls `Manager::createBarcode` or `updateBarcode` while passing the `skip_barcode_type_rules` option.
+- **`BarcodeExport`**:
+  - Exports data according to the columns defined in `columns.yaml`, with optional filtering based on user permissions.
+
+##### 7. Central Configuration (config.php)
+
+A rich `config.php` file has been created:
+
+- **General settings**:
+  - `allow_debug_any` – enable debug mode via GET parameters.
+  - `api.enable_cache` and `api.cache_ttl` – enable API caching.
+- **`barcodes` settings**:
+  - `is_default_company`, `department_type`, `is_check_duplicate`, `is_show_create_default`, `is_stop_show_menu`, etc.
+  - `image_width`, `image_height`, `image_color`, `image_format`, `storage_disk` – barcode image settings.
+  - **`usage_limits`**:
+    - `enabled`, `daily_limit`, `hourly_limit`, `reset_at_midnight`.
+    - `tracking_type` (`cache` or `database`).
+    - `tracking_period` (`hour`, `day`, `week`, `month`, or a number of days).
+    - `tracking_custom_days`, `use_soft_limit`, `limit_message`.
+  - **Permission settings for each operation** (`list`, `show`, `create`, `update`, `delete`, `verify`, `use`, `generate`, `stats`, `userStats`):
+    - `permission.is_allow`, `permission.backend`, `permission.frontend`, `permission.guest`.
+    - `advanced_filters` and `frontend_resolver` for each operation (customisable via environment variables).
+
+##### 8. Translation and Multi‑language Support
+
+`lang/ar/lang.php` and `lang/en/lang.php` files have been added covering:
+
+- Icons, menus, permissions, messages, errors, filters, form fields, list columns, import/export helpers, etc.
+- Special keys for `skip_barcode_type_rules` options in the import section.
+- Translation of multiple barcode types used in `getBarcodeTypeOptions`.
+
+---
+
+### Practical Examples
+
+#### 1. Create a Barcode via API
+
+```bash
+curl -X POST "https://domain.com/api/v1/qrcodes/barcodes" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "barcode": "5901234123457",
+    "barcode_type": "EAN13",
+    "product_name": "Test Product",
+    "price": 99.99
+  }'
+```
+
+#### 2. Scan and Use a Barcode
+
+```bash
+curl -X POST "https://domain.com/api/v1/qrcodes/barcodes/use" \
+  -H "Content-Type: application/json" \
+  -d '{"barcode": "BC000101"}'
+```
+
+#### 3. Import with Skip Type Rules (in the backend)
+
+In the barcode import form, choose the value `true` from the `skip_barcode_type_rules` dropdown if you are importing EAN‑13 barcodes that are not exactly 13 digits long, or `false` to apply the rules, or `null` for the default setting.
+
+#### 4. Use `Manager` Directly
+
+```php
+use Nano2\Qrcodes\Classes\Manager;
+
+// Create a new barcode
+$result = Manager::createBarcode([
+    'barcode' => '1234567890',
+    'barcode_type' => 'C128',
+    'product_name' => 'New device',
+]);
+
+if ($result['status']) {
+    $barcode = $result['model'];
+    echo $barcode->code;
+}
+
+// Use a barcode
+$useResult = Manager::scanAndUseBarcode('1234567890', $currentUser);
+
+// User statistics
+$stats = Manager::getUserBarcodeUsageStats($currentUser);
+```
+
+#### 5. Generate a Barcode Image Using `BarcodeGenerator`
+
+```php
+use Nano2\Qrcodes\Classes\BarcodeGenerator;
+
+$pngData = BarcodeGenerator::generateBarcodeImage('5901234123457', 'EAN13');
+header('Content-Type: image/png');
+echo $pngData;
+```
+
+---
+
+### Upgrade Requirements
+
+1. **Update the database**  
+   Run the new migrations (if not already run):
+
+   ```bash
+   php artisan october:migrate
+   ```
+
+   This will create the `nano2_qrcodes_barcodes` table (it may already exist from version 1.0.2).
+
+2. **Update the code**  
+   Replace the following files with the new versions:
+   - `models/Barcode.php` (with all traits in the `barcode/` folder).
+   - `controllers/Barcodes.php` (backend).
+   - `apicontrollers/Barcodes.php` (API).
+   - `transformers/BarcodeTransformer.php`.
+   - `classes/Manager.php`.
+   - `classes/BarcodeGenerator.php`.
+   - `classes/QrcodeManagement.php` (if present).
+   - `config/config.php`.
+   - `routes.php`.
+   - `updates/version.yaml`.
+   - Language files `lang/ar/lang.php` and `lang/en/lang.php`.
+   - YAML files for the model (`models/barcode/fields.yaml`, `columns.yaml`, etc.).
+   - View and configuration files for the backend controller (`controllers/barcodes/*.htm`, `config_*.yaml`).
+
+3. **Register menus and permissions**  
+   Ensure that `Plugin.php` calls `Barcodes::registerBackendPermissions()` and `Barcodes::bootBackendNavigation()` inside the `boot()` function.
+
+4. **Set environment variables (optional)**  
+   You can place the following variables in the `.env` file to customise behaviour:
+
+   ```ini
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_ENABLED=true
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_DAILY_LIMIT=10
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_TRACKING_TYPE=database
+   NANO2_QRCODES_BARCODES_LIST_BACKEND_ALLOW=true
+   NANO2_QRCODES_API_ENABLE_CACHE=false
+   NANO2_QRCODES_BARCODE_IMAGE_WIDTH=300
+   ```
+
+5. **Test the functionality**  
+   - Verify that the `Barcodes` menu appears in the control panel.
+   - Try creating, editing, and deleting a barcode.
+   - Test batch creation, printing, and export.
+   - Test API endpoints using Postman or `curl`.
+   - Ensure that usage limits work as required (can be tested via the `use` endpoint).
+
+6. **Clear cache**  
+   To apply the new settings:
+
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### Conclusion
+
+Version 1.0.3 is a foundational, integrated release for barcode management on the NanoSoft platform. It provides a rich model, a complete backend controller, a modern API, a flexible `Manager` class, and a multi‑library barcode generator. It also supports flexible import/export and an advanced usage limits system that can be customised according to business requirements.
+
+Thank you for your attention, and we welcome your feedback and suggestions to improve the plugin in future releases.
+
+---
+
+**Reference documentation**
+
+- [General plugin documentation](./docs/Qrcodes/Docs-Nano2-Qrcodes-en.md)
+- [`Barcode` model documentation](./docs/Qrcodes/Docs-Barcode-Model-en.md)
+- [`Manager` class documentation](./docs/Qrcodes/Docs-Manager-Class-en.md)
+- [`BarcodeGenerator` class documentation](./docs/Qrcodes/Docs-BarcodeGenerator-Class-en.md)
+- [API documentation](./docs/Qrcodes/Docs-API-Documentation-en.md)
+
