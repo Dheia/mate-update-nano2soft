@@ -1864,3 +1864,292 @@ $orderManager->updateOrderStatusAdvanced($options);
 - [توثيق `Nano.FileUpload`](./docs/FileUpload/Docs-FileUpload-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API) لإدارة الصور](./docs/OrdersApi/Docs-OrdersApi-Photos-ar.md)
 
+## 2026-06-06 - 2026-06-09
+
+**تحديثات إضافة `Nano2.Qrcodes` – الإصدار 1.0.4**
+
+### ملخص التحديثات
+
+يأتي الإصدار 1.0.4 ليُكمِّل البنية القوية التي أُسست في 1.0.3، ويركز على **تحسين تجربة الاستيراد**، **إضافة أوضاع الاختبار والنطاقات المخصصة**، **تدعيم مولد الباركودات بمكتبات إضافية**، **إصلاح أخطاء حرجة**، و **إثراء نظام الصلاحيات والحدود**. الهدف هو توفير بيئة استيراد أكثر أماناً وسرعة، وإتاحة أدوات محاكاة متقدمة، وتوسيع نطاق أنواع الباركودات المدعومة.
+
+أبرز ما في هذا الإصدار:
+
+- **وضع الاختبار (`is_test_import`)** في الاستيراد لمحاكاة العملية دون حفظ البيانات.
+- **الاستيراد بنطاق مخصص (`is_custom_import`)** مع دعم صيغ مرنة (first, last, نطاقات أرقام، عربية/إنجليزية).
+- **تحسين أداء الاستيراد** عبر تعطيل مسح الكاش وتوليد الصور أثناء الجري، ثم مسح الكاش مرة واحدة بعد الانتهاء.
+- **دعم المكتبات** `chillerlan\QRCode`، `PHP QR Code`، `BaconQrCode`، `Endroid\QrCode` داخل `BarcodeGenerator`.
+- **إضافة `validateBarcode`** الشاملة التي تتحقق من صحة قيم الباركود لكل الأنواع (EAN, UPC, ISBN, Code 128/39/93, I25, POSTNET، وغيرها).
+- **تطبيق قواعد النوع ديناميكياً** عبر `applyBarcodeTypeRules` لضمان توافق الباركود مع النوع المختار.
+- **إصلاح خطأ فادح** في `Manager::createBarcode` كان يعين كائن النموذج في حقل `barcode`.
+- **إصلاح كود لا يمكن الوصول إليه** في `getBarcodeImageUrl`.
+- **تحسين حدود الاستخدام** بإضافة التتبع عبر قاعدة البيانات (`tracking_type=database`) وفترات مرنة (ساعة، أسبوع، شهر، أيام مخصصة).
+- **إضافة `frontend_resolver`** و `advanced_filters` في صلاحيات API لتعزيز المرونة.
+- **توسيع قائمة أنواع الباركودات** في `getBarcodeTypeOptions` لتشمل جميع الأنواع المدعومة من `BarcodeGenerator`.
+
+كل ذلك مع ترجمة كاملة للمصطلحات الجديدة وتوثيق عملي.
+
+---
+
+### الإصدار 1.0.4 – النضج في الاستيراد والتحقق والتوسع
+
+#### أهداف الإصدار
+
+- **تمكين المستخدم من اختبار الاستيراد** قبل تنفيذه فعلياً (`is_test_import`).
+- **إتاحة تحديد نطاق معين من السجلات** في ملف الاستيراد دون الحاجة لتحرير الملف (`is_custom_import` و `custom_import_range`).
+- **تحسين أداء الاستيراد** لتجنب التأخير في الملفات الكبيرة (آلاف الصفوف).
+- **توسيع قدرات `BarcodeGenerator`** لاستيعاب أكبر عدد من المكتبات وأنواع المخرجات.
+- **إضافة طبقة تحقق صارمة ومتعددة** للباركودات حسب نوعها.
+- **إصلاح الأخطاء البرمجية** التي تؤثر على إنشاء الباركودات وعرض الصور.
+- **تخصيص حدود الاستخدام** لتناسب متطلبات العمل (يومي، ساعي، أسبوعي، شهري، أو أيام مخصصة).
+- **جعل نظام الصلاحيات أكثر ديناميكية** لدعم الفلاتر المتقدمة وحل البيانات من المستخدم (frontend resolver).
+
+#### الميزات الجديدة والتحسينات
+
+##### 1. أوضاع الاستيراد المتقدمة: الاختبار والنطاق المخصص
+
+أضفنا إلى نموذج `BarcodeImport` ثلاثة حقول جديدة في واجهة الاستيراد:
+
+- **`is_test_import`**: وضع الاختبار (Test Mode). عند تفعيله، لا يتم حفظ البيانات في قاعدة البيانات، بل يتم استدعاء دوال `Manager::createBarcode` و `updateBarcode` مع `$is_test_create = true`، ثم يتم عرض نتائج المحاكاة (نجاح/فشل) عبر رسائل تحذيرية. يمكن للمستخدم مراجعة الأخطاء قبل الاستيراد الفعلي.
+
+- **`is_custom_import`**: تفعيل الاستيراد بنطاق مخصص. عند تفعيله، يظهر حقل `custom_import_range`.
+
+- **`custom_import_range`**: حقل نصي يدعم صيغاً متعددة لتحديد السجلات المراد استيرادها:
+  - `5` – سجل واحد فقط (رقم 5).
+  - `5-10` – من السجل 5 إلى 10.
+  - `1,3,5,7` – سجلات محددة مفصولة بفواصل.
+  - `1-5,10,15-20` – مزيج من نطاقات وأرقام.
+  - `أول 10` / `first 10` – أول 10 سجلات.
+  - `آخر 5` / `last 5` – آخر 5 سجلات.
+  - `من 5 إلى 10` / `السجلات من 5 إلى 10` – نطاق بالعربية.
+
+تمت إضافة دالة `parseRange` و `filterResultsByRange` في `CustomImportRange` trait لتحليل هذه الصيغ وتطبيقها على مصفوفة النتائج.
+
+**تأثير الأداء**: أثناء الاستيراد، يتم تعطيل مسح الكاش (`skip_cache_clear = true`) وتوليد الصور (`generate_image = false`) لتسريع العملية، ويُمسح الكاش مرة واحدة بعد انتهاء الحلقة.
+
+##### 2. تحسين `Manager::createBarcode` و `updateBarcode` لدعم الاختبار وتخطي الكاش
+
+- أُضيف خيار `skip_cache_clear` (افتراضي `false`) يمكن تمريره من الاستيراد لمنع استدعاء `Barcode::clearCache` أثناء الحفظ.
+- أُضيف خيار `skip_barcode_type_rules` (يقبل `null`، `true`، `false`) لتجاوز قواعد النوع عند الحاجة (مثل استيراد بيانات قديمة).
+- تم إصلاح **الخطأ الفادح**: كان السطر `$barcode->barcode = $barcode;` يعين كائن النموذج في حقل النص. أصبح الآن `$barcodeModel->barcode = $barcode;` (مع تغيير اسم المتغير لتجنب التعارض).
+- تم إصلاح **الكود الذي لا يمكن الوصول إليه** في `getBarcodeImageUrl` (كان هناك `return null;` قبل إنشاء الرابط).
+
+##### 3. توسيع `BarcodeGenerator` بمكتبات إضافية
+
+أضفنا محولات للمكتبات التالية مع كشف تلقائي:
+
+- **chillerlan\QRCode** (مكتبة QR متقدمة، تدعم إعدادات دقيقة).
+- **PHP QR Code** (دالة `qrcode` – تستخدم في بيئات لا تتوفر فيها مكتبات أخرى).
+- **BaconQrCode** (مكتبة QR خفيفة).
+- **Endroid\QrCode** (مكتبة QR حديثة).
+
+أصبحت قائمة المكتبات المدعومة:
+
+| المكتبة | الأولوية | الأنواع المدعومة |
+|---------|----------|------------------|
+| Picqer\Barcode | 1 | 1D & 2D |
+| chillerlan\QRCode | 2 | QR فقط |
+| SimpleSoftwareIO\QrCode | 3 | QR فقط |
+| PHP QR Code (qrcode) | 4 | QR فقط |
+| BaconQrCode | 5 | QR فقط |
+| Endroid\QrCode | 6 | QR فقط |
+| Milon\Barcode | 7 | 1D & 2D |
+| Fallback (GD) | الأخير | نص بسيط |
+
+كما تم إضافة دالة `generateBarcodeImage` التي تُعد واجهة مبسطة لإنشاء صور PNG.
+
+##### 4. التحقق من صحة الباركود `validateBarcode`
+
+تمت كتابة دالة شاملة `validateBarcode($barcode, $type)` تدعم:
+
+- **2D**: أي نوع (QR, PDF417, Datamatrix, Aztec, MaxiCode) – فقط تتأكد من أن الطول ≤ 4096 حرفاً.
+- **EAN-13, EAN-8, UPC-A, UPC-E**: تتحقق من الطول وخوارزمية الرقم الاختباري (mod 10).
+- **ISBN-10, ISBN-13, ISSN**: تتحقق من خوارزميات الأرقام الاختبارية الخاصة بها.
+- **Code 128, Code 39, Code 93, Codabar, RMS4CC, KIX, IMB**: تتحقق من الأحرف المسموحة (ASCII القابلة للطباعة أو مجموعة محددة).
+- **Interleaved 2 of 5 (I25)**: تتحقق من الأرقام والطول الزوجي.
+- **POSTNET, PLANET**: تتحقق من الأطوال المسموحة (5,9,11 و 12,14 على التوالي).
+- **MSI, CODE11, PHARMA, PHARMA2T**: أرقام فقط.
+
+هذه الدالة مفيدة جداً قبل إنشاء أو استيراد الباركودات للتأكد من صحة البيانات.
+
+##### 5. تطبيق قواعد النوع ديناميكياً `applyBarcodeTypeRules`
+
+أصبحت دالة `beforeValidate` في موديل `Barcode` تستدعي `applyBarcodeTypeRules` التي تعدل قواعد التحقق (`$rules['barcode']`) استناداً إلى `barcode_type`. تشمل القواعد:
+
+- الأطوال الثابتة (EAN13: 13 رقم، EAN8: 8، UPCA: 12، UPCE: 8).
+- الأنواع الرقمية بطول متغير (I25, S25, MSI, CODE11, POSTNET, PLANET, PHARMA, PHARMA2T) مع دعم أطوال زوجية أو أطوال مسموحة.
+- الأنواع الأبجدية الرقمية (C128, C39, C93, CODABAR, RMS4CC, KIX, IMB) مع تحديد مجموعة أحرف مسموحة.
+- الأنواع 2D (QR, PDF417, DATAMATRIX, AZTEC, MAXICODE) مع حد أقصى 2000 حرف.
+- قاعدة عامة لبقية الأنواع.
+
+هذا يضمن أن الباركود المخزّن يتوافق مع المعايير المعتمدة لنوعه.
+
+##### 6. تحسين حدود الاستخدام (Usage Limits)
+
+تم إضافة إمكانيات جديدة في `config.php`:
+
+```php
+'usage_limits' => [
+    'enabled' => true,
+    'daily_limit' => 10,
+    'hourly_limit' => 3,
+    'tracking_type' => 'database',   // أو 'cache'
+    'tracking_period' => 'day',      // 'hour', 'day', 'week', 'month', أو عدد أيام
+    'tracking_custom_days' => null,
+    'use_soft_limit' => false,
+    'limit_message' => null,
+],
+```
+
+- **`tracking_type = database`**: يقوم بحساب عدد الاستخدامات من جدول الباركودات مباشرة (حقل `used_at`)، مما يضمن دقة مطلقة ولا يعتمد على ذاكرة التخزين المؤقت.
+- **`tracking_period`**: يمكن ضبطها على `hour`، `day`، `week`، `month`، أو عدد صحيح (مثل 10 أيام). يتم حساب بداية الفترة باستخدام `Carbon` وفلترة السجلات التي استخدمت بعد ذلك الوقت.
+- **`use_soft_limit`**: إذا كان `true`، يتم السماح بتجاوز الحد مع إصدار تحذير بدلاً من رفض العملية (سيُطبق لاحقاً).
+- **`limit_message`**: تخصيص رسالة الخطأ عند تجاوز الحد.
+
+تم إضافة دوال مساعدة: `getPeriodStartTime`, `getUserUsageCountFromDatabase`, `getUserCurrentUsageCount`, `getUsageLimitValue` (مع مراعاة الأولويات).
+
+##### 7. تعزيز صلاحيات API (Frontend Resolver & Advanced Filters)
+
+- **`frontend_resolver`**: يسمح بتحديد كيفية تعبئة حقول مثل `user_id` و `user_type` تلقائياً للمستخدمين المسجلين. يمكن إعداد قواعد لكل `ref_type` (مثل `user`, `student`, `parent`). يتم استدعاء `resolveDynamicFrontendOptions` في المتحكم API قبل تنفيذ الاستعلام.
+
+- **`advanced_filters`**: يتحكم في إمكانية استخدام الفلاتر المتقدمة (`is_or_*`, `is_not_*`, `is_or_null_*`) لكل عملية. يحدد الحقول المسموحة لكل نوع مستخدم (backend/frontend/guest) وقواعد خاصة بالحقول. يتم استدعاء `filterAdvancedOptions` لتطهير الخيارات من الفلاتر غير المسموحة.
+
+##### 8. توسيع قائمة أنواع الباركودات في `getBarcodeTypeOptions`
+
+أصبحت الدالة تعرض جميع الأنواع المعرفة في `BarcodeGenerator::TYPE_1D` و `TYPE_2D` مع أسماء مقروءة:
+
+```php
+$types1D = [
+    'C128'      => 'Code 128',
+    'C39'       => 'Code 39',
+    'C93'       => 'Code 93',
+    'EAN13'     => 'EAN-13',
+    'EAN8'      => 'EAN-8',
+    'UPCA'      => 'UPC-A',
+    'UPCE'      => 'UPC-E',
+    'I25'       => 'Interleaved 2 of 5',
+    'S25'       => 'Standard 2 of 5',
+    'CODABAR'   => 'Codabar',
+    'MSI'       => 'MSI',
+    'POSTNET'   => 'POSTNET',
+    'PLANET'    => 'PLANET',
+    'RMS4CC'    => 'RMS4CC (Royal Mail)',
+    'KIX'       => 'KIX',
+    'IMB'       => 'Intelligent Mail',
+    'CODE11'    => 'Code 11',
+    'PHARMA'    => 'Pharmacode',
+    'PHARMA2T'  => 'Pharmacode 2-Track',
+    'QR'        => 'QR Code',
+    'PDF417'    => 'PDF417',
+    'DATAMATRIX' => 'Data Matrix',
+    'AZTEC'     => 'Aztec',
+    'MAXICODE'  => 'MaxiCode',
+];
+```
+
+##### 9. إصلاحات الأخطاء (Bug Fixes)
+
+- **إصلاح خطأ `TypeError` في `Manager::createBarcode`**: كان تعيين `$barcode->barcode = $barcode;` يعين كائن النموذج بدلاً من القيمة النصية. تم تغيير اسم المتغير إلى `$barcodeModel` لتجنب التعارض.
+- **إصلاح كود لا يمكن الوصول إليه في `getBarcodeImageUrl`**: كان هناك `return null;` قبل محاولة إنشاء الرابط، مما يمنع الوصول إلى `route()`. تم إعادة ترتيب المنطق.
+- **إصلاح خطأ نحوي في `BarcodeImport::importData`**: تم تصحيح السطر `if($this->skip_barcode_type_rules, ==='null')` (فاصلة زائدة) إلى `if($this->skip_barcode_type_rules === 'null')`.
+- **إصلاح مشكلة توليد الصورة في API**: تمت إضافة دالة `generateBarcodeImage` في `BarcodeGenerator` لتستخدمها نقطة `image` في المتحكم.
+
+##### 10. تحسينات إضافية في `Barcode` model
+
+- إضافة دالة `prepareDepartmentAndCompanys` لتوحيد حساب `departments_id` و `companys_id`.
+- إضافة دالة `skipCacheClear` مع العلم `skipCacheClear`، وتعديل `afterSave` لاحترامه.
+- إضافة دالة `prepareCode` لضمان وجود `code` قبل الحفظ.
+- تعديل `getPublicDefault` لتطبيق القيم الافتراضية بشكل أفضل.
+
+---
+
+### أمثلة عملية
+
+#### 1. اختبار الاستيراد قبل التنفيذ (وضع الاختبار)
+
+في واجهة استيراد الباركودات، قم بتفعيل `is_test_import` ثم ارفع ملف CSV. سترى رسائل تحذيرية لكل صف توضح البيانات التي ستُستورد وحالة العملية (نجاح/فشل) دون تغيير قاعدة البيانات.
+
+#### 2. استيراد أول 50 سجل فقط
+
+- فعّل `is_custom_import`.
+- اكتب في `custom_import_range`: `أول 50` (أو `first 50`).
+- سيتم استيراد أول 50 صفاً فقط من الملف.
+
+#### 3. استخدام `Manager::createBarcode` مع تخطي قواعد النوع والكاش
+
+```php
+$result = Manager::createBarcode([
+    'barcode' => '123',
+    'barcode_type' => 'EAN13',  // غير صالح (يجب 13 رقمًا)
+    'skip_barcode_type_rules' => true,
+    'skip_cache_clear' => true,
+], false); // false = ليس اختبارًا
+```
+
+#### 4. التحقق من صحة باركود قبل الاستيراد
+
+```php
+if (BarcodeGenerator::validateBarcode($barcodeValue, $barcodeType)) {
+    // صالح
+} else {
+    // غير صالح
+}
+```
+
+---
+
+### متطلبات الترقية
+
+1. **تحديث قاعدة البيانات**  
+   لا توجد تغييرات هيكلية في الجداول، لذا لا حاجة لتشغيل ترحيلات جديدة.
+
+2. **تحديث الكود**  
+   يجب استبدال الملفات التالية بالنسخ الجديدة:
+   - `models/Barcode.php`
+   - `models/BarcodeImport.php`
+   - `models/barcodeimport/fields.yaml`
+   - `models/barcodeimport/CustomImportRange.php` (إنشاء جديد)
+   - `classes/Manager.php`
+   - `classes/BarcodeGenerator.php`
+   - `config/config.php`
+   - `lang/ar/lang.php` و `lang/en/lang.php`
+   - `apicontrollers/Barcodes.php` (لإضافة التعديلات إن وجدت)
+   - `updates/version.yaml`
+
+3. **تسجيل السمة `CustomImportRange`**  
+   تأكد من أن `BarcodeImport` يستخدم `use \Nano2\Qrcodes\Models\BarcodeImport\CustomImportRange;` (موجود بالفعل).
+
+4. **إعداد متغيرات البيئة الجديدة** (اختياري)  
+   أضف إلى `.env`:
+   ```ini
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_TRACKING_TYPE=database
+   NANO2_QRCODES_BARCODES_USAGE_LIMITS_TRACKING_PERIOD=week
+   ```
+
+5. **اختبار الاستيراد**  
+   - جرب وضع الاختبار (`is_test_import`) مع ملف صغير للتأكد من ظهور النتائج.
+   - جرب وضع النطاق المخصص (`is_custom_import`) مع صيغ مختلفة.
+   - تأكد من أن الاستيراد الفعلي يعمل بكفاءة مع ملف كبير (2000+ سجل).
+
+6. **مسح الكاش**  
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### الخاتمة
+
+الإصدار 1.0.4 يضيف طبقة متقدمة من التحكم والمرونة في استيراد الباركودات، ويحسن الأداء بشكل ملحوظ، ويدعم مزيداً من المكتبات وأنواع الباركودات، ويصلح أخطاء حرجة. أصبحت الإضافة الآن أداة قوية وجاهزة للاستخدام في بيئات الإنتاج التي تتطلب استيراد كميات كبيرة من الباركودات مع إمكانية الاختبار المسبق وتحديد النطاقات. كما أن نظام حدود الاستخدام أصبح أكثر دقة بفضل خيار `database`، ونظام الصلاحيات أصبح أكثر ديناميكية بفضل `frontend_resolver` و `advanced_filters`.
+
+نشكركم على دعمكم المستمر، ونرحب بملاحظاتكم لمواصلة تحسين الإضافة.
+
+---
+
+**الوثائق المرجعية** 
+
+- [التوثيق العام للإضافة](./docs/Qrcodes/Docs-Nano2-Qrcodes-ar.md)
+- [توثيق الاستيراد والتصدير](./docs/Qrcodes/Docs-Import-Export-ar.md)
+- [توثيق مولد الباركودات](./docs/Qrcodes/Docs-BarcodeGenerator-ar.md)
+- [توثيق واجهة برمجة التطبيقات](./docs/Qrcodes/Docs-API-Documentation-ar.md)
+
