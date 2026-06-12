@@ -1,0 +1,14 @@
+graph TD
+    A[Order owner uploads a photo] --> B[uploadOrderPhoto]
+    B --> C[validatePhotoUploadPermission]
+    C --> D{Is permission correct?}
+    D -->|Yes| E[FileUploadService::upload]
+    D -->|No| F[Reject with error message]
+    E --> G[Save file and link to order]
+    G --> H[Fire nano.orders.photo.uploaded event]
+    H --> I[Attempt to change status to DELIVERY]
+    I --> J[updateOrderStatusAdvanced]
+    J --> K[enforcePhotoRequirementsOnStatusChange]
+    K --> L{Are there photos in user_before_delivery?}
+    L -->|Yes| M[Status change allowed]
+    L -->|No| N[Reject with message: Photos required before DELIVERY]

@@ -1,0 +1,14 @@
+graph TD
+    A[مالك الطلب يرفع صورة] --> B[uploadOrderPhoto]
+    B --> C[validatePhotoUploadPermission]
+    C --> D{هل الصلاحية صحيحة؟}
+    D -->|نعم| E[FileUploadService::upload]
+    D -->|لا| F[رفض مع رسالة خطأ]
+    E --> G[حفظ الملف وربطه بالطلب]
+    G --> H[إطلاق حدث nano.orders.photo.uploaded]
+    H --> I[محاولة تغيير الحالة إلى DELIVERY]
+    I --> J[updateOrderStatusAdvanced]
+    J --> K[enforcePhotoRequirementsOnStatusChange]
+    K --> L{هل توجد صور في user_before_delivery؟}
+    L -->|نعم| M[تغيير الحالة مسموح]
+    L -->|لا| N[رفض مع رسالة: يجب رفع الصور قبل DELIVERY]

@@ -1550,3 +1550,317 @@ The function already exists and converts a media path to a full URL. It has not 
 **Updated by:** Dheia Al-Shami  
 **For inquiries:** info@nano2soft.com
 
+## 2026-06-05 - 2026-06-09
+
+**Update to `Nano.Orders` – Version 2.2.12 and `Nano.OrdersApi` – Version 1.0.22**
+
+### Update to `Nano.Orders` – Version 2.2.12  
+
+### Update to `Nano.OrdersApi` – Version 1.0.22
+
+---
+
+### Summary of Updates
+
+Version **2.2.12** of `Nano.Orders` added full support for managing photos associated with orders, including four new `attachMany` relationships and the `StepPhotos` trait, which provides professional functions for uploading, deleting, and checking user permissions (owner, delivery, admin) based on the current order status. The system was also integrated with `Nano.FileUpload` to unify the file upload process, added flexible settings (`photo_rules`) to control each field, fired new events, and introduced the `skip_photo_check` option in `updateOrderStatusAdvanced` to prevent status changes without the required photos.
+
+In parallel, version **1.0.22** of `Nano.OrdersApi` provided three API endpoints for uploading (single/multiple) and deleting photos, fully integrated with `StepPhotos` and permission checks, returning photo URLs and thumbnails in the response.
+
+---
+
+## Nano.Orders v2.2.12 – Order Photo Management (StepPhotos)
+
+### Release Objectives
+
+- **Enable uploading photos** before and after delivery by both the lessee (`user_id`) and the lessor (`delivery_user_id`).
+- **Link photos to order statuses** such as `NEW`, `PROCESSING`, `DELIVERY`, `COMPLETE` to ensure they are uploaded at the appropriate time.
+- **Prevent changing the order status** (`DELIVERY` or `COMPLETE`) unless the required photos have been uploaded.
+- **Provide flexible functions** that rely on `Nano.FileUpload` and support regular files or base64.
+- **Fire events** to extend behaviour (notifications, logging, etc.).
+- **Allow developers to customise rules** (allowed statuses, roles, maximum number of photos, allowed file types) via configuration.
+
+### New Features
+
+#### 1. `attachMany` relationships in the `Order` model
+
+Four new relationships were added inside `Order.php`:
+
+```php
+public $attachMany = [
+    'user_before_delivery'     => 'System\Models\File',
+    'user_after_delivery'      => 'System\Models\File',
+    'delivery_before_delivery' => 'System\Models\File',
+    'delivery_after_delivery'  => 'System\Models\File',
+];
+```
+
+| Relationship | Description | Authorised User |
+|--------------|-------------|-----------------|
+| `user_before_delivery` | Lessee photos before delivery | Owner (`user_id`) |
+| `user_after_delivery`  | Lessee photos after delivery | Owner |
+| `delivery_before_delivery` | Lessor photos before delivery | Delivery person (`delivery_user_id`) |
+| `delivery_after_delivery`  | Lessor photos after delivery | Delivery person |
+
+#### 2. Registering fields in `FileUploadRegistry`
+
+These fields were automatically registered in `Plugin.php` via the `registerOrderFileUploadFields` function, with the following settings:
+
+- Field type: `image` (only images supported)
+- Maximum size: 5 MB (adjustable)
+- Allowed types: `jpg, jpeg, png, gif`
+- `multiple => true` (because they are `attachMany` relationships)
+- `max_files => 10` (allowed number of photos)
+- `is_public => false` (private, accessed via temporary link)
+
+#### 3. `StepPhotos` trait (file `traits/steps/StepPhotos.php`)
+
+This trait contains all photo management functions:
+
+| Function | Description |
+|----------|-------------|
+| `uploadOrderPhoto($field, $fileData, array $options)` | Upload a single photo (supports `UploadedFile` or base64). |
+| `uploadOrderPhotos($field, array $filesData, array $options)` | Upload multiple photos at once. |
+| `deleteOrderPhoto($field, $fileId, array $options)` | Delete an existing photo. |
+| `validatePhotoUploadPermission($field, $user, $order, $newStatus, array $options)` | Check user permission for upload (role, allowed status, maximum count). |
+| `canUploadPhoto($field, $user, $order)` | Quick check without exception. |
+| `canUploadPhotoToField($field, $user, $order, $newStatus)` | Same as above with support for new status. |
+| `enforcePhotoRequirementsOnStatusChange($oldStatus, $newStatus, $order, $actor, array $options)` | Called before status change to ensure required photos exist. |
+| `getOrderPhotoUrls($field, array $thumbSizes, $includeModel)` | Fetch photo URLs with custom thumbnails. |
+| `hasRequiredPhotosForStatus($newStatus, $order, $role)` | Quick check for requirements. |
+
+**Permission validation mechanism (`validatePhotoUploadPermission`):**
+- Determines the user’s role (`user` / `delivery` / `admin`) relative to the order.
+- Reads the rules (`allowed_roles`, `allowed_statuses`, `max_files`) from settings or passed options.
+- Checks that the field allows this role, that the current order status is allowed for upload, and that the current number of photos has not reached the maximum.
+- If `$newStatus` is passed, checks whether the field is required for transitioning to that status.
+
+#### 4. Support for `skip_photo_check` in `updateOrderStatusAdvanced`
+
+The `updateOrderStatusAdvanced` function (in the `StepStatus` trait) was modified to support two new options:
+
+- `skip_photo_check` (bool, default `false`) – bypass photo check.
+- `photo_validation_rules` (array) – custom rules to override the default rules.
+
+When attempting to change the status, the function extracts the actual new status, then calls `enforcePhotoRequirementsOnStatusChange` unless `skip_photo_check = true`. If required photos are missing, an exception is thrown and the change is prevented.
+
+#### 5. `photo_rules` settings in `config/nano/orders.php`
+
+A complete section was added that can be customised via environment variables or direct editing:
+
+```php
+'photo_rules' => [
+    'user_before_delivery' => [
+        'allowed_statuses' => ['NEW', 'PROCESSING'],
+        'allowed_roles'    => ['user', 'admin'],
+        'required_on_transition' => ['DELIVERY'],
+        'max_files'        => 10,
+        'allowed_types'    => 'jpg,jpeg,png,gif',
+        'max_size'         => 5120,
+        'description'      => 'Lessee photos before delivery',
+    ],
+    // ... remaining fields
+],
+```
+
+Corresponding environment variables:
+```ini
+NANO_ORDERS_PHOTO_USER_BEFORE_STATUSES="NEW,PROCESSING"
+NANO_ORDERS_PHOTO_USER_BEFORE_ROLES="user,admin"
+NANO_ORDERS_PHOTO_USER_BEFORE_REQUIRED="DELIVERY"
+NANO_ORDERS_PHOTO_USER_BEFORE_MAX_FILES=10
+NANO_ORDERS_PHOTO_USER_BEFORE_ALLOWED_TYPES="jpg,jpeg,png,gif"
+NANO_ORDERS_PHOTO_USER_BEFORE_MAX_SIZE=5120
+```
+
+#### 6. New Events
+
+- `nano.orders.photo.uploaded` – fired after a photo is successfully uploaded, passes `order`, `field`, `file`, `actor`.
+- `nano.orders.photo.deleted` – fired after a photo is successfully deleted, passes `order`, `field`, `file_id`, `actor`.
+
+#### 7. Translation keys
+
+New keys were added under `manager.photo` and `orders.photo` in the language files (`lang/ar/lang.php`, `lang/en/lang.php`) to cover success, error, and validation messages.
+
+---
+
+## Nano.OrdersApi v1.0.22 – API Endpoints for Photo Management
+
+### Release Objectives
+
+- **Provide an API for uploading and deleting photos**, following the same style as `update-status`.
+- **Fully integrate with `StepPhotos` and `OrderManager`** to ensure the same permission and status rules are applied.
+- **Support file uploads via `multipart/form-data` or `base64`**.
+- **Return photo and thumbnail URLs** directly in the response to facilitate display in client applications.
+
+### New Features
+
+#### 1. Three Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/orders/orders/upload-photo` | Upload a single photo. |
+| `POST` | `/api/v1/orders/orders/upload-multiple-photos` | Upload multiple photos (array). |
+| `POST` | `/api/v1/orders/orders/delete-photo` | Delete a photo (accepts `order_id`, `field`, `file_id`). |
+| `DELETE` | `/api/v1/orders/orders/delete-photo/{orderId}/{field}/{fileId}` | Delete a photo via path parameters (alternative). |
+
+#### 2. Controller Functions in `Orders`
+
+The following functions were added inside `Orders.php` (following the same pattern as `updateStatus`):
+
+- `onUploadPhoto($data, $is_array)`
+- `onUploadMultiplePhotos($data, $is_array)`
+- `onDeletePhoto($data, $is_array)`
+- `uploadPhoto()` – public endpoint calling `onUploadPhoto`.
+- `uploadMultiplePhotos()`
+- `deletePhoto()` – public endpoint calling `onDeletePhoto`.
+
+**Parameters for single photo upload**:
+- `order_id` or `id` (required)
+- `field` (required, one of the four fields)
+- `file` (file) or `file_base64` (base64 string)
+- `title`, `description`, `is_public`, `auto_resize`, etc. (optional)
+
+**Success response**:
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "Photo uploaded successfully",
+    "data": {
+        "id": 456,
+        "path": "https://.../image.jpg",
+        "thumb": "https://.../thumb.jpg",
+        "photos": {
+            "thumb": "https://.../thumb.jpg",
+            "medium": "https://.../medium.jpg",
+            "large": "https://.../large.jpg"
+        }
+    }
+}
+```
+
+#### 3. Handling Uploaded Files (`multipart/form-data`)
+
+The functions were improved to extract files directly using `Input::hasFile()` and `Input::file()`, while retaining support for `base64` for environments that do not upload files directly.
+
+#### 4. Full Permission Integration
+
+Before any photo upload, `validatePhotoUploadPermission` (inside `uploadOrderPhoto` in `StepPhotos`) is called. If the check fails (disallowed role, disallowed status, maximum reached), an exception is thrown and an appropriate error message is displayed.
+
+#### 5. Returning Photo URLs
+
+After uploading the photo, `getOrderPhotoUrls` is called to generate the URL of the original photo as well as default thumbnail sizes (`thumb`, `medium`, `large`). Sizes can be customised via `thumb_sizes` in the options.
+
+---
+
+## Usage Examples
+
+### Upload a single photo (multipart/form-data)
+
+```http
+POST /api/v1/orders/orders/upload-photo
+Authorization: Bearer ...
+Content-Type: multipart/form-data
+
+order_id: 123
+field: user_before_delivery
+file: @/path/to/photo.jpg
+title: Photo before delivery
+```
+
+### Upload multiple photos (base64)
+
+```json
+POST /api/v1/orders/orders/upload-multiple-photos
+{
+    "order_id": 123,
+    "field": "delivery_after_delivery",
+    "files": [
+        "data:image/jpeg;base64,...",
+        "data:image/jpeg;base64,..."
+    ]
+}
+```
+
+### Delete a photo
+
+```http
+DELETE /api/v1/orders/orders/delete-photo/123/user_before_delivery/456
+```
+
+### Attempt to change the order status to DELIVERY without the required photos
+
+The request will be rejected with the message:
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "You must upload photos in field user_before_delivery before changing the status to DELIVERY"
+}
+```
+
+### Bypass photo check (admin)
+
+```php
+$options = [
+    'order' => $order,
+    'order_states_ref_type' => 'COMPLETE',
+    'skip_photo_check' => true,
+    'admin_override' => true
+];
+$orderManager->updateOrderStatusAdvanced($options);
+```
+
+---
+
+## Upgrade Requirements
+
+### For `Nano.Orders`
+
+1. **Update the files**:
+   - `models/Order.php` – add the new relationships.
+   - `traits/steps/StepPhotos.php` – add the entire trait.
+   - `Plugin.php` – add `registerOrderFileUploadFields` and call it in `boot()`.
+   - `config/nano/orders.php` – add the `photo_rules` section (optional).
+   - `lang/ar/lang.php` and `lang/en/lang.php` – add the new translation keys.
+
+2. **No new migrations** – `attachMany` relationships do not require additional columns in the `nano_orders_orders` table.
+
+3. **Dependencies**:
+   - The `Nano.FileUpload` plugin must be installed and configured (version 1.0.7 or later).
+   - `Nano.FileUpload` depends on `Nano.Api` (to provide `AuthHelpers`).
+
+4. **Configuration**:
+   - You can leave the default values or customise via `.env` or direct editing.
+
+### For `Nano.OrdersApi`
+
+1. **Update the files**:
+   - `APIControllers/Orders.php` – add the new functions.
+   - `routes.php` – add the new routes.
+   - `lang/ar/lang.php` and `lang/en/lang.php` – add the new translation keys under `orders.photo`.
+
+2. **Dependencies**:
+   - Requires version 2.2.12 of `Nano.Orders` (or later).
+
+3. **Compatibility testing**:
+   - Test uploading photos using `multipart/form-data` and `base64`.
+   - Test uploading multiple photos and exceeding the maximum limit.
+   - Test deleting photos and permission checks.
+   - Test preventing status changes without required photos via `update-status`.
+
+---
+
+## Conclusion
+
+Versions **Nano.Orders 2.2.12** and **Nano.OrdersApi 1.0.22** add powerful photo management capabilities to the NanoSoft orders system. Thanks to the integration with `Nano.FileUpload`, uploading is secure and unified, supporting both regular files and base64. Controlling permissions and roles (owner / delivery / admin) and order statuses ensures that photos are uploaded only at the appropriate time by authorised persons. The `skip_photo_check` option allows administrators to bypass requirements when necessary. The new API endpoints allow external applications to easily benefit from these features.
+
+The code is documented, extensible, and compatible with previous versions.
+
+---
+
+**Reference documentation**:
+- [`StepPhotos` trait documentation](./docs/Orders/Traits/Steps/Docs-StepPhotos-Trait-en.md)
+- [`Nano.FileUpload` documentation](./docs/FileUpload/Docs-FileUpload-en.md)
+- [Photo Management API documentation](./docs/OrdersApi/Docs-OrdersApi-Photos-en.md)
+

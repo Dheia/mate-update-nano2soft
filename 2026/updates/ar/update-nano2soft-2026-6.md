@@ -1551,3 +1551,316 @@ if(!isset($customData['app_links']))
 **تم التحديث بواسطة:** Dheia Al-Shami  
 **للاستفسارات:** info@nano2soft.com
 
+## 2026-06-05 - 2026-06-09
+
+**Update to `Nano.Orders` – Version 2.2.12 and `Nano.OrdersApi` – Version 1.0.22**
+
+### تحديث إضافة `Nano.Orders` – الإصدار 2.2.12  
+### تحديث إضافة `Nano.OrdersApi` – الإصدار 1.0.22
+
+---
+
+### ملخص التحديثات
+
+أضاف الإصدار **2.2.12** من `Nano.Orders` دعماً متكاملاً لإدارة الصور المرتبطة بالطلب، مع أربع علاقات جديدة من نوع `attachMany`، وسمة `StepPhotos` التي توفر دوال احترافية لرفع الصور وحذفها والتحقق من صلاحيات المستخدمين (المالك، الموصل، المدير) بناءً على حالة الطلب الحالية. تم أيضاً ربط النظام بـ `Nano.FileUpload` لتوحيد عملية رفع الملفات، مع إضافة إعدادات مرنة (`photo_rules`) للتحكم بكل حقل، وإطلاق أحداث جديدة، ودعم خيار `skip_photo_check` في دالة `updateOrderStatusAdvanced` لمنع تغيير الحالة دون الصور المطلوبة.
+
+في المقابل، وفر الإصدار **1.0.22** من `Nano.OrdersApi` ثلاث نقاط نهاية API لرفع (فردي/متعدد) وحذف الصور، مع تكامل كامل مع `StepPhotos` والتحقق من الصلاحيات، وإرجاع روابط الصور والمصغرات في الاستجابة.
+
+---
+
+## Nano.Orders v2.2.12 – إدارة صور الطلبات (StepPhotos)
+
+### أهداف الإصدار
+
+- **تمكين رفع الصور** قبل وبعد التسليم من قبل كل من المستأجر (`user_id`) والمؤجر (`delivery_user_id`).
+- **ربط الصور بحالات الطلب** مثل `NEW`, `PROCESSING`, `DELIVERY`, `COMPLETE` لضمان رفعها في الوقت المناسب.
+- **منع تغيير حالة الطلب** (`DELIVERY` أو `COMPLETE`) ما لم تكن الصور المطلوبة قد رُفعت.
+- **توفير دوال مرنة** تعتمد على `Nano.FileUpload` وتدعم رفع الملفات العادية أو `base64`.
+- **إطلاق أحداث** لتوسيع السلوك (إشعارات، تسجيل، إلخ).
+- **تمكين المطورين من تخصيص القواعد** (الحالات المسموحة، الأدوار، الحد الأقصى للصور، أنواع الملفات) عبر الإعدادات.
+
+### الميزات الجديدة
+
+#### 1. علاقات `attachMany` في نموذج `Order`
+
+أضيفت أربع علاقات جديدة داخل `Order.php`:
+
+```php
+public $attachMany = [
+    'user_before_delivery'     => 'System\Models\File',
+    'user_after_delivery'      => 'System\Models\File',
+    'delivery_before_delivery' => 'System\Models\File',
+    'delivery_after_delivery'  => 'System\Models\File',
+];
+```
+
+| العلاقة | الوصف | المستخدم المخوّل |
+|---------|-------|------------------|
+| `user_before_delivery` | صور المستأجر قبل التسليم | المالك (`user_id`) |
+| `user_after_delivery`  | صور المستأجر بعد التسليم | المالك |
+| `delivery_before_delivery` | صور المؤجر قبل التسليم | الموصل (`delivery_user_id`) |
+| `delivery_after_delivery`  | صور المؤجر بعد التسليم | الموصل |
+
+#### 2. تسجيل الحقول في `FileUploadRegistry`
+
+تم تسجيل هذه الحقول تلقائياً في `Plugin.php` عبر دالة `registerOrderFileUploadFields`، مع الإعدادات التالية:
+
+- نوع الحقل: `image` (يدعم الصور فقط)
+- الحد الأقصى للحجم: 5 ميجابايت (قابل للتعديل)
+- الأنواع المسموحة: `jpg, jpeg, png, gif`
+- `multiple => true` (لأنها علاقات `attachMany`)
+- `max_files => 10` (عدد الصور المسموحة)
+- `is_public => false` (خاصة، يتم الوصول إليها عبر رابط مؤقت)
+
+#### 3. ترايت `StepPhotos` (ملف `traits/steps/StepPhotos.php`)
+
+هذا الترايت يضم جميع دوال إدارة الصور:
+
+| الدالة | الوصف |
+|--------|-------|
+| `uploadOrderPhoto($field, $fileData, array $options)` | رفع صورة واحدة (دعم `UploadedFile` أو `base64`). |
+| `uploadOrderPhotos($field, array $filesData, array $options)` | رفع عدة صور دفعة واحدة. |
+| `deleteOrderPhoto($field, $fileId, array $options)` | حذف صورة موجودة. |
+| `validatePhotoUploadPermission($field, $user, $order, $newStatus, array $options)` | التحقق من صلاحية المستخدم للرفع (الدور، الحالة المسموحة، الحد الأقصى). |
+| `canUploadPhoto($field, $user, $order)` | فحص سريع بدون استثناء. |
+| `canUploadPhotoToField($field, $user, $order, $newStatus)` | نفس السابق مع دعم الحالة الجديدة. |
+| `enforcePhotoRequirementsOnStatusChange($oldStatus, $newStatus, $order, $actor, array $options)` | تُستدعى قبل تغيير الحالة للتأكد من وجود الصور المطلوبة. |
+| `getOrderPhotoUrls($field, array $thumbSizes, $includeModel)` | جلب روابط الصور مع صور مصغرة مخصصة. |
+| `hasRequiredPhotosForStatus($newStatus, $order, $role)` | فحص سريع للمتطلبات. |
+
+**آلية التحقق من الصلاحية** (`validatePhotoUploadPermission`):
+- يحدد دور المستخدم ( `user` / `delivery` / `admin` ) بالنسبة للطلب.
+- يقرأ القواعد (`allowed_roles`, `allowed_statuses`, `max_files`) من الإعدادات أو الخيارات الممررة.
+- يتحقق من أن الحقل يسمح بهذا الدور، ومن أن الحالة الحالية للطلب مسموحة للرفع، ومن أن عدد الصور الحالي لم يصل إلى الحد الأقصى.
+- إذا تم تمرير `$newStatus`، يتحقق مما إذا كان الحقل مطلوباً للانتقال إلى تلك الحالة.
+
+#### 4. دعم `skip_photo_check` في `updateOrderStatusAdvanced`
+
+تم تعديل دالة `updateOrderStatusAdvanced` (في ترايت `StepStatus`) لدعم خيارين جديدين:
+
+- `skip_photo_check` (bool، افتراضي `false`) – تجاوز فحص الصور.
+- `photo_validation_rules` (array) – قواعد مخصصة لتجاوز القواعد الافتراضية.
+
+عند محاولة تغيير الحالة، تستخرج الدالة الحالة الجديدة الفعلية، ثم تستدعي `enforcePhotoRequirementsOnStatusChange` ما لم يكن `skip_photo_check = true`. إذا كانت الصور المطلوبة مفقودة، تُرمى استثناء وتمنع التغيير.
+
+#### 5. إعدادات `photo_rules` في ملف `config/nano/orders.php`
+
+أضيف قسم كامل يمكن تخصيصه عبر متغيرات البيئة أو التعديل المباشر:
+
+```php
+'photo_rules' => [
+    'user_before_delivery' => [
+        'allowed_statuses' => ['NEW', 'PROCESSING'],
+        'allowed_roles'    => ['user', 'admin'],
+        'required_on_transition' => ['DELIVERY'],
+        'max_files'        => 10,
+        'allowed_types'    => 'jpg,jpeg,png,gif',
+        'max_size'         => 5120,
+        'description'      => 'صور المستأجر قبل التسليم',
+    ],
+    // ... باقي الحقول
+],
+```
+
+متغيرات البيئة المقابلة:
+```ini
+NANO_ORDERS_PHOTO_USER_BEFORE_STATUSES="NEW,PROCESSING"
+NANO_ORDERS_PHOTO_USER_BEFORE_ROLES="user,admin"
+NANO_ORDERS_PHOTO_USER_BEFORE_REQUIRED="DELIVERY"
+NANO_ORDERS_PHOTO_USER_BEFORE_MAX_FILES=10
+NANO_ORDERS_PHOTO_USER_BEFORE_ALLOWED_TYPES="jpg,jpeg,png,gif"
+NANO_ORDERS_PHOTO_USER_BEFORE_MAX_SIZE=5120
+```
+
+#### 6. الأحداث الجديدة
+
+- `nano.orders.photo.uploaded` – يُطلق بعد رفع صورة بنجاح، يمرر `order`, `field`, `file`, `actor`.
+- `nano.orders.photo.deleted` – يُطلق بعد حذف صورة بنجاح، يمرر `order`, `field`, `file_id`, `actor`.
+
+#### 7. مفاتيح الترجمة
+
+أضيفت مفاتيح جديدة تحت `manager.photo` و `orders.photo` في ملفات اللغة (`lang/ar/lang.php`، `lang/en/lang.php`)، لتغطية رسائل النجاح والخطأ والتحقق.
+
+---
+
+## Nano.OrdersApi v1.0.22 – نقاط API لإدارة الصور
+
+### أهداف الإصدار
+
+- **توفير واجهة API لرفع وحذف الصور**، بنفس أسلوب `update-status`.
+- **دمج كامل مع `StepPhotos`** و `OrderManager` لضمان تطبيق نفس قواعد الصلاحية والحالات.
+- **دعم رفع الملفات عبر `multipart/form-data` أو `base64`**.
+- **إرجاع روابط الصور والمصغرات** مباشرة في الاستجابة لتسهيل عرضها في التطبيقات.
+
+### الميزات الجديدة
+
+#### 1. نقاط النهاية الثلاث
+
+| الطريقة | المسار | الوصف |
+|---------|--------|-------|
+| `POST` | `/api/v1/orders/orders/upload-photo` | رفع صورة واحدة. |
+| `POST` | `/api/v1/orders/orders/upload-multiple-photos` | رفع عدة صور (مصفوفة). |
+| `POST` | `/api/v1/orders/orders/delete-photo` | حذف صورة (تستقبل `order_id`, `field`, `file_id`). |
+| `DELETE` | `/api/v1/orders/orders/delete-photo/{orderId}/{field}/{fileId}` | حذف صورة عبر معاملات المسار (بديل). |
+
+#### 2. دوال المتحكم `Orders`
+
+أضيفت الدوال التالية داخل `Orders.php` (بنفس نمط `updateStatus`):
+
+- `onUploadPhoto($data, $is_array)`
+- `onUploadMultiplePhotos($data, $is_array)`
+- `onDeletePhoto($data, $is_array)`
+- `uploadPhoto()` – نقطة عامة تستدعي `onUploadPhoto`.
+- `uploadMultiplePhotos()`
+- `deletePhoto()` – نقطة عامة تستدعي `onDeletePhoto`.
+
+**معاملات رفع صورة واحدة**:
+- `order_id` أو `id` (مطلوب)
+- `field` (مطلوب، واحد من الحقول الأربعة)
+- `file` (ملف) أو `file_base64` (نص base64)
+- `title`, `description`, `is_public`, `auto_resize`, إلخ (اختيارية)
+
+**استجابة النجاح**:
+```json
+{
+    "code": 200,
+    "status": true,
+    "message": "تم رفع الصورة بنجاح",
+    "data": {
+        "id": 456,
+        "path": "https://.../image.jpg",
+        "thumb": "https://.../thumb.jpg",
+        "photos": {
+            "thumb": "https://.../thumb.jpg",
+            "medium": "https://.../medium.jpg",
+            "large": "https://.../large.jpg"
+        }
+    }
+}
+```
+
+#### 3. التعامل مع الملفات المرفوعة (`multipart/form-data`)
+
+تم تحسين الدوال لاستخراج الملف مباشرة باستخدام `Input::hasFile()` و `Input::file()`، مع الاحتفاظ بدعم `base64` للبيئات التي لا ترفع ملفات مباشرة.
+
+#### 4. دمج الصلاحيات بشكل كامل
+
+قبل رفع أي صورة، يتم استدعاء `validatePhotoUploadPermission` (داخل `uploadOrderPhoto` في `StepPhotos`). إذا فشل التحقق (دور غير مسموح، حالة غير مسموحة، بلوغ الحد الأقصى)، تُرمى استثناء وتعرض رسالة خطأ مناسبة.
+
+#### 5. إرجاع روابط الصور
+
+بعد رفع الصورة، يتم استدعاء `getOrderPhotoUrls` لتوليد رابط الصورة الأصلية بالإضافة إلى صور مصغرة بأحجام افتراضية (`thumb`, `medium`, `large`). يمكن تخصيص الأحجام عبر `thumb_sizes` في الخيارات.
+
+---
+
+## أمثلة استخدام
+
+### رفع صورة واحدة (multipart/form-data)
+
+```http
+POST /api/v1/orders/orders/upload-photo
+Authorization: Bearer ...
+Content-Type: multipart/form-data
+
+order_id: 123
+field: user_before_delivery
+file: @/path/to/photo.jpg
+title: صورة قبل التسليم
+```
+
+### رفع عدة صور (base64)
+
+```json
+POST /api/v1/orders/orders/upload-multiple-photos
+{
+    "order_id": 123,
+    "field": "delivery_after_delivery",
+    "files": [
+        "data:image/jpeg;base64,...",
+        "data:image/jpeg;base64,..."
+    ]
+}
+```
+
+### حذف صورة
+
+```http
+DELETE /api/v1/orders/orders/delete-photo/123/user_before_delivery/456
+```
+
+### محاولة تغيير حالة الطلب إلى DELIVERY دون رفع الصور المطلوبة
+
+سيتم رفض الطلب واستقبال رسالة:
+```json
+{
+    "code": 400,
+    "status": false,
+    "message": "يجب رفع الصور في حقل user_before_delivery قبل تغيير الحالة إلى DELIVERY"
+}
+```
+
+### تجاوز فحص الصور (للمسؤول)
+
+```php
+$options = [
+    'order' => $order,
+    'order_states_ref_type' => 'COMPLETE',
+    'skip_photo_check' => true,
+    'admin_override' => true
+];
+$orderManager->updateOrderStatusAdvanced($options);
+```
+
+---
+
+## متطلبات الترقية
+
+### لإضافة `Nano.Orders`
+
+1. **تحديث الملفات**:
+   - `models/Order.php` – إضافة العلاقات الجديدة.
+   - `traits/steps/StepPhotos.php` – إضافة الترايت بالكامل.
+   - `Plugin.php` – إضافة `registerOrderFileUploadFields` واستدعائها في `boot()`.
+   - `config/nano/orders.php` – إضافة قسم `photo_rules` (اختياري).
+   - `lang/ar/lang.php` و `lang/en/lang.php` – إضافة مفاتيح الترجمة الجديدة.
+
+2. **لا توجد هجرات جديدة** – العلاقات من نوع `attachMany` لا تحتاج إلى أعمدة إضافية في جدول `nano_orders_orders`.
+
+3. **الاعتماديات**:
+   - يجب أن تكون إضافة `Nano.FileUpload` مثبتة ومهيأة (الإصدار 1.0.7 أو أحدث).
+   - إضافة `Nano.FileUpload` تعتمد على `Nano.Api` (لتوفير `AuthHelpers`).
+
+4. **الإعدادات**:
+   - يمكن ترك القيم الافتراضية أو تخصيصها عبر `.env` أو التعديل المباشر.
+
+### لإضافة `Nano.OrdersApi`
+
+1. **تحديث الملفات**:
+   - `APIControllers/Orders.php` – إضافة الدوال الجديدة.
+   - `routes.php` – إضافة المسارات الجديدة.
+   - `lang/ar/lang.php` و `lang/en/lang.php` – إضافة مفاتيح الترجمة تحت `orders.photo`.
+
+2. **الاعتماديات**:
+   - تتطلب الإصدار 2.2.12 من `Nano.Orders` (أو أحدث).
+
+3. **اختبار التوافق**:
+   - اختبار رفع الصور باستخدام `multipart/form-data` و `base64`.
+   - اختبار رفع عدة صور وتجاوز الحد الأقصى.
+   - اختبار حذف الصور والتحقق من الصلاحية.
+   - اختبار منع تغيير الحالة بدون الصور المطلوبة عبر `update-status`.
+
+---
+
+## الخاتمة
+
+يمثل الإصداران **Nano.Orders 2.2.12** و **Nano.OrdersApi 1.0.22** إضافة قوية لإدارة صور الطلبات في نظام نانوسوفت. بفضل التكامل مع `Nano.FileUpload`، أصبح الرفع آمناً وموحداً، مع دعم للملفات العادية و base64. التحكم بالصلاحيات والأدوار (مالك / موصل / مدير) وحالات الطلب يضمن أن الصور ترفع في الوقت المناسب فقط من قبل الأشخاص المخولين. الخيار `skip_photo_check` يتيح للمسؤولين تجاوز المتطلبات عند الضرورة. كما أن واجهة API الجديدة تتيح للتطبيقات الخارجية الاستفادة من هذه الميزات بسهولة.
+
+الكود موثّق، قابل للتوسع، ومتوافق مع الإصدارات السابقة.
+
+---
+
+**الوثائق المرجعية**:
+- [توثيق `StepPhotos` الترايت](./docs/Orders/Traits/Steps/Docs-StepPhotos-Trait-ar.md)
+- [توثيق `Nano.FileUpload`](./docs/FileUpload/Docs-FileUpload-ar.md)
+- [توثيق واجهة برمجة التطبيقات (API) لإدارة الصور](./docs/OrdersApi/Docs-OrdersApi-Photos-ar.md)
+
