@@ -1348,3 +1348,206 @@ echo $pngData;
 - [توثيق كلاس `BarcodeGenerator`](./docs/Qrcodes/Docs-BarcodeGenerator-Class-ar.md)
 - [توثيق واجهة برمجة التطبيقات (API)](./docs/Qrcodes/Docs-API-Documentation-ar.md)
 
+## 2026-06-07 - 2026-06-08
+
+### تحديث الإصدار: Tss.Webbasic (v1.0.15) و Nano.BasicApi (v1.0.22)
+
+**المطور:** Dheia Al-Shami  
+
+---
+
+### ملخص التحديث
+
+تم إضافة حقل جديد من نوع `repeater` باسم `app_links` في إعدادات الثيم (Theme Settings) وذلك لإدارة روابط التطبيقات (مثل متجر جوجل، آب ستور، وغيرها). كما تم دعم هذا الحقل في واجهة برمجة التطبيقات (API) الخاصة بـ `Nano.BasicApi` بحيث يتم إرجاع قيمة الحقل مع معالجة حقل الصورة (`image`) لتحويله إلى رابط كامل باستخدام `MediaLibrary`.
+
+---
+
+### التغييرات في Tss.Webbasic (v1.0.15)
+
+#### 1. إضافة حقل `app_links` إلى واجهة إعدادات الثيم
+
+- **الموقع:** `CmsManager.php` (دالة `extendCmsThemeConfig`)
+- **نوع الحقل:** `repeater`
+- **الحقول الفرعية:**
+  - `name` (نص، مطلوب)
+  - `link` (نص، مطلوب)
+  - `icon` (أيقونات من Awesome Icons)
+  - `image` (ملف وسائط عبر MediaFinder)
+  - `is_active` (مفتاح تشغيل/إيقاف)
+
+- **التبويب:** `tss.webbasic::lang.theme.tab.shop`
+
+#### 2. إضافة مفاتيح الترجمة (lang)
+
+تم إضافة مفاتيح جديدة في `lang/ar/lang.php` و `lang/en/lang.php`:
+
+##### اللغة العربية (`ar`)
+
+```php
+'theme' => [
+    'form' => [
+        'app_links_label' => 'روابط التطبيقات',
+        'app_links_prompt' => 'إضافة رابط جديد',
+        'app_links_name_label' => 'الاسم',
+        'app_links_name_placeholder' => 'أدخل اسم الرابط',
+        'app_links_link_label' => 'الرابط',
+        'app_links_link_placeholder' => 'https://...',
+        'app_links_icon_label' => 'الأيقونة',
+        'app_links_icon_placeholder' => 'اختر الأيقونة',
+        'app_links_image_label' => 'الصورة',
+        'app_links_is_active' => 'مفعل',
+    ],
+    'tab' => [
+        'shop' => 'إعدادات المتجر', // إذا لم يكن موجوداً
+    ],
+],
+```
+
+##### اللغة الإنجليزية (`en`)
+
+```php
+'theme' => [
+    'form' => [
+        'app_links_label' => 'App Links',
+        'app_links_prompt' => 'Add new link',
+        'app_links_name_label' => 'Name',
+        'app_links_name_placeholder' => 'Enter link name',
+        'app_links_link_label' => 'URL',
+        'app_links_link_placeholder' => 'https://...',
+        'app_links_icon_label' => 'Icon',
+        'app_links_icon_placeholder' => 'Select icon',
+        'app_links_image_label' => 'Image',
+        'app_links_is_active' => 'Active',
+    ],
+    'tab' => [
+        'shop' => 'Shop Settings', // إذا لم يكن موجوداً
+    ],
+],
+```
+
+#### 3. تحديث ملف الإصدارات `version.yaml`
+
+```yaml
+1.0.15:
+    - 'Add app_links repeater field to theme settings with translation support'
+    - 'Add Arabic and English translations for app_links fields'
+```
+
+---
+
+### التغييرات في Nano.BasicApi (v1.0.22)
+
+#### 1. دعم حقل `app_links` في واجهة API
+
+- **الملف المعدل:** `APIControllers/Themes.php`
+- **الدالة:** `index()`
+
+##### أ. إضافة معالجة `app_links` عند وجوده في إعدادات الثيم
+
+```php
+if(isset($customData['app_links']) && !empty($customData['app_links'])) {
+    $app_links = $customData['app_links'];
+    $app_links = array_map(function($item) {
+        $item['image'] = isset($item['image']) ? self::getUrlMediaLibrary($item['image']) : null;
+        return $item;
+    }, $app_links);
+    
+    $customData['app_links'] = $app_links;
+}
+
+if(!isset($customData['app_links']))
+    $customData['app_links'] = null;
+```
+
+##### ب. تحديث دالة `getUrlMediaLibrary`
+
+الدالة موجودة مسبقاً وتقوم بتحويل مسار الوسائط إلى رابط كامل. لم يتم تعديلها ولكنها تستخدم لمعالجة الصور في `app_links`.
+
+#### 2. تحديث ملف الإصدارات `version.yaml`
+
+```yaml
+1.0.22:
+    - 'Add support for app_links field in theme settings API endpoint'
+    - 'Process image field in app_links using MediaLibrary URL'
+```
+
+---
+
+### كيفية الاستخدام
+
+#### في لوحة التحكم (إعدادات الثيم)
+
+1. انتقل إلى `Customize → Theme` (أو `الإعدادات → الثيم` حسب اللغة).
+2. اذهب إلى تبويب **"إعدادات المتجر"** (أو `Shop Settings`).
+3. ستجد حقل جديد باسم **"روابط التطبيقات"** أو `App Links`.
+4. يمكنك إضافة عدة روابط، كل رابط يحتوي على:
+   - الاسم (مطلوب)
+   - الرابط URL (مطلوب)
+   - أيقونة (اختياري)
+   - صورة (اختياري)
+   - تفعيل/إلغاء التفعيل
+
+#### عبر API
+
+- **نقطة النهاية:** `GET /api/v1/basic/settings`
+- **الاستجابة:** ستظهر `app_links` كمصفوفة من الكائنات، مع معالجة حقل `image` ليكون رابطاً كاملاً.
+
+**مثال للاستجابة:**
+
+```json
+{
+    "app_links": [
+        {
+            "name": "رابط تحميل التطبيق من متجر جوجل",
+            "link": "https://play.google.com/store/apps/details?id=com.nano2soft.now",
+            "icon": "fab fa-google-play",
+            "image": "https://example.com/storage/app/media/GooglePlay.svg",
+            "is_active": "1"
+        }
+    ]
+}
+```
+
+---
+
+### التوافق
+
+- **يتطلب وجود** `GinoPane.AwesomeSocialLinks` لدعم نوع الحقل `awesomeiconslist` (اختياري، إذا لم يكن موجوداً سيظهر خطأ في الواجهة).
+- **يتطلب NanoSoft App v2.x أو v3.x**
+- **الحد الأدنى لإصدار PHP:** 7.2
+
+---
+
+### ملاحظات للمطورين
+
+- حقل `app_links` يُخزن بصيغة JSON في نموذج `ThemeData`، لذا لا حاجة لإنشاء جدول جديد.
+- لضمان عمل الحقل بشكل صحيح، تأكد من إضافة `app_links` إلى قائمة `jsonable` في نموذج `ThemeData` (يمكن إضافته عبر `extend` في `boot()`).
+- تم استخدام نفس أسلوب معالجة الصور المطبق على `social_links`.
+
+---
+
+### تاريخ الإصدارات السابقة
+
+- **Tss.Webbasic v1.0.14:** دعم SiteSearch لمحتوى المنشورات والمشاريع.
+- **Nano.BasicApi v1.0.21:** (في حال وجود إصدار سابق)
+
+---
+
+### التحديث المقترح للمشاريع القائمة
+
+1. قم بتحديث الإضافات عبر الأمر:
+   ```bash
+   php artisan plugin:refresh Tss.Webbasic
+   php artisan plugin:refresh Nano.BasicApi
+   ```
+2. مسح ذاكرة التخزين:
+   ```bash
+   php artisan cache:clear
+   ```
+3. إذا كنت تستخدم الثيم الخاص بك، تأكد من أن واجهة إعدادات الثيم تدعم الحقل الجديد.
+
+---
+
+**تم التحديث بواسطة:** Dheia Al-Shami  
+**للاستفسارات:** info@nano2soft.com
+

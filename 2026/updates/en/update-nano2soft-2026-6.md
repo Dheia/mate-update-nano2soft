@@ -1347,3 +1347,206 @@ Thank you for your attention, and we welcome your feedback and suggestions to im
 - [`BarcodeGenerator` class documentation](./docs/Qrcodes/Docs-BarcodeGenerator-Class-en.md)
 - [API documentation](./docs/Qrcodes/Docs-API-Documentation-en.md)
 
+## 2026-06-07 - 2026-06-08
+
+### Update Version: Tss.Webbasic (v1.0.15) and Nano.BasicApi (v1.0.22)
+
+**Developer:** Dheia Al-Shami  
+
+---
+
+### Update Summary
+
+A new `repeater` field named `app_links` has been added to the theme settings to manage application links (such as Google Play Store, App Store, etc.). This field is also supported in the `Nano.BasicApi` API endpoint, so the field value is returned with the `image` field processed into a full URL using `MediaLibrary`.
+
+---
+
+### Changes in Tss.Webbasic (v1.0.15)
+
+#### 1. Adding the `app_links` Field to the Theme Settings Interface
+
+- **Location:** `CmsManager.php` (`extendCmsThemeConfig` function)
+- **Field Type:** `repeater`
+- **Subfields:**
+  - `name` (text, required)
+  - `link` (text, required)
+  - `icon` (Awesome Icons)
+  - `image` (media file via MediaFinder)
+  - `is_active` (switch)
+
+- **Tab:** `tss.webbasic::lang.theme.tab.shop`
+
+#### 2. Adding Translation Keys (lang)
+
+New keys have been added in `lang/ar/lang.php` and `lang/en/lang.php`:
+
+##### Arabic (`ar`)
+
+```php
+'theme' => [
+    'form' => [
+        'app_links_label' => 'روابط التطبيقات',
+        'app_links_prompt' => 'إضافة رابط جديد',
+        'app_links_name_label' => 'الاسم',
+        'app_links_name_placeholder' => 'أدخل اسم الرابط',
+        'app_links_link_label' => 'الرابط',
+        'app_links_link_placeholder' => 'https://...',
+        'app_links_icon_label' => 'الأيقونة',
+        'app_links_icon_placeholder' => 'اختر الأيقونة',
+        'app_links_image_label' => 'الصورة',
+        'app_links_is_active' => 'مفعل',
+    ],
+    'tab' => [
+        'shop' => 'إعدادات المتجر', // if not already present
+    ],
+],
+```
+
+##### English (`en`)
+
+```php
+'theme' => [
+    'form' => [
+        'app_links_label' => 'App Links',
+        'app_links_prompt' => 'Add new link',
+        'app_links_name_label' => 'Name',
+        'app_links_name_placeholder' => 'Enter link name',
+        'app_links_link_label' => 'URL',
+        'app_links_link_placeholder' => 'https://...',
+        'app_links_icon_label' => 'Icon',
+        'app_links_icon_placeholder' => 'Select icon',
+        'app_links_image_label' => 'Image',
+        'app_links_is_active' => 'Active',
+    ],
+    'tab' => [
+        'shop' => 'Shop Settings', // if not already present
+    ],
+],
+```
+
+#### 3. Updating the `version.yaml` File
+
+```yaml
+1.0.15:
+    - 'Add app_links repeater field to theme settings with translation support'
+    - 'Add Arabic and English translations for app_links fields'
+```
+
+---
+
+### Changes in Nano.BasicApi (v1.0.22)
+
+#### 1. Supporting the `app_links` Field in the API
+
+- **Modified File:** `APIControllers/Themes.php`
+- **Function:** `index()`
+
+##### a. Adding `app_links` Processing When Present in Theme Settings
+
+```php
+if(isset($customData['app_links']) && !empty($customData['app_links'])) {
+    $app_links = $customData['app_links'];
+    $app_links = array_map(function($item) {
+        $item['image'] = isset($item['image']) ? self::getUrlMediaLibrary($item['image']) : null;
+        return $item;
+    }, $app_links);
+    
+    $customData['app_links'] = $app_links;
+}
+
+if(!isset($customData['app_links']))
+    $customData['app_links'] = null;
+```
+
+##### b. Updating the `getUrlMediaLibrary` Function
+
+The function already exists and converts a media path to a full URL. It has not been modified but is used to process images in `app_links`.
+
+#### 2. Updating the `version.yaml` File
+
+```yaml
+1.0.22:
+    - 'Add support for app_links field in theme settings API endpoint'
+    - 'Process image field in app_links using MediaLibrary URL'
+```
+
+---
+
+### How to Use
+
+#### In the Administration Panel (Theme Settings)
+
+1. Go to `Customize → Theme` (or `Settings → Theme` depending on language).
+2. Go to the **"Shop Settings"** tab.
+3. You will find a new field named **"App Links"**.
+4. You can add multiple links, each containing:
+   - Name (required)
+   - URL (required)
+   - Icon (optional)
+   - Image (optional)
+   - Active/Inactive toggle
+
+#### Via API
+
+- **Endpoint:** `GET /api/v1/basic/settings`
+- **Response:** `app_links` will appear as an array of objects, with the `image` field processed into a full URL.
+
+**Example Response:**
+
+```json
+{
+    "app_links": [
+        {
+            "name": "Google Play Store Download Link",
+            "link": "https://play.google.com/store/apps/details?id=com.nano2soft.now",
+            "icon": "fab fa-google-play",
+            "image": "https://example.com/storage/app/media/GooglePlay.svg",
+            "is_active": "1"
+        }
+    ]
+}
+```
+
+---
+
+### Compatibility
+
+- **Requires** `GinoPane.AwesomeSocialLinks` to support the `awesomeiconslist` field type (optional; if not present, an error will appear in the interface).
+- **Requires NanoSoft App v2.x or v3.x**
+- **Minimum PHP version:** 7.2
+
+---
+
+### Notes for Developers
+
+- The `app_links` field is stored as JSON in the `ThemeData` model, so no new database table is needed.
+- To ensure the field works properly, make sure `app_links` is added to the `jsonable` array in the `ThemeData` model (can be added via `extend` in `boot()`).
+- The same image processing method used for `social_links` has been applied.
+
+---
+
+### Previous Version History
+
+- **Tss.Webbasic v1.0.14:** Support for SiteSearch on posts and projects content.
+- **Nano.BasicApi v1.0.21:** (if a previous version exists)
+
+---
+
+### Suggested Update for Existing Projects
+
+1. Update the plugins using the command:
+   ```bash
+   php artisan plugin:refresh Tss.Webbasic
+   php artisan plugin:refresh Nano.BasicApi
+   ```
+2. Clear the cache:
+   ```bash
+   php artisan cache:clear
+   ```
+3. If you are using your own theme, ensure that the theme settings interface supports the new field.
+
+---
+
+**Updated by:** Dheia Al-Shami  
+**For inquiries:** info@nano2soft.com
+
