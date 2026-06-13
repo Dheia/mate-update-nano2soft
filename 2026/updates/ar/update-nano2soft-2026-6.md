@@ -2153,6 +2153,420 @@ if (BarcodeGenerator::validateBarcode($barcodeValue, $barcodeType)) {
 - [توثيق مولد الباركودات](./docs/Qrcodes/Docs-BarcodeGenerator-ar.md)
 - [توثيق واجهة برمجة التطبيقات](./docs/Qrcodes/Docs-API-Documentation-ar.md)
 
+## 2026-06-08 - 2026-06-10 
+
+**إطلاق إضافة `Nano.SchoolControlApi` – الإصدار 1.0.1**
+
+### إنشاء واجهة برمجة تطبيقات أساسية للتحكم المدرسي (الأعمال الشهرية، العلامات الفصلية، النتائج)
+
+---
+
+### ملخص التحديثات
+
+يقدم الإصدار الأول **1.0.1** من إضافة `Nano.SchoolControlApi` واجهة برمجة تطبيقات أساسية للتفاعل مع ثلاثة كيانات رئيسية في نظام `Tss.SchoolControl`:
+
+- **الأعمال الشهرية للطلاب** (`StudentMonthlyWork`) – إدارة درجات الأعمال الشهرية لكل مادة.
+- **العلامات الفصلية والنهائية** (`StudentMark`) – إدارة درجات الفصلين الأول والثاني.
+- **نتائج الطلاب** (`Result`) – إدارة النتائج بجميع أنواعها (شهرية، نصفية، نهائية).
+
+تم بناء الإضافة وفقاً لأحدث معايير `Nano-Api-SKILL.md`، مع الاستفادة من `AccessManager` للصلاحيات، و`AdvancedQueryHelper` للتصفية الديناميكية، ومحولات البيانات (Transformers)، ونظام تخزين مؤقت وأحداث موحد.
+
+---
+
+### أهداف الإصدار
+
+- **توفير API أساسي** لإدارة الأعمال الشهرية والعلامات الفصلية والنتائج.
+- **تمكين التطبيقات الخارجية** من قراءة وكتابة بيانات الدرجات والنتائج.
+- **دعم الفلاتر الأساسية** مثل `student_id`, `record_id`, `year_id`, `class_id`, `group_id`, `subject_id`.
+- **تطبيق نظام صلاحيات أولي** للتحكم في الوصول حسب نوع المستخدم (backend/frontend/guest).
+- **توفير توثيق أولي** للنقاط النهائية الأساسية.
+
+---
+
+### الميزات الجديدة
+
+#### 1. ثلاثة متحكمات RESTful أساسية
+
+| المتحكم | النموذج المستهدف | العمليات المدعومة |
+|---------|-----------------|-------------------|
+| `StudentMonthlyWorks` | `StudentMonthlyWork` | قائمة، عرض، إنشاء، تحديث، حذف |
+| `StudentMarks` | `StudentMark` | قائمة، عرض، إنشاء، تحديث، حذف |
+| `Results` | `Result` | قائمة، عرض، إنشاء، تحديث، حذف |
+
+**كل متحكم يدعم:**
+- `index()`: جلب قائمة مع تصفية وبحث وترتيب وتقسيم صفحات.
+- `show($id)`: عرض تفاصيل عنصر مع تضمين العلاقات.
+- `getRecords(array $options)`: دالة أساسية لبناء استعلامات معقدة.
+- `store()` و `update()` و `destroy()`: عمليات الكتابة.
+- `activelystats()`: نقطة نهاية لإرجاع آخر تحديث للتخزين المؤقت.
+
+#### 2. دالة `getRecords` موحدة
+
+تم تطبيق دالة `getRecords` موحدة في كل متحكم باستخدام التريت `HasRecordsHelper`، وتدعم:
+- **فلاتر متقدمة** عبر `AdvancedQueryManager::scopeWhereField` مع `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **نطاق الوصول** (`applyAccessScope`) للشركة والقسم والولاية ومنشئ السجل.
+- **استبعاد الأعمدة** (`exclude`) لتقليل حجم البيانات.
+- **تضمين العلاقات** (`custom_with`).
+- **البحث النصي** (`q`) مع دعم البحث المتقدم (ArPhpHelper).
+- **الترتيب** (`orderBy`, `orderDirection`) والمجموعات (`group_by`) و`having`.
+- **خيارات الإخراج**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **الأحداث**: `api.list.extendQueryBefore` و `api.list.extendQuery` لتوسيع الاستعلامات.
+
+#### 3. نظام صلاحيات مركزي أولي
+
+تم تعريف إعدادات الصلاحيات الأساسية في ملف `config.php` لكل عملية ولكل مورد، مع إمكانية التحكم عبر متغيرات البيئة.
+
+**مثال من إعدادات `results.list`:**
+```php
+'results' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_SCHOOLCONTROLAPI_RESULTS_LIST_IS_ALLOW', true),
+            'backend' => [
+                'allow' => true,
+                'check_permission' => true,
+                'permissions' => ['tss.schoolcontrol.resultalls.access_all', 'tss.schoolcontrol.resultalls.access'],
+                'access_scope' => 'all',
+            ],
+            'frontend' => [
+                'allow' => true,
+                'allowed_ref_types' => ['student', 'parent'],
+                'access_scope' => 'own',
+            ],
+        ],
+    ],
+],
+```
+
+يتم التحقق من الصلاحيات عبر `AccessManager::checkByResource()`.
+
+#### 4. محولات البيانات (Transformers)
+
+تم إنشاء ثلاثة محولات أساسية:
+- **`StudentMonthlyWorkTransformer`**: يعرض بيانات الأعمال الشهرية مع العلاقات (student, subject, teacher, class, group, studyYear, department).
+- **`StudentMarkTransformer`**: يعرض بيانات العلامات الفصلية مع العلاقات.
+- **`ResultTransformer`**: يعرض بيانات النتائج مع العلاقات ودعم تضمين الدرجات (`marks`) حسب نوع النتيجة.
+
+كل المحولات تدعم تنسيق التواريخ واستبعاد الحقول عبر `exclude`.
+
+#### 5. استجابة موحدة لعمليات الإنشاء والتحديث
+
+```json
+{
+  "data": {
+    "code": 200,
+    "status": true,
+    "message": "Result created successfully.",
+    "data": { ... },
+    "model": { ... },
+    "input_data": { ... },
+    "process_data": { ... }
+  }
+}
+```
+
+#### 6. تسجيل نطاق `scopeExclude`
+
+تم تسجيل النطاق الديناميكي `scopeExclude` للنماذج الثلاثة في `Plugin::boot()`:
+```php
+\Tss\SchoolControl\Models\StudentMonthlyWork::extend(function($model) {
+    $model->addDynamicMethod('scopeExclude', function($query, $columns) use($model) { ... });
+});
+// وكذلك لـ StudentMark و Result
+```
+
+---
+
+### نقاط النهاية المدعومة
+
+| المورد | الطرق المدعومة | المسارات |
+|--------|---------------|----------|
+| **StudentMonthlyWorks** | GET, POST, PUT, DELETE | `/student-monthly-works`, `/student-monthly-works/{id}`, `/student-monthly-works/activelystats` |
+| **StudentMarks** | GET, POST, PUT, DELETE | `/student-marks`, `/student-marks/{id}`, `/student-marks/activelystats` |
+| **Results** | GET, POST, PUT, DELETE | `/results`, `/results/{id}`, `/results/activelystats` |
+
+**قاعدة المسار الأساسية:** `/api/v1/schoolcontrol`
+
+---
+
+### أمثلة على الاستخدام
+
+#### 1. جلب نتائج شهرية لطالب معين
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/schoolcontrol/results?student_id=8&record_id=3&ref_type=monthly&semster=semster1&month_num=1&include=student" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### 2. إنشاء علامة فصلية جديدة
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/schoolcontrol/student-marks" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_id": 8,
+    "record_id": 3,
+    "subject_id": 1,
+    "year_id": 3,
+    "class_id": 1,
+    "s1_month1_mark": 12,
+    "s1_month2_mark": 14,
+    "s1_month3_mark": 13,
+    "exam1_mark": 18
+  }'
+```
+
+#### 3. تحديث درجة عمل شهري
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/schoolcontrol/student-monthly-works/2" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"exam_mark": 16}'
+```
+
+---
+
+### التغييرات التقنية
+
+#### ملفات جديدة
+
+| المسار | الوصف |
+|--------|-------|
+| `apicontrollers/StudentMonthlyWorks.php` | متحكم الأعمال الشهرية. |
+| `apicontrollers/StudentMarks.php` | متحكم العلامات الفصلية. |
+| `apicontrollers/Results.php` | متحكم النتائج. |
+| `traits/HasRecordsHelper.php` | التريت الموحد لبناء الاستعلامات. |
+| `helpers/StudentMonthlyWorkRecordsHelper.php` | مساعد الأعمال الشهرية. |
+| `helpers/StudentMarkRecordsHelper.php` | مساعد العلامات الفصلية. |
+| `helpers/ResultRecordsHelper.php` | مساعد النتائج. |
+| `transformers/StudentMonthlyWorkTransformer.php` | محول الأعمال الشهرية. |
+| `transformers/StudentMarkTransformer.php` | محول العلامات الفصلية. |
+| `transformers/ResultTransformer.php` | محول النتائج. |
+| `config/config.php` | إعدادات الصلاحيات والفلاتر. |
+| `lang/ar/lang.php` | ترجمة عربية. |
+| `lang/en/lang.php` | ترجمة إنجليزية. |
+| `routes.php` | تعريف المسارات. |
+| `Plugin.php` | تسجيل الإضافة و `scopeExclude`. |
+| `version.yaml` | تعريف الإصدار. |
+
+---
+
+### متطلبات التثبيت
+
+1. **تثبيت الإضافة**: انسخ مجلد `nano/schoolcontrolapi` إلى `plugins/nano/schoolcontrolapi`.
+2. **تسجيل الإضافة**:
+   ```bash
+   php artisan plugin:refresh Nano.SchoolControlApi
+   ```
+3. **إعدادات البيئة**: أضف متغيرات البيئة المطلوبة في ملف `.env` (راجع `config/config.php`).
+4. **الصلاحيات**: تأكد من أن الأدوار المناسبة تمتلك الصلاحيات مثل `tss.schoolcontrol.resultalls.access` إلخ.
+5. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### الخاتمة
+
+يمثل الإصدار **1.0.1** من `Nano.SchoolControlApi` الأساس المتين لإدارة الأعمال الشهرية والعلامات الفصلية والنتائج عبر API. يوفر هذا الإصدار واجهة آمنة ومرنة، مع دعم الفلاتر الأساسية ونظام صلاحيات أولي، مما يسمح للمطورين ببناء تطبيقات تعليمية متكاملة.
+
+---
+
+**الوثائق المرجعية**:
+- [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
+- [توثيق كلاس `AccessManager`](./docs/AuthApi/Docs-AccessManager-ar.md)
+- [توثيق كلاس `AdvancedQueryHelper`](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
+
+---
+
+## 2026-06-12
+
+**تحديث إضافة `Nano.SchoolControlApi` – الإصدار 1.0.2**
+
+### إضافة أرقام الجلوس، الفترات الامتحانية، واللجان الامتحانية
+
+---
+
+### ملخص التحديثات
+
+يضيف الإصدار **1.0.2** من إضافة `Nano.SchoolControlApi` دعم ثلاثة كيانات إضافية في نظام `Tss.SchoolControl`:
+
+- **أرقام الجلوس** (`Seating`) – إدارة أرقام الجلوس الامتحانية.
+- **الفترات الامتحانية** (`ExamPeriod`) – إدارة فترات الامتحانات.
+- **اللجان الامتحانية** (`Committee`) – إدارة اللجان والقاعات الامتحانية.
+
+تم اتباع نفس المعايير والنمط المعماري المعتمد في الإصدار 1.0.1، مع إضافة تحسينات في دالة `getDefaultOptions` لدعم الحقول الخاصة بهذه الكيانات.
+
+---
+
+### أهداف الإصدار
+
+- **توسيع نطاق API** ليشمل إدارة أرقام الجلوس والفترات واللجان الامتحانية.
+- **تمكين التطبيقات من تخصيص أرقام الجلوس** لكل طالب حسب الفترة واللجنة.
+- **دعم الفلاتر المتقدمة** مثل `sitting_number`, `pin_number`, `exam_periods_id`, `committees_id`.
+- **توفير نفس مستوى الصلاحيات والأمان** للموارد الجديدة.
+
+---
+
+### الميزات الجديدة
+
+#### 1. ثلاثة متحكمات إضافية
+
+| المتحكم | النموذج المستهدف | العمليات المدعومة |
+|---------|-----------------|-------------------|
+| `Seatings` | `Seating` | قائمة، عرض، إنشاء، تحديث، حذف |
+| `ExamPeriods` | `ExamPeriod` | قائمة، عرض، إنشاء، تحديث، حذف |
+| `Committees` | `Committee` | قائمة، عرض، إنشاء، تحديث، حذف |
+
+#### 2. دالة `getDefaultOptions` محدّثة
+
+تم إضافة مفاتيح جديدة في `HasRecordsHelper::getDefaultOptions()` لدعم الحقول الخاصة بالكيانات الجديدة:
+- `sitting_number`, `pin_number`, `exam_periods_id`, `committees_id` (لـ `Seating`).
+- `name`, `start_at`, `end_at` (لـ `ExamPeriod` و `Committee`).
+
+#### 3. فلاتر متقدمة خاصة بأرقام الجلوس
+
+يمكن تصفية أرقام الجلوس حسب:
+- `sitting_number`: رقم الجلوس (يدعم مقارنات).
+- `pin_number`: الرقم السري.
+- `exam_periods_id`: الفترة الامتحانية.
+- `committees_id`: اللجنة الامتحانية.
+
+#### 4. دعم العلاقات في Transformers الجديدة
+
+- **`SeatingTransformer`**: يدعم تضمين `student`, `record`, `class`, `group`, `studyYear`, `examPeriod`, `committee`, `department`.
+- **`ExamPeriodTransformer`**: يدعم تضمين `department`, `studyYear`.
+- **`CommitteeTransformer`**: يدعم تضمين `department`, `studyYear`.
+
+#### 5. إعدادات صلاحيات مخصصة
+
+تم إضافة إعدادات `permission` لكل من `seatings`, `exam_periods`, `committees` في `config.php`، مع دعم متغيرات البيئة.
+
+**مثال:**
+```php
+'seatings' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_SCHOOLCONTROLAPI_SEATINGS_LIST_IS_ALLOW', true),
+            'backend' => [
+                'allow' => true,
+                'permissions' => ['tss.schoolcontrol.seatings.access_all', 'tss.schoolcontrol.seatings.access'],
+            ],
+            'frontend' => [
+                'allow' => true,
+                'allowed_ref_types' => ['student', 'parent'],
+            ],
+        ],
+    ],
+],
+```
+
+#### 6. تسجيل `scopeExclude` للنماذج الجديدة
+
+تم إضافة النماذج `Seating`, `ExamPeriod`, `Committee` إلى حلقة `extendModelsScopeExclude` في `Plugin.php`.
+
+---
+
+### نقاط النهاية الجديدة
+
+| المورد | الطرق المدعومة | المسارات |
+|--------|---------------|----------|
+| **Seatings** | GET, POST, PUT, DELETE | `/seatings`, `/seatings/{id}`, `/seatings/activelystats` |
+| **ExamPeriods** | GET, POST, PUT, DELETE | `/exam-periods`, `/exam-periods/{id}`, `/exam-periods/activelystats` |
+| **Committees** | GET, POST, PUT, DELETE | `/committees`, `/committees/{id}`, `/committees/activelystats` |
+
+---
+
+### أمثلة على الاستخدام
+
+#### 1. جلب أرقام جلوس طالب معين
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/schoolcontrol/seatings?student_id=8&record_id=3" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### 2. إنشاء لجنة امتحانية جديدة
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/schoolcontrol/committees" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "اللجنة الأولى",
+    "departments_id": "4",
+    "year_id": "3",
+    "semster": "semster2",
+    "ref_type": "finality"
+  }'
+```
+
+#### 3. تحديث فترة امتحانية
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/schoolcontrol/exam-periods/5" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"start_at": "2026-06-20 08:00:00"}'
+```
+
+---
+
+### التغييرات التقنية
+
+#### ملفات جديدة
+
+| المسار | الوصف |
+|--------|-------|
+| `apicontrollers/Seatings.php` | متحكم أرقام الجلوس. |
+| `apicontrollers/ExamPeriods.php` | متحكم الفترات الامتحانية. |
+| `apicontrollers/Committees.php` | متحكم اللجان الامتحانية. |
+| `helpers/SeatingRecordsHelper.php` | مساعد أرقام الجلوس. |
+| `helpers/ExamPeriodRecordsHelper.php` | مساعد الفترات الامتحانية. |
+| `helpers/CommitteeRecordsHelper.php` | مساعد اللجان الامتحانية. |
+| `transformers/SeatingTransformer.php` | محول أرقام الجلوس. |
+| `transformers/ExamPeriodTransformer.php` | محول الفترات الامتحانية. |
+| `transformers/CommitteeTransformer.php` | محول اللجان الامتحانية. |
+
+#### ملفات محدّثة
+
+- `traits/HasRecordsHelper.php`: إضافة مفاتيح جديدة في `getDefaultOptions()`.
+- `config/config.php`: إضافة إعدادات `seatings`, `exam_periods`, `committees`.
+- `Plugin.php`: إضافة النماذج الجديدة إلى `extendModelsScopeExclude`.
+- `routes.php`: إضافة المسارات الجديدة.
+
+---
+
+### متطلبات الترقية (من 1.0.1 إلى 1.0.2)
+
+1. **تحديث الكود**: استبدال جميع الملفات المذكورة أعلاه.
+2. **تحديث `version.yaml`**:
+   ```yaml
+   1.0.2:
+     - 'Added API endpoints for seatings (أرقام الجلوس), exam periods (الفترات الامتحانية), and committees (اللجان الامتحانية).'
+   ```
+3. **تنفيذ هجرات**: لا توجد هجرات جديدة (تعتمد على جداول `Tss.SchoolControl` الموجودة).
+4. **مسح الكاش**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### الخاتمة
+
+يكمل الإصدار **1.0.2** من `Nano.SchoolControlApi` تغطية كافة الكيانات الأساسية في نظام التحكم المدرسي، مما يوفر منصة متكاملة لإدارة النتائج والدرجات وأرقام الجلوس والفترات واللجان الامتحانية عبر API واحد. هذا الإصدار يمهد الطريق للإصدار 1.0.3 الذي سيركز على تحسينات دعم ولي الأمر والحقول المحسوبة والتوثيق.
+
+---
+
+**الوثائق المرجعية**:
+- [دليل تطوير إضافات API (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
+
 ## 2026-06-10 - 2026-06-13
 
 **تحديثات إضافة `Nano.TranslateExtended` – الإصدار 1.0.12**  

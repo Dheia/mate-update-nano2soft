@@ -2153,6 +2153,235 @@ Thank you for your continued support, and we welcome your feedback to continue i
 - [Barcode Generator documentation](./docs/Qrcodes/Docs-BarcodeGenerator-en.md)
 - [API documentation](./docs/Qrcodes/Docs-API-Documentation-en.md)
 
+## 2026-06-08 - 2026-06-10
+
+**Launch of `Nano.SchoolControlApi` Plugin – version 1.0.1**
+
+### Creation of a basic school control API (monthly works, semester marks, results)
+
+---
+
+### Summary of updates
+
+The first version **1.0.1** of the `Nano.SchoolControlApi` Plugin provides a basic API for interacting with three main entities in the `Tss.SchoolControl` system:
+
+- **Student monthly works** (`StudentMonthlyWork`) – manage monthly work grades for each subject.
+- **Semester and final marks** (`StudentMark`) – manage first and second semester grades.
+- **Student results** (`Result`) – manage all types of results (monthly, half, final).
+
+The Plugin was built according to the latest `Nano-Api-SKILL.md` standards, making use of `AccessManager` for permissions, `AdvancedQueryHelper` for dynamic filtering, data transformers, a unified caching system, and events.
+
+---
+
+### Release objectives
+
+- **Provide a basic API** for managing monthly works, semester marks, and results.
+- **Enable external applications** to read and write grade and result data.
+- **Support basic filters** such as `student_id`, `record_id`, `year_id`, `class_id`, `group_id`, `subject_id`.
+- **Apply an initial permission system** to control access according to user type (backend/frontend/guest).
+- **Provide initial documentation** for the basic endpoints.
+
+---
+
+### New features
+
+#### 1. Three basic RESTful controllers
+
+| Controller | Target model | Supported operations |
+|------------|--------------|----------------------|
+| `StudentMonthlyWorks` | `StudentMonthlyWork` | list, view, create, update, delete |
+| `StudentMarks` | `StudentMark` | list, view, create, update, delete |
+| `Results` | `Result` | list, view, create, update, delete |
+
+**Each controller supports:**
+- `index()`: fetch a list with filtering, search, sorting, and pagination.
+- `show($id)`: display item details with relationships included.
+- `getRecords(array $options)`: core function for building complex queries.
+- `store()`, `update()`, `destroy()`: write operations.
+- `activelystats()`: endpoint to return the last cache update.
+
+#### 2. Unified `getRecords` function
+
+A unified `getRecords` function was implemented in each controller using the `HasRecordsHelper` trait, supporting:
+- **Advanced filters** via `AdvancedQueryManager::scopeWhereField` with `is_or`, `is_not`, `is_force`, `is_or_null`.
+- **Access scope** (`applyAccessScope`) for company, department, state, and record creator.
+- **Column exclusion** (`exclude`) to reduce data size.
+- **Relationship embedding** (`custom_with`).
+- **Text search** (`q`) with advanced search support (ArPhpHelper).
+- **Sorting** (`orderBy`, `orderDirection`) and groupings (`group_by`) with `having`.
+- **Output options**: `is_query`, `is_first`, `is_model`, `is_collection`, `is_paginator`, `is_to_sql`.
+- **Events**: `api.list.extendQueryBefore` and `api.list.extendQuery` to extend queries.
+
+#### 3. Initial centralised permission system
+
+Basic permission settings were defined in `config.php` for each operation and each resource, with control via environment variables.
+
+**Example from `results.list` settings:**
+```php
+'results' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_SCHOOLCONTROLAPI_RESULTS_LIST_IS_ALLOW', true),
+            'backend' => [
+                'allow' => true,
+                'check_permission' => true,
+                'permissions' => ['tss.schoolcontrol.resultalls.access_all', 'tss.schoolcontrol.resultalls.access'],
+                'access_scope' => 'all',
+            ],
+            'frontend' => [
+                'allow' => true,
+                'allowed_ref_types' => ['student', 'parent'],
+                'access_scope' => 'own',
+            ],
+        ],
+    ],
+],
+```
+
+Permissions are checked via `AccessManager::checkByResource()`.
+
+#### 4. Data transformers
+
+Three basic transformers were created:
+- **`StudentMonthlyWorkTransformer`**: displays monthly work data with relationships (student, subject, teacher, class, group, studyYear, department).
+- **`StudentMarkTransformer`**: displays semester marks data with relationships.
+- **`ResultTransformer`**: displays result data with relationships and support for embedding marks (`marks`) depending on the result type.
+
+All transformers support date formatting and field exclusion via `exclude`.
+
+#### 5. Unified response for create and update operations
+
+```json
+{
+  "data": {
+    "code": 200,
+    "status": true,
+    "message": "Result created successfully.",
+    "data": { ... },
+    "model": { ... },
+    "input_data": { ... },
+    "process_data": { ... }
+  }
+}
+```
+
+#### 6. Registering the `scopeExclude` scope
+
+The dynamic `scopeExclude` scope was registered for the three models in `Plugin::boot()`:
+```php
+\Tss\SchoolControl\Models\StudentMonthlyWork::extend(function($model) {
+    $model->addDynamicMethod('scopeExclude', function($query, $columns) use($model) { ... });
+});
+// Similarly for StudentMark and Result
+```
+
+---
+
+### Supported endpoints
+
+| Resource | Supported methods | Paths |
+|----------|------------------|-------|
+| **StudentMonthlyWorks** | GET, POST, PUT, DELETE | `/student-monthly-works`, `/student-monthly-works/{id}`, `/student-monthly-works/activelystats` |
+| **StudentMarks** | GET, POST, PUT, DELETE | `/student-marks`, `/student-marks/{id}`, `/student-marks/activelystats` |
+| **Results** | GET, POST, PUT, DELETE | `/results`, `/results/{id}`, `/results/activelystats` |
+
+**Base path:** `/api/v1/schoolcontrol`
+
+---
+
+### Usage examples
+
+#### 1. Fetch monthly results for a specific student
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/schoolcontrol/results?student_id=8&record_id=3&ref_type=monthly&semster=semster1&month_num=1&include=student" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### 2. Create a new semester mark
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/schoolcontrol/student-marks" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "student_id": 8,
+    "record_id": 3,
+    "subject_id": 1,
+    "year_id": 3,
+    "class_id": 1,
+    "s1_month1_mark": 12,
+    "s1_month2_mark": 14,
+    "s1_month3_mark": 13,
+    "exam1_mark": 18
+  }'
+```
+
+#### 3. Update a monthly work grade
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/schoolcontrol/student-monthly-works/2" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"exam_mark": 16}'
+```
+
+---
+
+### Technical changes
+
+#### New files
+
+| Path | Description |
+|------|-------------|
+| `apicontrollers/StudentMonthlyWorks.php` | Monthly works controller. |
+| `apicontrollers/StudentMarks.php` | Semester marks controller. |
+| `apicontrollers/Results.php` | Results controller. |
+| `traits/HasRecordsHelper.php` | Unified trait for building queries. |
+| `helpers/StudentMonthlyWorkRecordsHelper.php` | Monthly works helper. |
+| `helpers/StudentMarkRecordsHelper.php` | Semester marks helper. |
+| `helpers/ResultRecordsHelper.php` | Results helper. |
+| `transformers/StudentMonthlyWorkTransformer.php` | Monthly works transformer. |
+| `transformers/StudentMarkTransformer.php` | Semester marks transformer. |
+| `transformers/ResultTransformer.php` | Results transformer. |
+| `config/config.php` | Permission and filter settings. |
+| `lang/ar/lang.php` | Arabic translations. |
+| `lang/en/lang.php` | English translations. |
+| `routes.php` | Route definitions. |
+| `Plugin.php` | Add‑on registration and `scopeExclude`. |
+| `version.yaml` | Version definition. |
+
+---
+
+### Installation requirements
+
+1. **Install the Plugin**: Copy the `nano/schoolcontrolapi` folder to `plugins/nano/schoolcontrolapi`.
+2. **Register the Plugin**:
+   ```bash
+   php artisan plugin:refresh Nano.SchoolControlApi
+   ```
+3. **Environment settings**: Add the required environment variables to your `.env` file (see `config/config.php`).
+4. **Permissions**: Ensure that appropriate roles have permissions such as `tss.schoolcontrol.resultalls.access`, etc.
+5. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+
+---
+
+### Conclusion
+
+Version **1.0.1** of `Nano.SchoolControlApi` represents a solid foundation for managing monthly works, semester marks, and results via API. This version provides a secure and flexible interface, with support for basic filters and an initial permission system, allowing developers to build integrated educational applications.
+
+---
+
+**Reference documentation**:
+- [API Plugin Development Guide (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
+- [`AccessManager` Class Documentation](./docs/AuthApi/Docs-AccessManager-en.md)
+- [`AdvancedQueryHelper` Class Documentation](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
+
+
 ## 2026-06-10 – 2026-06-13
 
 **Nano.TranslateExtended Plugin Updates – Version 1.0.12**  
