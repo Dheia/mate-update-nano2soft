@@ -2381,6 +2381,276 @@ Version **1.0.1** of `Nano.SchoolControlApi` represents a solid foundation for m
 - [`AccessManager` Class Documentation](./docs/AuthApi/Docs-AccessManager-en.md)
 - [`AdvancedQueryHelper` Class Documentation](./docs/querybuilder/Docs-AdvancedQueryHelper.md)
 
+## 2026-06-11 - 2026-06-12
+
+**Update of `Nano.SchoolControlApi` Plugin – version 1.0.2**
+
+### Adding seating numbers, exam periods, and exam committees
+
+---
+
+### Summary of updates
+
+Version **1.0.2** of the `Nano.SchoolControlApi` Plugin adds support for three additional entities in the `Tss.SchoolControl` system:
+
+- **Seating numbers** (`Seating`) – manage exam seating numbers linked to periods and committees.
+- **Exam periods** (`ExamPeriod`) – manage exam periods (half‑year, final, monthly).
+- **Exam committees** (`Committee`) – manage exam committees and halls.
+
+The same standards and architectural pattern used in version 1.0.1 (permission system, advanced filtering, transformers, events) are followed, with improvements to the `getDefaultOptions` function to support fields specific to these entities.
+
+---
+
+### Objectives of the release
+
+- **Extend the API scope** to include management of seating numbers, exam periods, and committees.
+- **Enable applications to assign seating numbers** to each student according to period, committee, and class.
+- **Support advanced filters** such as `sitting_number`, `pin_number`, `exam_periods_id`, `committees_id`.
+- **Provide the same level of permissions and security** for the new resources (backend/frontend/guest).
+- **Prepare for integration with external examination systems**.
+
+---
+
+### New features and improvements
+
+#### 1. Three additional controllers
+
+| Controller | Target model | Supported operations |
+|------------|--------------|----------------------|
+| `Seatings` | `Seating` | list, view, create, update, delete |
+| `ExamPeriods` | `ExamPeriod` | list, view, create, update, delete |
+| `Committees` | `Committee` | list, view, create, update, delete |
+
+**Each controller supports:**
+- `index()`: fetch a list with filtering, search, sorting, and pagination.
+- `show($id)`: display item details with relationships included.
+- `getRecords(array $options)`: core function for building complex queries (unified via trait).
+- `store()`, `update()`, `destroy()`: write operations (usually restricted to Backend).
+- `activelystats()`: endpoint to return the last update timestamp (for caching).
+
+#### 2. Updated `getDefaultOptions` to support new fields
+
+New keys added in `HasRecordsHelper::getDefaultOptions()`:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `sitting_number` | mixed | Seating number (supports comparisons). |
+| `pin_number` | mixed | PIN code. |
+| `exam_periods_id` | mixed | Exam period ID. |
+| `committees_id` | mixed | Committee ID. |
+| `name` | string | Period or committee name (for text search). |
+| `start_at` | date | Period start date. |
+| `end_at` | date | Period end date. |
+
+#### 3. Advanced filters specific to seating numbers
+
+`is_or`, `is_not`, `is_force`, `is_or_null` can be used with:
+- `sitting_number`
+- `pin_number`
+- `exam_periods_id`
+- `committees_id`
+
+**Example:**  
+`GET /seatings?sitting_number=5,10&is_or_sitting_number=true` → seating numbers **or** 10.
+
+#### 4. Relationship support in new Transformers
+
+| Transformer | Supported relationships (`availableIncludes`) |
+|-------------|------------------------------------------------|
+| `SeatingTransformer` | `student`, `record`, `class`, `group`, `studyYear`, `examPeriod`, `committee`, `department` |
+| `ExamPeriodTransformer` | `department`, `studyYear` |
+| `CommitteeTransformer` | `department`, `studyYear` |
+
+All transformers support date formatting and field exclusion via `exclude`.
+
+#### 5. Custom permission settings in `config.php`
+
+`permission` settings for `seatings`, `exam_periods`, and `committees` have been added, with environment variable support.
+
+**Example for `seatings.list`:**
+```php
+'seatings' => [
+    'list' => [
+        'permission' => [
+            'is_allow' => env('NANO_SCHOOLCONTROLAPI_SEATINGS_LIST_IS_ALLOW', true),
+            'backend' => [
+                'allow' => true,
+                'check_permission' => true,
+                'permissions' => ['tss.schoolcontrol.seatings.access_all', 'tss.schoolcontrol.seatings.access'],
+                'access_scope' => 'all',
+            ],
+            'frontend' => [
+                'allow' => true,
+                'allowed_ref_types' => ['student', 'parent'],
+                'access_scope' => 'own',
+            ],
+        ],
+    ],
+],
+```
+
+#### 6. Registering `scopeExclude` for the new models
+
+The models `Seating`, `ExamPeriod`, and `Committee` have been added to the `extendModelsScopeExclude` loop in `Plugin.php`, allowing the client to use the `exclude` parameter to omit unnecessary fields.
+
+#### 7. Default values in create operations
+
+When creating a new exam period or committee, if `companys_id`, `departments_id`, or `year_id` are not provided, they are automatically filled from the system defaults (via `BasicHelper` and `Period::getPrimary()`).
+
+---
+
+### New endpoints
+
+| Resource | Supported methods | Paths |
+|----------|------------------|-------|
+| **Seatings** | GET, POST, PUT, DELETE | `/seatings`, `/seatings/{id}`, `/seatings/activelystats` |
+| **ExamPeriods** | GET, POST, PUT, DELETE | `/exam-periods`, `/exam-periods/{id}`, `/exam-periods/activelystats` |
+| **Committees** | GET, POST, PUT, DELETE | `/committees`, `/committees/{id}`, `/committees/activelystats` |
+
+**Base path:** `/api/v1/schoolcontrol`
+
+---
+
+### Usage examples
+
+#### 1. Fetch a specific student's seating numbers in a specific semester
+
+```bash
+curl -X GET "https://yourdomain.com/api/v1/schoolcontrol/seatings?student_id=8&record_id=3&semster=semster2" \
+  -H "Authorization: Bearer <token>"
+```
+
+#### 2. Create a new exam period
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/schoolcontrol/exam-periods" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Final Exam Period 2026",
+    "departments_id": "4",
+    "year_id": "3",
+    "semster": "semster2",
+    "ref_type": "finality",
+    "start_at": "2026-06-20 08:00:00",
+    "end_at": "2026-06-30 15:00:00"
+  }'
+```
+
+#### 3. Create an exam committee
+
+```bash
+curl -X POST "https://yourdomain.com/api/v1/schoolcontrol/committees" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Committee 1 - Hall A",
+    "departments_id": "4",
+    "year_id": "3",
+    "semster": "semster2",
+    "ref_type": "finality",
+    "min_student": 20,
+    "max_student": 30
+  }'
+```
+
+#### 4. Update a seating number (modify the PIN)
+
+```bash
+curl -X PUT "https://yourdomain.com/api/v1/schoolcontrol/seatings/42" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"pin_number": 123456}'
+```
+
+#### 5. Delete a committee
+
+```bash
+curl -X DELETE "https://yourdomain.com/api/v1/schoolcontrol/committees/5" \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
+### Detailed technical changes
+
+#### New files
+
+| Path | Description |
+|------|-------------|
+| `apicontrollers/Seatings.php` | Seating numbers controller. |
+| `apicontrollers/ExamPeriods.php` | Exam periods controller. |
+| `apicontrollers/Committees.php` | Committees controller. |
+| `helpers/SeatingRecordsHelper.php` | Seating numbers helper. |
+| `helpers/ExamPeriodRecordsHelper.php` | Exam periods helper. |
+| `helpers/CommitteeRecordsHelper.php` | Committees helper. |
+| `transformers/SeatingTransformer.php` | Seating numbers transformer. |
+| `transformers/ExamPeriodTransformer.php` | Exam periods transformer. |
+| `transformers/CommitteeTransformer.php` | Committees transformer. |
+
+#### Updated files
+
+| Path | Change |
+|------|--------|
+| `traits/HasRecordsHelper.php` | Added new keys in `getDefaultOptions()` (e.g., `sitting_number`, `pin_number`, etc.). |
+| `config/config.php` | Added settings for `seatings`, `exam_periods`, `committees` (permissions, advanced filters, frontend_resolver). |
+| `Plugin.php` | Added the new models to `extendModelsScopeExclude`. |
+| `routes.php` | Added routes for the three resources. |
+| `lang/ar/lang.php` | Added translation messages for errors and success for the new resources. |
+| `lang/en/lang.php` | Added translation messages for errors and success for the new resources. |
+
+#### No database changes
+
+- The Plugin relies entirely on the existing `Tss.SchoolControl` tables:
+  - `tss_schoolcontrol_seatings`
+  - `tss_schoolcontrol_exam_periods`
+  - `tss_schoolcontrol_committees`
+- No new migrations are required.
+
+---
+
+### Upgrade requirements (from 1.0.1 to 1.0.2)
+
+1. **Update the code**: Replace all files mentioned above (or merge manually if local modifications exist).
+2. **Update `version.yaml`**:
+   ```yaml
+   1.0.2:
+     - 'Added API endpoints for seatings (أرقام الجلوس), exam periods (الفترات الامتحانية), and committees (اللجان الامتحانية).'
+   ```
+3. **Run migrations**: No new migrations, but you can refresh the version with:
+   ```bash
+   php artisan plugin:refresh Nano.SchoolControlApi
+   ```
+   (only the version will be updated, no table changes).
+4. **Reset permissions (optional)**: Assign the new permissions to appropriate groups in `Settings > User Management > Groups` (e.g., `tss.schoolcontrol.seatings.access`).
+5. **Clear cache**:
+   ```bash
+   php artisan cache:clear
+   php artisan config:clear
+   ```
+6. **Test the new endpoints**: Verify that the new paths work correctly with different user permissions.
+
+---
+
+### Benefits and added value
+
+- **Centralised seating number management**: Schools can link seating numbers to periods, committees, classes, and students.
+- **Flexible exam setup**: Define flexible exam periods (monthly, half‑year, final) with start and end dates.
+- **Support for multiple committees**: Create multiple committees with different student ranges (minimum and maximum students).
+- **Integration with the results system**: Seating numbers can be used as an input to link students to their results.
+- **High security**: Same permission model (`AccessManager`) with fine‑grained control via environment variables.
+- **Ready for external use**: Unified interface allowing web and mobile applications to manage exams and seating numbers.
+
+---
+
+### Conclusion
+
+Version **1.0.2** of `Nano.SchoolControlApi` completes the coverage of all core exam‑related entities in the school control system. It provides a comprehensive interface for managing seating numbers, periods, and exam committees, enabling schools to fully automate examination processes. This version paves the way for version 1.0.3, which will focus on parent support improvements, computed fields, and comprehensive documentation.
+
+---
+
+**Reference documentation**:
+- [API Plugin Development Guide (Nano-Api-SKILL.md)](./docs/mcp/Nano-Api-SKILL.md)
 
 ## 2026-06-10 – 2026-06-13
 
